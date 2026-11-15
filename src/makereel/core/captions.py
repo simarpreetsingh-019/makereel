@@ -14,21 +14,28 @@ from __future__ import annotations
 
 import difflib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 # --------------------------------------------------------------------------- templates
 # How the spoken word is shown inside its group. Every active tag starts with "\c&H..&" so
 # parse_words can find the active word; past words (karaoke) use "\1c", which it ignores.
 TEMPLATES: dict[str, dict] = {
+    # spoken word in the highlight colour, slightly larger
     "classic": {"label": "Classic", "active": r"\c{hl}\fscx108\fscy108", "upper": True, "group": 3},
-    "pop": {"label": "Pop", "active": r"\c{hl}\fscx135\fscy135\t(0,120,\fscx110\fscy110)",
+    # spoken word much bigger, springing in from bigger still
+    "pop": {"label": "Pop", "active": r"\c{hl}\fscx150\fscy150\t(0,140,\fscx128\fscy128)",
             "upper": True, "group": 3},
-    "boxed": {"label": "Boxed word", "active": r"\c&H00FFFFFF&\3c{hl}\bord{box}", "upper": True, "group": 3},
-    "glow": {"label": "Glow", "active": r"\c{hl}\3c{hl}\bord5\blur7", "upper": True, "group": 3},
+    # dark text on a solid highlight-coloured box behind the spoken word
+    "boxed": {"label": "Boxed word", "active": r"\c&H00141414&\3c{hl}\bord{box}\shad0", "upper": True, "group": 3},
+    # white word with a soft coloured halo (only the outline is blurred, so the word stays sharp)
+    "glow": {"label": "Glow", "active": r"\c&H00FFFFFF&\3c{hl}\bord{glow}\blur{blur}", "upper": True, "group": 3},
+    # words fill with colour as they are spoken and stay filled
     "karaoke": {"label": "Karaoke fill", "active": r"\c{hl}\fscx108\fscy108", "past": r"\1c{hl}",
                 "upper": True, "group": 4},
-    "single": {"label": "One word", "active": r"\c{hl}\fscx118\fscy118", "upper": True, "group": 1},
-    "minimal": {"label": "Minimal", "active": r"\c{hl}", "upper": False, "group": 4},
+    # one big word at a time
+    "single": {"label": "One word", "active": r"\c{hl}\fscx160\fscy160", "upper": True, "group": 1},
+    # normal case, smaller, just a colour change
+    "minimal": {"label": "Minimal", "active": r"\c{hl}", "upper": False, "group": 5, "scale": 0.75},
 }
 DEFAULT_TEMPLATE = "classic"
 
@@ -122,8 +129,13 @@ def build_ass(words: list[dict], start: float, end: float, hook: str | None,
     """Words are on any clock; only those in [start, end) are used, re-based to start at 0."""
     tpl = TEMPLATES.get(template, TEMPLATES[DEFAULT_TEMPLATE])
     group, upper = tpl["group"], tpl["upper"]
-    box = max(6, round(min(style.width, style.height) * 0.080 * style.size * 0.22))
-    active = tpl["active"].replace("{hl}", style.highlight).replace("{box}", str(box))
+    font_px = min(style.width, style.height) * 0.080 * style.size
+    active = (tpl["active"].replace("{hl}", style.highlight)
+              .replace("{box}", str(max(6, round(font_px * 0.16))))
+              .replace("{glow}", str(max(4, round(font_px * 0.12))))
+              .replace("{blur}", str(max(3, round(font_px * 0.10)))))
+    if tpl.get("scale"):   # smaller base text for this template
+        style = replace(style, size=style.size * tpl["scale"])
     past = tpl.get("past", "").replace("{hl}", style.highlight)
     lines = [style.header()]
     if hook:

@@ -77,3 +77,18 @@ def test_colours():
 def test_braces_are_stripped_from_words():
     ass = captions.build_ass([{"start": 0, "end": 1, "word": "{evil}"}], 0, 2, None)
     assert "{evil}" not in ass
+
+
+def test_templates_are_distinct_and_readable():
+    w = [{"start": i * 0.5, "end": i * 0.5 + 0.4, "word": x} for i, x in enumerate("one two three four".split())]
+    active = {}
+    for t in captions.TEMPLATES:
+        ass = captions.build_ass(w, 0, 3, None, template=t)
+        line = next(l for l in ass.splitlines() if l.startswith("Dialogue: 0"))
+        active[t] = line.split(",,", 1)[1]
+        assert [x["word"].lower() for x in captions.parse_words(ass)] == [x["word"] for x in w], t
+    assert len(set(active.values())) == len(active)                 # every style looks different
+    assert "\\c&H00141414&" in active["boxed"]                       # dark text on the box (readable)
+    assert "\\c&H00FFFFFF&" in active["glow"] and "\\blur" in active["glow"]   # sharp white word, blurred halo
+    assert active["single"].count(" ") == 0                          # one word at a time
+    assert "one" in active["minimal"]                                # normal case

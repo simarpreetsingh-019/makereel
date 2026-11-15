@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.1 (2026-11-16)
+
+### Fixed
+- Caption styles: **Glow** blurred the word itself (unreadable); it's now a sharp white word with a coloured halo.
+  **Boxed word** had white text on a yellow box; the text is now dark. **Pop** and **One word** are much bigger,
+  so they're clearly different from Classic. **Minimal** is smaller and in normal case.
+- The Look tab preview (and the Timing preview) now show the selected caption style straight away. Before, clicking
+  a style changed nothing until you saved.
+- Reels saved with the old Glow or Boxed style: open Look and save again to re-render.
+
 ## 0.4.0 (2026-11-16)
 
 ### Added

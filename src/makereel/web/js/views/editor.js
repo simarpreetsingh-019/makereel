@@ -106,6 +106,20 @@ function readLook() {
   return out;
 }
 
+const GROUP = { classic: 3, pop: 3, boxed: 3, glow: 3, karaoke: 4, single: 1, minimal: 5 };
+
+/** Caption HTML for word `i` being spoken, in a template's grouping (mirrors captions.TEMPLATES). */
+function captionHTML(words, i, template) {
+  const n = GROUP[template] || 3;
+  const g = Math.floor(i / n) * n;
+  return words.slice(g, g + n).map((w, k) => {
+    const idx = g + k;
+    if (idx === i) return `<b>${esc(w.word)}</b>`;
+    if (template === "karaoke" && idx < i) return `<i>${esc(w.word)}</i>`;
+    return esc(w.word);
+  }).join(" ");
+}
+
 /** Style a caption element like the rendered captions (positions/sizes relative to its stage). */
 function styleCaption(el, look, stage) {
   const w = stage.clientWidth || 300;
@@ -115,7 +129,10 @@ function styleCaption(el, look, stage) {
   el.style.fontFamily = `"${look.font}", "Arial Black", system-ui, sans-serif`;
   el.style.color = look.text_colour;
   el.style.webkitTextStroke = `${Math.max(1, w * 0.004)}px ${look.outline_colour}`;
-  el.querySelectorAll("b").forEach((b) => (b.style.color = look.highlight_colour));
+  el.dataset.tpl = look.template || "classic";
+  el.style.setProperty("--hl", look.highlight_colour);
+  el.style.setProperty("--outline", look.outline_colour);
+  if (look.template === "minimal") el.style.fontSize = `${w * 0.08 * look.size * 0.75}px`;
   const inner = el.querySelector("span") || el;
   inner.style.background = look.box ? hexToRgba(look.box_colour, look.box_opacity) : "transparent";
 }
@@ -123,8 +140,9 @@ function styleCaption(el, look, stage) {
 function drawLook() {
   const look = { ...cur.reel.look, ...readLook() };
   const cap = $("#lk-caption");
-  cap.innerHTML = `<span>${cur.words.slice(0, 3).map((w, i) => (i === 1 ? `<b>${esc(w.word)}</b>` : esc(w.word))).join(" ")
-    || "CAPTIONS <b>LOOK</b> LIKE"}</span>`;
+  look.template = cur.look.template;
+  const sample = cur.words.length ? cur.words : ["captions", "look", "like", "this"].map((word) => ({ word }));
+  cap.innerHTML = `<span>${captionHTML(sample, 1, look.template)}</span>`;
   styleCaption(cap, look, $("#lk-stage"));
   $("#lk-vertical-v").textContent = `${Math.round(look.vertical * 100)}%`;
   $("#lk-size-v").textContent = `${Math.round(look.size * 100)}%`;
@@ -169,7 +187,8 @@ function activeIndex(t) {
   const w = cur.words;
   for (let i = w.length - 1; i >= 0; i--) {
     if (t >= w[i].start + cur.offset) {
-      const groupEnd = Math.floor(i / 3) * 3 + 3;
+      const n = GROUP[cur.reel.look.template] || 3;
+      const groupEnd = Math.floor(i / n) * n + n;
       const next = w[i + 1] ? w[i + 1].start + cur.offset : w[i].end + cur.offset + 0.25;
       const limit = w[groupEnd] ? w[groupEnd].start + cur.offset : next;
       return t < Math.min(next, limit) ? i : -1;
@@ -185,9 +204,7 @@ function drawOverlay() {
   const box = $("#tm-caption");
   if (i < 0) { box.innerHTML = ""; }
   else {
-    const g = Math.floor(i / 3) * 3;
-    box.innerHTML = `<span>${cur.words.slice(g, g + 3)
-      .map((w, k) => (g + k === i ? `<b>${esc(w.word)}</b>` : esc(w.word))).join(" ")}</span>`;
+    box.innerHTML = `<span>${captionHTML(cur.words, i, cur.reel.look.template)}</span>`;
     styleCaption(box, cur.reel.look, box.parentElement);
   }
   document.querySelectorAll("#tm-list [data-i]").forEach((row) => row.classList.toggle("on", Number(row.dataset.i) === i));
@@ -338,6 +355,7 @@ export function mount() {
     if (t) {
       cur.look.template = t.dataset.template;
       document.querySelectorAll("#lk-templates .chip-btn").forEach((x) => x.classList.toggle("on", x === t));
+      drawLook();
     }
   });
 
