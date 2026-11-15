@@ -64,3 +64,29 @@ def test_bench_report_has_no_personal_data(monkeypatch):
     assert "Apple M5" in md and "9.0s" in md and "/Users/" not in md
     monkeypatch.setattr(bench, "REPO_URL", "https://github.com/x/makereel")
     assert bench.share_url(result).startswith("https://github.com/x/makereel/issues/new?labels=benchmark")
+
+
+def test_caption_box_and_height():
+    from makereel.core.captions import Style
+    plain = Style().header()
+    boxed = Style(box=True, box_colour="#FF0000", box_opacity=0.6, vertical=0.45).header()
+    cap = next(l for l in boxed.splitlines() if l.startswith("Style: Caption"))
+    fields = cap.split(",")
+    assert fields[15] == "4"                       # BorderStyle 4 = translucent box, outline kept
+    assert fields[6] == "&H660000FF"               # 40% transparent red (ASS alpha 0x66)
+    assert fields[18] == "2" and fields[21] == str(round(1920 * 0.45))   # bottom-centred, 45% up
+    assert next(l for l in plain.splitlines() if l.startswith("Style: Caption")).split(",")[15] == "1"
+
+
+def test_clean_look_validates():
+    assert branding.clean_look({"vertical": "0.4", "box": 1, "box_opacity": 0.5}) == \
+        {"vertical": 0.4, "box": True, "box_opacity": 0.5}
+    for bad in ({"vertical": 2}, {"size": 9}, {"box_colour": "black"}, {"box_opacity": -1}):
+        with pytest.raises(ValueError):
+            branding.clean_look(bad)
+
+
+def test_reel_look_overrides_brand():
+    b = config.load_settings().brand
+    s = branding.style_for("1x1", b, {"vertical": 0.5, "box": True})
+    assert s.vertical == 0.5 and s.box and s.width == s.height == 1080

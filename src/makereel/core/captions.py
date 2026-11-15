@@ -39,16 +39,28 @@ class Style:
     outline_colour: str = "#000000"
     position: str = "bottom"       # bottom | middle | top (captions); the title sits at the top
     size: float = 1.0              # scale on the default caption size
+    vertical: float | None = None  # exact height: bottom of the captions at this share of the height
+    box: bool = False              # background box behind the captions
+    box_colour: str = "#000000"
+    box_opacity: float = 0.6       # 0 = invisible, 1 = solid
 
     def header(self) -> str:
         short = min(self.width, self.height)          # scale text by the short side
         cap = round(short * 0.080 * self.size)        # 86 px on a 1080-wide reel
-        hook = round(short * 0.057 * self.size)
-        margin_v = {"bottom": round(self.height * 0.29), "middle": 0, "top": round(self.height * 0.22)}[
-            self.position] if self.height > self.width else round(self.height * 0.08)
+        hook = round(short * 0.057 * min(self.size, 1.2))
+        if self.vertical is not None:                 # exact placement (e.g. above burned-in subtitles)
+            align, margin_v = 2, round(self.height * self.vertical)
+        else:
+            align = POSITIONS[self.position]
+            margin_v = {"bottom": round(self.height * 0.29), "middle": 0, "top": round(self.height * 0.22)}[
+                self.position] if self.height > self.width else round(self.height * 0.08)
         hook_margin = round(self.height * 0.115) if self.height > self.width else round(self.height * 0.06)
         side = round(self.width * 0.055)
         text, outline = ass_colour(self.text_colour), ass_colour(self.outline_colour)
+        if self.box:   # BorderStyle 4 (libass): translucent box in BackColour, outline kept; Shadow = padding
+            border, back, shadow = 4, ass_colour(self.box_colour, round((1 - self.box_opacity) * 255)), round(cap * 0.2)
+        else:
+            border, back, shadow = 1, "&H80000000", 2
         return (
             "[Script Info]\n"
             "; Made by makereel. Edit freely, then re-render (web app: Edit -> Save)\n"
@@ -59,8 +71,8 @@ class Style:
             "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
             "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
             "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
-            f"Style: Caption,{self.font},{cap},{text},{text},{outline},&H80000000,-1,0,0,0,100,100,0,0,1,"
-            f"{max(2, round(cap * 0.08))},2,{POSITIONS[self.position]},{side},{side},{margin_v},1\n"
+            f"Style: Caption,{self.font},{cap},{text},{text},{outline},{back},-1,0,0,0,100,100,0,0,{border},"
+            f"{max(2, round(cap * 0.08))},{shadow},{align},{side},{side},{margin_v},1\n"
             f"Style: Hook,{self.font},{hook},&H00FFFFFF,&H00FFFFFF,&H00000000,&H50000000,-1,0,0,0,100,100,0,0,"
             f"3,{round(hook * 0.29)},0,8,{side + 20},{side + 20},{hook_margin},1\n\n"
             "[Events]\n"

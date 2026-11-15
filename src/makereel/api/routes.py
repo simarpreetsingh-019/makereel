@@ -113,7 +113,8 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
         return library.update_reel(req.params["folder"], req.params["name"],
                                    hook=body.get("hook"), caption=body.get("caption"),
                                    transcript=body.get("transcript"), words=body.get("words"), offset=offset,
-                                   ass=body.get("ass"), logo=body.get("logo"), restyle=bool(body.get("restyle")))
+                                   ass=body.get("ass"), logo=body.get("logo"), restyle=bool(body.get("restyle")),
+                                   look=body.get("look"))
 
     @api.post("/folders/{folder}/reels/{name}/sync")
     def sync_reel(req: Request):

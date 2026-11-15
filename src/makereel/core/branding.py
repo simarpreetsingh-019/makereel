@@ -26,11 +26,46 @@ def logo_file() -> Path | None:
     return next((brand_dir() / n for n in LOGO_NAMES if (brand_dir() / n).is_file()), None)
 
 
-def style_for(fmt: str, brand: dict) -> Style:
+def style_for(fmt: str, brand: dict, look: dict | None = None) -> Style:
+    """Caption style for a format: the brand kit, plus this reel's own look overrides (if any)."""
     w, h = FORMATS[fmt]
+    look = look or {}
     return Style(width=w, height=h, font=brand["font"], text_colour=brand["text_colour"],
                  highlight_colour=brand["highlight_colour"], outline_colour=brand["outline_colour"],
-                 position=brand["caption_position"], size=brand["caption_size"])
+                 position=brand["caption_position"],
+                 size=look.get("size", brand["caption_size"]),
+                 vertical=look.get("vertical"),
+                 box=look.get("box", brand.get("caption_box", False)),
+                 box_colour=look.get("box_colour", brand.get("box_colour", "#000000")),
+                 box_opacity=look.get("box_opacity", brand.get("box_opacity", 0.6)))
+
+
+def clean_look(look: dict) -> dict:
+    """Validate a reel's caption look overrides. Raises ValueError with a readable message."""
+    import re
+    out = {}
+    if look.get("vertical") is not None:
+        v = float(look["vertical"])
+        if not 0.02 <= v <= 0.9:
+            raise ValueError("caption height must be between 2% and 90% from the bottom")
+        out["vertical"] = round(v, 3)
+    if look.get("size") is not None:
+        v = float(look["size"])
+        if not 0.5 <= v <= 2.0:
+            raise ValueError("caption size must be between 50% and 200%")
+        out["size"] = round(v, 2)
+    if look.get("box") is not None:
+        out["box"] = bool(look["box"])
+    if look.get("box_colour") is not None:
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", str(look["box_colour"])):
+            raise ValueError("background colour must look like #000000")
+        out["box_colour"] = look["box_colour"]
+    if look.get("box_opacity") is not None:
+        v = float(look["box_opacity"])
+        if not 0 <= v <= 1:
+            raise ValueError("background opacity must be between 0 and 100%")
+        out["box_opacity"] = round(v, 2)
+    return out
 
 
 def logo_for(brand: dict, enabled_on_reel: bool = True) -> Logo | None:

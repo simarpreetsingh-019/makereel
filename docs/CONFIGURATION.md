@@ -66,7 +66,12 @@ passes a one-frame test; otherwise it falls back to `libx264`.
 | `text_colour` / `highlight_colour` / `outline_colour` | `#FFFFFF` / `#FFDD00` / `#000000` | caption colours |
 | `caption_position` | `bottom` | `bottom` (lower third), `middle` or `top` |
 | `caption_size` | 1.0 | 0.5–2 × the default size |
+| `caption_box` | false | a background box behind captions (helps over busy video or video with its own subtitles) |
+| `box_colour` / `box_opacity` | `#000000` / 0.6 | background colour, and how solid it is (0 = invisible, 1 = solid) |
 | `credit_footer` | true | end the post text with "✂️ Made with makereel". It's opt-out, and is never put on the video. |
+
+Each reel can override the height, size and background in Edit → **Look**. That's how to deal with
+videos that already have subtitles burned in: move the captions above them, or cover them with a solid background.
 
 The brand applies to new reels. For existing reels, use Edit → *Apply brand style* (captions); the logo
 setting applies on any re-render.

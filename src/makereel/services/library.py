@@ -144,9 +144,20 @@ def _summary(folder: str, name: str, post: dict, video: Path) -> dict:
             "download": _media_url(folder, video.name, video) + "&download=1",
             "raw": _media_url(folder, post["raw"], d / post["raw"]) if (d / post.get("raw", "-")).is_file() else None,
             "can_export": (d / post.get("source_clip", "-")).is_file(),
-            "logo": post.get("logo", True), "exports": exports,
+            "logo": post.get("logo", True), "exports": exports, "look": _look(post),
             **{k: post.get(k) for k in ("hook", "caption", "creator", "creator_url", "source",
                                         "score", "why", "start", "end", "fit")}}
+
+
+def _look(post: dict) -> dict:
+    """The reel's effective caption look (its overrides on top of the brand kit), for the editor."""
+    b = load_settings().brand
+    style = branding.style_for(render.MAIN_FORMAT, b, post.get("look"))
+    default_vertical = {"bottom": 0.29, "middle": 0.5, "top": 0.78}[b["caption_position"]]
+    return {"vertical": style.vertical if style.vertical is not None else default_vertical, "size": style.size,
+            "box": style.box, "box_colour": style.box_colour, "box_opacity": style.box_opacity,
+            "font": style.font, "text_colour": style.text_colour, "highlight_colour": style.highlight_colour,
+            "outline_colour": style.outline_colour, "custom": bool(post.get("look"))}
 
 
 def get_reel(folder: str, name: str) -> dict:
@@ -160,7 +171,8 @@ def get_reel(folder: str, name: str) -> dict:
 # --------------------------------------------------------------------------- editing
 def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str | None = None,
                 transcript: str | None = None, words: list[dict] | None = None, offset: float | None = None,
-                ass: str | None = None, logo: bool | None = None, restyle: bool = False) -> dict:
+                ass: str | None = None, logo: bool | None = None, restyle: bool = False,
+                look: dict | None = None) -> dict:
     """Apply edits and re-render the reel (and any exports).
 
     - `transcript`: the caption words as a paragraph. Unchanged words keep their timing; edited,
@@ -172,6 +184,9 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
     - `ass`: the whole caption file, for advanced edits (wins over the options above).
     - `logo`: show the brand logo on this reel or not.
     - `restyle`: re-apply the current brand kit's caption style.
+    - `look`: this reel's caption placement and background, e.g. to avoid subtitles already in the video:
+      {"vertical": 0.4 (share of the height from the bottom), "size": 0.9, "box": true,
+       "box_colour": "#000000", "box_opacity": 0.6}. Keys left out keep their current value.
     """
     meta_file, post = _reel_paths(folder, name)
     d = meta_file.parent
@@ -179,6 +194,12 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
     current = ass_file.read_text(encoding="utf-8")
     new_hook = hook.strip() if hook is not None and hook.strip() else post.get("hook")
     brand = load_settings().brand
+    if look is not None:
+        try:
+            post["look"] = {**(post.get("look") or {}), **branding.clean_look(look)}
+        except (TypeError, ValueError) as e:
+            raise InvalidInput(str(e)) from e
+        restyle = True
 
     if ass is not None and ass.strip() and ass != current:
         text = ass
@@ -201,7 +222,7 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
                 raise InvalidInput("shift captions by at most 10 seconds")
             timed = captions.shift(timed, offset)
             changed = True
-        style = branding.style_for(render.MAIN_FORMAT, brand) if restyle else None
+        style = branding.style_for(render.MAIN_FORMAT, brand, post.get("look")) if restyle else None
         if changed or restyle:
             text = captions.rebuild(current, timed, new_hook, style)
         elif new_hook != post.get("hook"):
@@ -260,7 +281,8 @@ def export_reel(folder: str, name: str, fmt: str, fit: str | None = None) -> dic
     main_ass = (d / post["captions"]).read_text(encoding="utf-8")
     words, hook = captions.parse_words(main_ass), captions.parse_hook(main_ass)
     ass = d / f"{name}.{fmt}.ass"
-    ass.write_text(captions.rebuild(main_ass, words, hook, branding.style_for(fmt, brand)), encoding="utf-8")
+    ass.write_text(captions.rebuild(main_ass, words, hook, branding.style_for(fmt, brand, post.get("look"))),
+                   encoding="utf-8")
     out = d / f"{name}.{fmt}.mp4"
     render.export(source, ass, out, fmt, fit, branding.logo_for(brand, post.get("logo", True)),
                   branding.fonts_dir())

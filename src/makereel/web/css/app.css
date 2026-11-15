@@ -127,10 +127,11 @@ dialog::backdrop { background: #0009; }
 /* timing */
 .tm-stage { position: relative; }
 .tm-stage video { width: 100%; aspect-ratio: 9/16; background: #000; border-radius: 10px; display: block; }
-.tm-caption { position: absolute; left: 6%; right: 6%; top: 66%; text-align: center; pointer-events: none;
+.tm-caption { position: absolute; left: 6%; right: 6%; bottom: 29%; text-align: center; pointer-events: none;
               font: 900 clamp(14px, 4.4vw, 22px)/1.15 "Arial Black", system-ui, sans-serif; color: #fff;
               text-transform: uppercase; -webkit-text-stroke: 1px #000; text-shadow: 0 2px 4px #000a; }
 .tm-caption b { color: #FFDD00; display: inline-block; transform: scale(1.08); }
+.tm-caption span { padding: .12em .25em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .word-list { max-height: 300px; overflow: auto; margin-top: 10px; border: 1px solid var(--line); border-radius: 9px; }
 .word-row { display: grid; grid-template-columns: 52px 1fr auto auto auto; gap: 6px; align-items: center; padding: 4px 8px;
             border-top: 1px solid var(--line); font-size: 13.5px; }
@@ -194,3 +195,9 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
                       background: #000a; color: #fff; border: 0; }
 .folder:hover .folder-del, .folder:focus-within .folder-del { opacity: 1; }
 @media (hover: none) { .folder .folder-del { opacity: 1; } }
+
+/* caption look preview (editor + brand) */
+.lk-caption { position: absolute; left: 5.5%; right: 5.5%; text-align: center; pointer-events: none;
+              font-weight: 900; text-transform: uppercase; line-height: 1.12; }
+.lk-caption span { padding: .12em .25em; border-radius: 2px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.lk-caption b { display: inline-block; transform: scale(1.08); }

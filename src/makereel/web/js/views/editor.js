@@ -1,9 +1,11 @@
 // Reel editor, three tabs:
 //   Text    on-screen title, captions as a paragraph, post text, logo on/off
 //   Timing  live caption preview over the clean video, shift slider, auto-sync, tap-to-sync, per-word nudges
+//   Look    caption height, size and background box (e.g. to avoid subtitles already in the video)
 //   Export  the same reel as 9:16, 4:5, 1:1 or 16:9 (blur / crop / bars)
 import { api, media } from "../api.js";
 import { $, busy, copyText, esc, toast } from "../ui.js";
+import { hexToRgba } from "./brand.js";
 
 const FORMATS = [
   ["9x16", "9:16", "Reels, Shorts, TikTok"],
@@ -12,7 +14,8 @@ const FORMATS = [
   ["16x9", "16:9", "YouTube, X"],
 ];
 
-let cur = null;   // { folder, name, onSaved, reel, words, offset, tapIndex }
+let cur = null;   // { folder, name, onSaved, reel, words, offset, tapIndex, look }
+const LOOK_FIELDS = ["vertical", "size", "box", "box_colour", "box_opacity"];
 
 // ------------------------------------------------------------------ open / fill
 export async function openEditor(folder, name, onSaved, tab = "text") {
@@ -43,8 +46,55 @@ function fill(reel) {
   $("#tm-video").src = media(reel.raw || reel.video);
   $("#tm-offset").value = 0;
   $("#tm-offset-label").textContent = "0.00 s";
+  $("#lk-video").src = media(reel.raw || reel.video);
+  cur.look = { ...reel.look };
+  fillLook();
   drawWordList();
   drawExports();
+}
+
+// ------------------------------------------------------------------ look (placement + background)
+function fillLook() {
+  LOOK_FIELDS.forEach((k) => {
+    const el = $(`#lk-${k}`);
+    if (el.type === "checkbox") el.checked = cur.look[k]; else el.value = cur.look[k];
+  });
+  drawLook();
+}
+
+function readLook() {
+  const out = {};
+  LOOK_FIELDS.forEach((k) => {
+    const el = $(`#lk-${k}`);
+    out[k] = el.type === "checkbox" ? el.checked : el.type === "range" ? Number(el.value) : el.value;
+  });
+  return out;
+}
+
+/** Style a caption element like the rendered captions (positions/sizes relative to its stage). */
+function styleCaption(el, look, stage) {
+  const w = stage.clientWidth || 300;
+  el.style.bottom = `${look.vertical * 100}%`;
+  el.style.top = "auto";
+  el.style.fontSize = `${w * 0.08 * look.size}px`;
+  el.style.fontFamily = `"${look.font}", "Arial Black", system-ui, sans-serif`;
+  el.style.color = look.text_colour;
+  el.style.webkitTextStroke = `${Math.max(1, w * 0.004)}px ${look.outline_colour}`;
+  el.querySelectorAll("b").forEach((b) => (b.style.color = look.highlight_colour));
+  const inner = el.querySelector("span") || el;
+  inner.style.background = look.box ? hexToRgba(look.box_colour, look.box_opacity) : "transparent";
+}
+
+function drawLook() {
+  const look = { ...cur.reel.look, ...readLook() };
+  const cap = $("#lk-caption");
+  cap.innerHTML = `<span>${cur.words.slice(0, 3).map((w, i) => (i === 1 ? `<b>${esc(w.word)}</b>` : esc(w.word))).join(" ")
+    || "CAPTIONS <b>LOOK</b> LIKE"}</span>`;
+  styleCaption(cap, look, $("#lk-stage"));
+  $("#lk-vertical-v").textContent = `${Math.round(look.vertical * 100)}%`;
+  $("#lk-size-v").textContent = `${Math.round(look.size * 100)}%`;
+  $("#lk-box_opacity-v").textContent = `${Math.round(look.box_opacity * 100)}%`;
+  $("#lk-box-opts").style.opacity = look.box ? 1 : 0.45;
 }
 
 function showTab(tab) {
@@ -102,8 +152,9 @@ function drawOverlay() {
   if (i < 0) { box.innerHTML = ""; }
   else {
     const g = Math.floor(i / 3) * 3;
-    box.innerHTML = cur.words.slice(g, g + 3)
-      .map((w, k) => (g + k === i ? `<b>${esc(w.word)}</b>` : esc(w.word))).join(" ");
+    box.innerHTML = `<span>${cur.words.slice(g, g + 3)
+      .map((w, k) => (g + k === i ? `<b>${esc(w.word)}</b>` : esc(w.word))).join(" ")}</span>`;
+    styleCaption(box, cur.reel.look, box.parentElement);
   }
   document.querySelectorAll("#tm-list [data-i]").forEach((row) => row.classList.toggle("on", Number(row.dataset.i) === i));
   $("#tm-time").textContent = `${t.toFixed(2)} s`;
@@ -239,6 +290,22 @@ export function mount() {
     const changed = cur.offset !== 0 || JSON.stringify(cur.words) !== JSON.stringify(cur.reel.words);
     if (!changed) return toast("Timing unchanged");
     save({ words: cur.words, offset: cur.offset || undefined }, e.currentTarget, "Timing saved and re-rendered.");
+  });
+
+  // Look tab
+  $("[data-edpanel=look]").addEventListener("input", (e) => { if (e.target.id?.startsWith("lk-")) drawLook(); });
+  $("[data-edpanel=look]").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-preset]");
+    if (b) { $("#lk-vertical").value = b.dataset.preset; drawLook(); }
+  });
+  $("#lk-video").addEventListener("loadedmetadata", drawLook);
+  window.addEventListener("resize", () => cur && drawLook());
+  $("#lk-reset").addEventListener("click", () => { cur.look = { ...cur.reel.look }; fillLook(); });
+  $("#lk-save").addEventListener("click", (e) => {
+    const look = readLook();
+    const changed = LOOK_FIELDS.some((k) => String(look[k]) !== String(cur.reel.look[k]));
+    if (!changed) return toast("Look unchanged");
+    save({ look }, e.currentTarget, "Look saved and re-rendered.");
   });
 
   // Export tab

@@ -4,7 +4,8 @@ import { api, media } from "../api.js";
 import { $, busy, esc, toast } from "../ui.js";
 
 const FIELDS = ["logo_enabled", "logo_position", "logo_scale", "logo_opacity", "font", "text_colour",
-  "highlight_colour", "outline_colour", "caption_position", "caption_size", "credit_footer"];
+  "highlight_colour", "outline_colour", "caption_position", "caption_size", "caption_box", "box_colour",
+  "box_opacity", "credit_footer"];
 const COMMON_FONTS = ["Arial Black", "Impact", "Montserrat", "Bebas Neue", "Anton", "Poppins", "Inter"];
 
 let state = null;   // { logo, fonts, settings }
@@ -52,6 +53,9 @@ function preview() {
   cap.style.webkitTextStroke = `1px ${v.outline_colour}`;
   cap.style.top = { top: "22%", middle: "47%", bottom: "68%" }[v.caption_position];
   cap.querySelector("b").style.color = v.highlight_colour;
+  cap.style.background = v.caption_box ? hexToRgba(v.box_colour, v.box_opacity) : "transparent";
+  cap.style.padding = v.caption_box ? "4px 6px" : "0";
+  $("#br-box_opacity-v").textContent = `${Math.round(v.box_opacity * 100)}%`;
   const logo = $("#br-prev-logo");
   logo.hidden = !(state.logo && v.logo_enabled);
   if (state.logo) logo.src = media(state.logo);
@@ -97,4 +101,9 @@ export function mount() {
     const name = e.target.dataset.font;
     if (name) busy(e.target, async () => { Object.assign(state, await api.deleteFont(name)); fillForm(); });
   });
+}
+
+export function hexToRgba(hex, alpha) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }

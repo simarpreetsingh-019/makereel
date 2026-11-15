@@ -116,6 +116,9 @@ BRAND_DEFAULTS: dict[str, Any] = {
     "outline_colour": "#000000",
     "caption_position": "bottom",   # bottom | middle | top
     "caption_size": 1.0,
+    "caption_box": False,           # background box behind captions (helps over busy or captioned video)
+    "box_colour": "#000000",
+    "box_opacity": 0.6,
     "credit_footer": True,          # add "Made with makereel" to the post text (opt out here)
 }
 
@@ -183,10 +186,11 @@ def validate_brand(brand: dict[str, Any]) -> None:
         raise ConfigError("brand.logo_position must be top-left, top-right, bottom-left or bottom-right")
     if brand.get("caption_position") not in ("bottom", "middle", "top"):
         raise ConfigError("brand.caption_position must be bottom, middle or top")
-    for key in ("text_colour", "highlight_colour", "outline_colour"):
+    for key in ("text_colour", "highlight_colour", "outline_colour", "box_colour"):
         if not re.fullmatch(r"#[0-9A-Fa-f]{6}", str(brand.get(key, ""))):
             raise ConfigError(f"brand.{key} must be a colour like #FFDD00")
-    for key, lo, hi in (("logo_scale", 0.03, 0.6), ("logo_opacity", 0.05, 1.0), ("caption_size", 0.5, 2.0)):
+    for key, lo, hi in (("logo_scale", 0.03, 0.6), ("logo_opacity", 0.05, 1.0), ("caption_size", 0.5, 2.0),
+                         ("box_opacity", 0.0, 1.0)):
         try:
             brand[key] = float(brand[key])
         except (TypeError, ValueError) as e:
@@ -197,6 +201,7 @@ def validate_brand(brand: dict[str, Any]) -> None:
         raise ConfigError("brand.font must be a plain font name")
     brand["logo_enabled"] = bool(brand.get("logo_enabled"))
     brand["credit_footer"] = bool(brand.get("credit_footer"))
+    brand["caption_box"] = bool(brand.get("caption_box"))
 
 
 def load_settings(path: Path | None = None) -> Settings:

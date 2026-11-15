@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.1 (2026-11-15)
+
+### Added
+- **Caption look per reel** (Edit → Look): height from the bottom (with quick presets), size, and a
+  background box with colour and opacity, previewed live. Use it to avoid or cover subtitles already in
+  the video. It applies to the reel and all its exports. Brand defaults for the background box are in the Brand tab.
+- The Timing preview shows captions with the reel's real look and position.
+
+### Fixed
+- Delete (folders and reels) did nothing in embedded browsers, because `window.confirm` was blocked. It
+  now uses an in-page confirmation, and folders can be deleted straight from their card.
+
 ## 0.3.0 (2026-11-15)
 
 ### Added

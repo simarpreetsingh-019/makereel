@@ -57,7 +57,7 @@ Errors always look like this:
 | GET | `/folders/{folder}` | | `{folder, info, reels: [Reel]}` |
 | DELETE | `/folders/{folder}` | | 204 |
 | GET | `/folders/{folder}/reels/{name}` | | `Reel` plus `transcript` and `ass` |
-| PATCH | `/folders/{folder}/reels/{name}` | any of `{"transcript", "words", "offset", "hook", "caption", "ass", "logo", "restyle"}` | updated `Reel` (re-rendered, exports too) |
+| PATCH | `/folders/{folder}/reels/{name}` | any of `{"transcript", "words", "offset", "hook", "caption", "ass", "logo", "restyle", "look"}` | updated `Reel` (re-rendered, exports too) |
 | POST | `/folders/{folder}/reels/{name}/sync` | | auto-sync: re-time captions from the reel's own audio, keeping corrected words |
 | POST | `/folders/{folder}/reels/{name}/export` | `{"format": "9x16"\|"4x5"\|"1x1"\|"16x9", "fit": "blur"\|"crop"\|"pad"}` | updated `Reel`, with `exports[format]` holding `video` and `download` |
 | DELETE | `/folders/{folder}/reels/{name}` | | 204 |
@@ -69,6 +69,10 @@ PATCH rules:
   Edited, added or removed words are fitted between them (sequence alignment).
 - `words` gives exact timings from the timing editor: `[{"start": 1.06, "end": 1.6, "word": "ALRIGHT"}, ...]` (seconds on the reel's clock).
 - `offset` moves every caption earlier (negative) or later (positive), in seconds (at most ±10).
+- `look` sets this reel's caption placement and background, e.g. to avoid subtitles already in the video:
+  `{"vertical": 0.45, "size": 0.9, "box": true, "box_colour": "#000000", "box_opacity": 0.6}`.
+  `vertical` is where the bottom of the captions sits, as a share of the height from the bottom (0.02–0.9).
+  Keys you leave out keep their value. It applies to the reel and all its exports, and the GET response returns the effective `look`.
 - `logo` (bool) shows or hides the brand logo on this reel. `restyle: true` re-applies the brand kit's caption style.
 - `hook` changes the on-screen title, and the first line of the post text follows it.
 - `caption` is the post text (credits, hashtags).
