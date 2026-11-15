@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0 (2026-11-16)
+
+### Added
+- **Follow the speaker** framing (`fit: track`): YuNet face detection, single-person tracking, a calm
+  dead-zone camera, and a fallback to blur when there's no steady face. Works for every export shape.
+- **Caption templates:** Classic, Pop, Boxed word, Glow, Karaoke fill, One word, Minimal (per reel, plus a brand default).
+- **Trim / extend, split, join** (editor Cut tab; Join in the folder view). Masters keep 6 s either side.
+  Trimming keeps corrected captions and transcribes newly revealed audio.
+- **Optional AI judge:** local (Ollama / LM Studio), Claude (`makereel[ai]`) or any OpenAI-compatible
+  API. Four scores plus a title and reason, blended with signals, shown on reel cards. Off by default.
+- Docs: COMPETITORS.md (gap analysis vs PeakCut, OpenShorts, SupoClip, ClipStudio) and MONETIZATION.md.
+
+### Changed
+- The 24/7 tab is now **Settings** and holds the AI judge settings.
+- Benchmarks include a `judge` stage.
+
 ## 0.3.1 (2026-11-15)
 
 ### Added

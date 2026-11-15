@@ -100,7 +100,7 @@ CLIP_DEFAULTS: dict[str, Any] = {
     "min_len": 15,
     "max_len": 45,
     "model": "base",         # whisper size: tiny | base | small | medium | large-v3
-    "layout": "blur",        # blur | crop
+    "layout": "blur",        # blur | crop | pad | track (follow the speaker)
     "language": None,        # None = auto-detect
     "silence": False,        # trim dead air with auto-editor (talk content)
 }
@@ -116,10 +116,18 @@ BRAND_DEFAULTS: dict[str, Any] = {
     "outline_colour": "#000000",
     "caption_position": "bottom",   # bottom | middle | top
     "caption_size": 1.0,
+    "caption_template": "classic",  # classic | pop | boxed | glow | karaoke | single | minimal
     "caption_box": False,           # background box behind captions (helps over busy or captioned video)
     "box_colour": "#000000",
     "box_opacity": 0.6,
     "credit_footer": True,          # add "Made with makereel" to the post text (opt out here)
+}
+
+AI_DEFAULTS: dict[str, Any] = {
+    "provider": "off",       # off | local (Ollama, LM Studio...) | claude | openai (any OpenAI-compatible API)
+    "model": "",             # empty = the provider's default
+    "base_url": "",          # for local / openai; empty = the provider's default
+    "weight": 0.5,           # 0 = signals only, 1 = AI only
 }
 
 SETTINGS_DEFAULTS: dict[str, Any] = {
@@ -134,11 +142,12 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "max_height": 720,       # source resolution to download
     "clip": CLIP_DEFAULTS,
     "brand": BRAND_DEFAULTS,
+    "ai": AI_DEFAULTS,
 }
 
 INT_SETTINGS = ("poll_minutes", "max_parallel_live", "keep_days", "buffer_minutes",
                 "clips_per_hour", "max_height")
-CLIP_CHOICES = {"profile": ("gameplay", "talk"), "layout": ("blur", "crop"),
+CLIP_CHOICES = {"profile": ("gameplay", "talk"), "layout": ("blur", "crop", "pad", "track"),
                 "model": ("tiny", "base", "small", "medium", "large-v3")}
 
 
@@ -156,6 +165,10 @@ class Settings:
     @property
     def brand(self) -> dict[str, Any]:
         return self.data["brand"]
+
+    @property
+    def ai(self) -> dict[str, Any]:
+        return self.data["ai"]
 
     def with_clip(self, **overrides: Any) -> Settings:
         """A copy with some clip options replaced (None and "" mean 'keep the default')."""
@@ -202,6 +215,24 @@ def validate_brand(brand: dict[str, Any]) -> None:
     brand["logo_enabled"] = bool(brand.get("logo_enabled"))
     brand["credit_footer"] = bool(brand.get("credit_footer"))
     brand["caption_box"] = bool(brand.get("caption_box"))
+    from .core.captions import TEMPLATES
+    if brand.get("caption_template") not in TEMPLATES:
+        raise ConfigError(f"brand.caption_template must be one of {', '.join(TEMPLATES)}")
+
+
+def validate_ai(ai: dict[str, Any]) -> None:
+    if ai.get("provider") not in ("off", "local", "claude", "openai"):
+        raise ConfigError("ai.provider must be off, local, claude or openai")
+    try:
+        ai["weight"] = float(ai.get("weight", 0.5))
+    except (TypeError, ValueError) as e:
+        raise ConfigError("ai.weight must be a number between 0 and 1") from e
+    if not 0 <= ai["weight"] <= 1:
+        raise ConfigError("ai.weight must be between 0 and 1")
+    base = str(ai.get("base_url") or "")
+    if base and not base.startswith(("http://", "https://")):
+        raise ConfigError("ai.base_url must start with http:// or https://")
+    ai["model"], ai["base_url"] = str(ai.get("model") or "").strip(), base.strip()
 
 
 def load_settings(path: Path | None = None) -> Settings:
@@ -213,11 +244,13 @@ def load_settings(path: Path | None = None) -> Settings:
         except json.JSONDecodeError as e:
             raise ConfigError(f"{path} is not valid JSON: {e}") from e
     data = copy.deepcopy(SETTINGS_DEFAULTS)
-    data.update({k: v for k, v in raw.items() if k in SETTINGS_DEFAULTS and k not in ("clip", "brand")})
+    data.update({k: v for k, v in raw.items() if k in SETTINGS_DEFAULTS and k not in ("clip", "brand", "ai")})
     data["clip"].update({k: v for k, v in (raw.get("clip") or {}).items() if k in CLIP_DEFAULTS})
     data["brand"].update({k: v for k, v in (raw.get("brand") or {}).items() if k in BRAND_DEFAULTS})
+    data["ai"].update({k: v for k, v in (raw.get("ai") or {}).items() if k in AI_DEFAULTS})
     validate_clip(data["clip"])
     validate_brand(data["brand"])
+    validate_ai(data["ai"])
     return Settings(data)
 
 
@@ -247,6 +280,9 @@ def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings
         current["clip"].update({k: v for k, v in changes["clip"].items()
                                 if k in CLIP_DEFAULTS and v != ""})
         validate_clip(current["clip"])
+    if isinstance(changes.get("ai"), dict):
+        current["ai"].update({k: v for k, v in changes["ai"].items() if k in AI_DEFAULTS})
+        validate_ai(current["ai"])
     if isinstance(changes.get("brand"), dict):
         current["brand"].update({k: v for k, v in changes["brand"].items() if k in BRAND_DEFAULTS})
         validate_brand(current["brand"])

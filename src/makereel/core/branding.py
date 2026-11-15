@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..config import env
-from .captions import Style
+from .captions import TEMPLATES, Style
 from .render import FORMATS, Logo
 
 LOGO_NAMES = ("logo.png", "logo.webp", "logo.jpg")
@@ -40,6 +40,10 @@ def style_for(fmt: str, brand: dict, look: dict | None = None) -> Style:
                  box_opacity=look.get("box_opacity", brand.get("box_opacity", 0.6)))
 
 
+def template_for(brand: dict, look: dict | None = None) -> str:
+    return (look or {}).get("template") or brand.get("caption_template", "classic")
+
+
 def clean_look(look: dict) -> dict:
     """Validate a reel's caption look overrides. Raises ValueError with a readable message."""
     import re
@@ -65,6 +69,10 @@ def clean_look(look: dict) -> dict:
         if not 0 <= v <= 1:
             raise ValueError("background opacity must be between 0 and 100%")
         out["box_opacity"] = round(v, 2)
+    if look.get("template") is not None:
+        if look["template"] not in TEMPLATES:
+            raise ValueError(f"caption template must be one of {', '.join(TEMPLATES)}")
+        out["template"] = look["template"]
     return out
 
 

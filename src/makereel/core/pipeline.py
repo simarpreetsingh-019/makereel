@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 
 from ..errors import MediaError
-from . import branding, captions, highlights, media, render, signals, transcribe
+from . import branding, captions, highlights, judge, media, render, signals, transcribe
 from .metrics import stage
 
 log = logging.getLogger(__name__)
@@ -26,10 +26,12 @@ BASE_TAGS = {
     "talk": ["#podcast", "#clips", "#viral", "#fyp"],
 }
 FOLDER_FILE = "folder.json"   # describes the source video of a folder
+MARGIN = 6.0                  # seconds kept either side of each reel in its master clip (for trimming)
 
 
 def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand: dict[str, Any],
-            chat: Path | None = None, chat_counts: np.ndarray | None = None) -> list[dict]:
+            chat: Path | None = None, chat_counts: np.ndarray | None = None,
+            ai: dict[str, Any] | None = None) -> list[dict]:
     """Make up to clip['max_clips'] reels from `video` into `out_dir`. Returns their metadata."""
     out_dir.mkdir(parents=True, exist_ok=True)
     write_folder_info(out_dir, meta)
@@ -64,6 +66,9 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand:
             words = transcribe.words_in(video, max(0, c.start - 6), min(total, c.end + 8),
                                         clip["model"], clip["language"])
         highlights.rescore(c, words, parts, clip["profile"])
+    if ai and judge.enabled(ai):
+        with stage("judge"):
+            _apply_judge(cands, ai, clip["profile"])
     best = sorted(cands, key=lambda c: c.score, reverse=True)[: clip["max_clips"]]
 
     log.info("[3/3] rendering %d reels -> %s", len(best), out_dir.name)
@@ -85,40 +90,48 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
         cuts = signals.scene_cuts(video, c.start, c.start + 3)
     if cuts:
         c.start = round(cuts[0], 2)
-    hook = make_hook(c.text)
+    hook = c.ai.get("title") or make_hook(c.text)
     name = next_reel_name(out_dir)
     src, raw, ass, out = (out_dir / f"{name}{ext}" for ext in (".src.mp4", ".raw.mp4", ".ass", ".mp4"))
 
+    s0, e0 = max(0.0, c.start - MARGIN), min(total, c.end + MARGIN)
+    section = (round(c.start - s0, 3), round(c.end - c.start, 3))     # the reel inside its master
     with stage("render"):
-        render.cut_source(video, c.start, c.end, src)
+        render.cut_source(video, s0, e0, src)
     with stage("sync"):
-        words = synced_words(src, c.words, c.start, clip)
-    ass.write_text(captions.build_ass(words, 0.0, c.end - c.start, hook,
-                                      branding.style_for(render.MAIN_FORMAT, brand)), encoding="utf-8")
+        words = synced_words(src, section, c.words, c.start, clip)
+    ass.write_text(captions.build_ass(words, 0.0, section[1], hook, branding.style_for(render.MAIN_FORMAT, brand),
+                                      branding.template_for(brand)), encoding="utf-8")
     with stage("render"):
-        render.make_raw(src, raw, render.MAIN_FORMAT, clip["layout"])
+        render.make_raw(src, raw, render.MAIN_FORMAT, clip["layout"], section)
         render.burn(raw, ass, out, branding.logo_for(brand), branding.fonts_dir())
     if clip.get("silence"):
         render.trim_silence(out)
 
     post = {"file": out.name, "raw": raw.name, "source_clip": src.name, "captions": ass.name,
             "folder": out_dir.name, "name": name, "format": render.MAIN_FORMAT, "fit": clip["layout"],
+            "src_offset": section[0], "length": section[1],
             "logo": True, "exports": {}, "score": round(c.score, 2), "why": c.reasons, "hook": hook,
+            "ai": c.ai or None,
             "start": c.start, "end": c.end, **credits(meta, c.start, clip["profile"], hook, brand)}
     (out_dir / f"{name}.json").write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
     log.info("   %s  %.1f-%.1fs  score %.2f  %s", name, c.start, c.end, c.score, c.reasons)
     return post
 
 
-def synced_words(clip_file: Path, source_words: list[dict], clip_start: float, clip: dict) -> list[dict]:
+def synced_words(clip_file: Path, section: tuple[float, float], source_words: list[dict], clip_start: float,
+                 clip: dict) -> list[dict]:
     """Caption timings measured on the finished clip itself (auto-sync).
 
     The first transcription ran on the long source with fast settings; cutting and re-encoding can
     shift things by a few hundred milliseconds. Re-transcribing the short clip precisely gives
     timings on exactly the audio viewers hear. Falls back to the source timings if it finds nothing.
     """
+    off, length = section
     try:
-        precise = transcribe.words_in_file(clip_file, clip["model"], clip["language"])
+        precise = [{**w, "start": round(w["start"] - off, 2), "end": round(w["end"] - off, 2)}
+                   for w in transcribe.words_in(clip_file, off, off + length, clip["model"], clip["language"],
+                                                precise=True)]
     except MediaError as e:
         log.warning("   caption sync skipped: %s", e.message)
         precise = []
@@ -126,6 +139,23 @@ def synced_words(clip_file: Path, source_words: list[dict], clip_start: float, c
         return precise
     return [{**w, "start": w["start"] - clip_start, "end": w["end"] - clip_start} for w in source_words
             if w["start"] >= clip_start]
+
+
+def _apply_judge(cands: list[highlights.Clip], ai: dict, profile: str) -> None:
+    """Blend the AI judge's 0-10 scores into the signal scores (weight from settings)."""
+    items = [{"id": i, "length": c.end - c.start, "why": c.reasons,
+              "text": " ".join(w["word"] for w in c.words if c.start <= w["start"] < c.end)}
+             for i, c in enumerate(cands)]
+    scores = judge.judge(items, ai, profile)
+    if not scores:
+        return
+    ai_norm = [sum(scores[i][k] for k in judge.CRITERIA) / 40 if i in scores else None for i in range(len(cands))]
+    for c, s, i in zip(cands, judge.blend([c.score for c in cands], ai_norm, ai.get("weight", 0.5)),
+                       range(len(cands)), strict=True):
+        c.score = round(s * 10, 2)
+        if i in scores:
+            c.ai = scores[i]
+            c.reasons.append("ai")
 
 
 def next_reel_name(out_dir: Path) -> str:

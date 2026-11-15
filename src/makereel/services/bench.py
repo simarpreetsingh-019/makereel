@@ -34,7 +34,7 @@ log = logging.getLogger(__name__)
 
 TEST_VIDEO = "https://www.youtube.com/watch?v=jNQXAC9IVRw"   # 19 s, public, stable since 2005
 TEST_ID = "jNQXAC9IVRw"
-STAGES = ("probe", "signals", "transcribe", "scenes", "render", "sync")
+STAGES = ("probe", "signals", "transcribe", "judge", "scenes", "render", "sync")
 REPO_URL = os.environ.get("MAKEREEL_REPO_URL", "").rstrip("/")
 
 

@@ -7,6 +7,10 @@ and get captioned 9:16 reels with full creator credits, ready for Instagram, You
 - **One folder per video.** Each folder is named after the video's title, with all its reels inside.
 - **Editable, in-sync captions.** Captions are text, not images, and are timed from each reel's own audio. Fix words in a paragraph,
   auto-sync, shift them, or tap along to the audio, all with a live preview.
+- **Speaker framing.** "Follow the speaker" keeps the person centred with a calm, smooth camera.
+- **Caption styles.** Classic, Pop, Boxed word, Glow, Karaoke fill, One word, Minimal.
+- **Trim, split, join.** Every reel keeps 6 s of extra footage on each side, so you can extend or cut it later.
+- **Optional AI judge.** A local model or your own key scores moments like an editor and writes titles. Off by default.
 - **Any shape.** Export each reel as 9:16, 4:5, 1:1 or 16:9 (blurred fill, crop or black bars) in seconds.
 - **Brand kit.** Your logo, fonts and caption colours on every reel. The "Made with makereel" line in the post text is opt-out.
 - **Benchmarks.** Measure speed, CPU, RAM and disk on any device, and compare versions.
@@ -65,6 +69,8 @@ Live streams use a rolling buffer (idea from [PeakCut](https://github.com/haziqa
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Setting up, tests, lint, conventions, adding a route |
 | [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | What's measured, how to share results, results table |
 | [docs/CLIENT_SIDE_PLAN.md](docs/CLIENT_SIDE_PLAN.md) | Plan: offer makereel as a website that runs on each visitor's own device (no servers to pay for) |
+| [docs/COMPETITORS.md](docs/COMPETITORS.md) | PeakCut, OpenShorts, SupoClip, ClipStudio compared; what's next |
+| [docs/MONETIZATION.md](docs/MONETIZATION.md) | Plan for a paid version: what to charge for, tiers, licence, payments without servers |
 | [CHANGELOG.md](CHANGELOG.md) | What changed |
 
 ## Credits and responsibility

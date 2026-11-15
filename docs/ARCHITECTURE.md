@@ -34,8 +34,10 @@ makereel/
 │   │   ├── signals.py       loudness, chat activity, scene cuts
 │   │   ├── highlights.py    scoring curve, candidates, rescoring, edge snapping
 │   │   ├── transcribe.py    faster-whisper on candidate windows only
-│   │   ├── captions.py      build / parse / align / shift / restyle .ass caption files
-│   │   ├── branding.py      brand kit → caption Style + logo overlay
+│   │   ├── captions.py      build / parse / align / shift / restyle .ass files; 7 caption templates
+│   │   ├── branding.py      brand kit → caption Style + logo overlay + template
+│   │   ├── framing.py       speaker tracking (YuNet faces → calm camera path → ffmpeg crop)
+│   │   ├── judge.py         optional AI judge (local / Claude / OpenAI-compatible)
 │   │   ├── metrics.py       stage timers for benchmarks
 │   │   ├── render.py        master clip, any format (9:16, 4:5, 1:1, 16:9) × fit, captions, logo
 │   │   ├── pipeline.py      video → reels (+ credits, hook, folder.json)
@@ -89,7 +91,7 @@ two different videos with the same title get the video id appended). Inside it:
 |---|---|
 | `folder.json` | source video: id, title, channel, link, live status |
 | `reel_NN.mp4` | the reel (9:16), captions and logo burned in |
-| `reel_NN.src.mp4` | the moment in its original shape: the master every export format is made from |
+| `reel_NN.src.mp4` | the moment in its original shape **plus 6 s either side**: the master for every format, trim and split. The reel is `[src_offset, src_offset + length]` inside it |
 | `reel_NN.raw.mp4` | the 9:16 version without captions, so caption edits only re-burn (seconds) |
 | `reel_NN.<fmt>.mp4` / `.ass` | exports in other formats (`4x5`, `1x1`, `16x9`), made on demand |
 | `reel_NN.ass` | the captions as text (styles, timing, one highlighted word per line) |
@@ -97,6 +99,23 @@ two different videos with the same title get the video id appended). Inside it:
 
 The caption text shown in the editor is read back from the `.ass` file itself (`captions.parse_words`),
 so there is a single source of truth.
+
+## Speaker framing
+
+`fit: "track"` samples the reel at 3 fps, finds faces with OpenCV's YuNet (a 230 KB model, downloaded and
+checksum-verified on first use), and follows one person. It prefers the face nearest the previous one, so it
+doesn't jump to people in the background. A virtual camera with a dead zone holds still until the
+speaker moves 7% off-centre, then glides there in 0.6 s. The path becomes a piecewise-linear ffmpeg
+`crop` expression of `t`. If fewer than 40% of samples have a face (gameplay, screen recordings), it uses
+the blurred layout instead.
+
+## AI judge (optional)
+
+After the signal stage has shortlisted 3× as many moments as wanted, `judge.py` can send their transcripts to an
+LLM. It scores hook, engagement, value and shareability (0–10), and writes a title and a reason. The scores
+are blended with the signal score (`ai.weight`). The provider can be a local model (Ollama / LM Studio;
+nothing leaves the machine), Claude via the official SDK (structured JSON output, low effort, server-side
+refusal fallback), or any OpenAI-compatible API. Every failure falls back to signal-only ranking, so a job never fails because of it.
 
 ## Caption sync
 

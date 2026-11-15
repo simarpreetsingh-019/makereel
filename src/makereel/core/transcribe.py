@@ -67,8 +67,8 @@ def words_in(video: Path, start: float, end: float, size: str = "base",
             beam_size=5 if precise else 1,
             vad_filter=True, vad_parameters={"min_silence_duration_ms": 300 if precise else 2000},
             condition_on_previous_text=not precise)
-        return [{"start": round(w.start + start, 2), "end": round(w.end + start, 2), "word": w.word.strip()}
-                for s in segments for w in (s.words or [])]
+        return [{"start": round(float(w.start) + start, 2), "end": round(float(w.end) + start, 2),
+                 "word": w.word.strip()} for s in segments for w in (s.words or [])]
 
 
 def words_in_file(video: Path, size: str = "base", language: str | None = None) -> list[dict]:

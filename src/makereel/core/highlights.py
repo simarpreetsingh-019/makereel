@@ -32,6 +32,7 @@ class Clip:
     text: str = ""
     reasons: list = field(default_factory=list)
     words: list = field(default_factory=list, repr=False)
+    ai: dict = field(default_factory=dict)      # AI judge scores, title and reason (if enabled)
 
 
 def zscore(x):

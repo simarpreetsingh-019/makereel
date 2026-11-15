@@ -1,10 +1,11 @@
 // Reel editor, three tabs:
 //   Text    on-screen title, captions as a paragraph, post text, logo on/off
 //   Timing  live caption preview over the clean video, shift slider, auto-sync, tap-to-sync, per-word nudges
-//   Look    caption height, size and background box (e.g. to avoid subtitles already in the video)
+//   Look    caption style template, framing (incl. follow-the-speaker), height, size, background box
+//   Cut     trim / extend the edges, split in two
 //   Export  the same reel as 9:16, 4:5, 1:1 or 16:9 (blur / crop / bars)
 import { api, media } from "../api.js";
-import { $, busy, copyText, esc, toast } from "../ui.js";
+import { $, busy, confirmDialog, copyText, esc, toast } from "../ui.js";
 import { hexToRgba } from "./brand.js";
 
 const FORMATS = [
@@ -49,12 +50,46 @@ function fill(reel) {
   $("#lk-video").src = media(reel.raw || reel.video);
   cur.look = { ...reel.look };
   fillLook();
+  fillCut(reel);
   drawWordList();
   drawExports();
 }
 
+// ------------------------------------------------------------------ cut (trim / split)
+function fillCut(reel) {
+  cur.trim = { start: 0, end: 0 };
+  $("#cut-video").src = media(reel.video);
+  $("#cut-len").textContent = `${reel.length.toFixed(1)} s`;
+  $("#cut-room").textContent = `${reel.room_before.toFixed(1)} s before and ${reel.room_after.toFixed(1)} s after`;
+  $("#cut-note").textContent = reel.can_trim ? ""
+    : "This reel was made before trimming existed. Run its link again to trim or split it.";
+  document.querySelectorAll("[data-edpanel=cut] button").forEach((b) => (b.disabled = !reel.can_trim));
+  drawCut();
+}
+
+function clampTrim() {
+  const r = cur.reel;
+  cur.trim.start = Math.min(Math.max(cur.trim.start, -r.room_before), r.length - 3);
+  cur.trim.end = Math.max(Math.min(cur.trim.end, r.room_after), -(r.length - 3 - Math.max(0, cur.trim.start)));
+  cur.trim.start = Math.round(cur.trim.start * 100) / 100;
+  cur.trim.end = Math.round(cur.trim.end * 100) / 100;
+}
+
+function drawCut() {
+  const f = (v) => `${v > 0 ? "+" : ""}${v.toFixed(2)} s`;
+  $("#cut-start").textContent = f(cur.trim.start);
+  $("#cut-end").textContent = f(cur.trim.end);
+  const newLen = cur.reel.length - cur.trim.start + cur.trim.end;
+  $("#cut-result").textContent = cur.trim.start || cur.trim.end ? `New length ${newLen.toFixed(1)} s` : "";
+}
+
 // ------------------------------------------------------------------ look (placement + background)
 function fillLook() {
+  const r = cur.reel;
+  $("#lk-templates").innerHTML = Object.entries(r.templates || {}).map(([id, label]) =>
+    `<button type="button" class="chip-btn ${id === cur.look.template ? "on" : ""}" data-template="${id}">${esc(label)}</button>`).join("");
+  $("#lk-fit").value = r.fit || "blur";
+  $("#lk-fit").disabled = !r.can_export;
   LOOK_FIELDS.forEach((k) => {
     const el = $(`#lk-${k}`);
     if (el.type === "checkbox") el.checked = cur.look[k]; else el.value = cur.look[k];
@@ -100,8 +135,7 @@ function drawLook() {
 function showTab(tab) {
   document.querySelectorAll("#editor [data-edtab]").forEach((b) => b.classList.toggle("on", b.dataset.edtab === tab));
   document.querySelectorAll("#editor [data-edpanel]").forEach((p) => (p.hidden = p.dataset.edpanel !== tab));
-  $("#ed-video").pause();
-  $("#tm-video").pause();
+  ["#ed-video", "#tm-video", "#lk-video", "#cut-video"].forEach((v) => $(v).pause());
 }
 
 // ------------------------------------------------------------------ saving
@@ -224,7 +258,10 @@ function drawExports() {
 export function mount() {
   const dialog = $("#editor");
   $("#ed-close").addEventListener("click", () => dialog.close());
-  dialog.addEventListener("close", () => { $("#ed-video").pause(); $("#tm-video").pause(); cur && stopTapSync(); });
+  dialog.addEventListener("close", () => {
+    ["#ed-video", "#tm-video", "#lk-video", "#cut-video"].forEach((v) => $(v).pause());
+    if (cur) stopTapSync();
+  });
   document.querySelectorAll("#editor [data-edtab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.edtab)));
   $("#ed-copy").addEventListener("click", () => copyText($("#ed-caption").value));
   $("#ed-transcript").addEventListener("input", (e) => {
@@ -297,15 +334,63 @@ export function mount() {
   $("[data-edpanel=look]").addEventListener("click", (e) => {
     const b = e.target.closest("[data-preset]");
     if (b) { $("#lk-vertical").value = b.dataset.preset; drawLook(); }
+    const t = e.target.closest("[data-template]");
+    if (t) {
+      cur.look.template = t.dataset.template;
+      document.querySelectorAll("#lk-templates .chip-btn").forEach((x) => x.classList.toggle("on", x === t));
+    }
+  });
+
+  // Cut tab
+  const cv = $("#cut-video");
+  cv.addEventListener("timeupdate", () => ($("#cut-time").textContent = `${cv.currentTime.toFixed(1)} s`));
+  $("[data-edpanel=cut]").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-trim], [data-trim-now]");
+    if (!b || !cur.reel.can_trim) return;
+    const edge = b.dataset.trim || b.dataset.trimNow;
+    if (b.dataset.trimNow) cur.trim[edge] = edge === "start" ? cv.currentTime : cv.currentTime - cur.reel.length;
+    else cur.trim[edge] += Number(b.dataset.d);
+    clampTrim();
+    drawCut();
+  });
+  $("#cut-apply").addEventListener("click", (e) => {
+    if (!cur.trim.start && !cur.trim.end) return toast("Move an edge first");
+    $("#ed-msg").textContent = "Trimming and re-rendering…";
+    busy(e.currentTarget, async () => {
+      fill(await api.trimReel(cur.folder, cur.name, cur.trim.start, cur.trim.end));
+      showTab("cut");
+      $("#ed-msg").textContent = "Trimmed. New audio at the edges was transcribed.";
+      cur.onSaved?.();
+    });
+  });
+  $("#cut-split").addEventListener("click", async (e) => {
+    const at = cv.currentTime;
+    if (at < 2 || at > cur.reel.length - 2) return toast("Pause at least 2 seconds from either end");
+    if (!(await confirmDialog(`Split ${cur.name} at ${at.toFixed(1)} s? The second part becomes a new reel.`, { ok: "Split", danger: false }))) return;
+    $("#ed-msg").textContent = "Splitting…";
+    busy(e.currentTarget, async () => {
+      await api.splitReel(cur.folder, cur.name, at);
+      toast("Split into two reels");
+      $("#editor").close();
+      cur.onSaved?.();
+    });
   });
   $("#lk-video").addEventListener("loadedmetadata", drawLook);
   window.addEventListener("resize", () => cur && drawLook());
   $("#lk-reset").addEventListener("click", () => { cur.look = { ...cur.reel.look }; fillLook(); });
   $("#lk-save").addEventListener("click", (e) => {
     const look = readLook();
-    const changed = LOOK_FIELDS.some((k) => String(look[k]) !== String(cur.reel.look[k]));
-    if (!changed) return toast("Look unchanged");
-    save({ look }, e.currentTarget, "Look saved and re-rendered.");
+      look.template = cur.look.template;
+    const changed = [...LOOK_FIELDS, "template"].some((k) => String(look[k]) !== String(cur.reel.look[k]));
+    const fit = $("#lk-fit").value;
+    const fitChanged = fit !== (cur.reel.fit || "blur");
+    if (!changed && !fitChanged) return toast("Look unchanged");
+    const body = {};
+    if (changed) body.look = look;
+    if (fitChanged) body.fit = fit;
+    $("#ed-msg").textContent = fit === "track" && fitChanged ? "Finding the speaker and re-rendering…" : "Rendering…";
+    save(body, e.currentTarget, fit === "track" && fitChanged
+      ? "Saved. If no steady face was found, the blurred layout is used." : "Look saved and re-rendered.");
   });
 
   // Export tab

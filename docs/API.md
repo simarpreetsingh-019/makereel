@@ -57,9 +57,12 @@ Errors always look like this:
 | GET | `/folders/{folder}` | | `{folder, info, reels: [Reel]}` |
 | DELETE | `/folders/{folder}` | | 204 |
 | GET | `/folders/{folder}/reels/{name}` | | `Reel` plus `transcript` and `ass` |
-| PATCH | `/folders/{folder}/reels/{name}` | any of `{"transcript", "words", "offset", "hook", "caption", "ass", "logo", "restyle", "look"}` | updated `Reel` (re-rendered, exports too) |
+| PATCH | `/folders/{folder}/reels/{name}` | any of `{"transcript", "words", "offset", "hook", "caption", "ass", "logo", "restyle", "look", "fit"}` | updated `Reel` (re-rendered, exports too) |
+| POST | `/folders/{folder}/reels/{name}/trim` | `{"start": -2, "end": 1.5}` (seconds to move each edge; negative = earlier) | updated `Reel` |
+| POST | `/folders/{folder}/reels/{name}/split` | `{"at": 12.5}` (seconds into the reel) | the folder's reels (the second part is a new reel) |
+| POST | `/folders/{folder}/merge` | `{"reels": ["reel_01", "reel_03"]}` (in play order) | `201` the new joined `Reel` (originals kept) |
 | POST | `/folders/{folder}/reels/{name}/sync` | | auto-sync: re-time captions from the reel's own audio, keeping corrected words |
-| POST | `/folders/{folder}/reels/{name}/export` | `{"format": "9x16"\|"4x5"\|"1x1"\|"16x9", "fit": "blur"\|"crop"\|"pad"}` | updated `Reel`, with `exports[format]` holding `video` and `download` |
+| POST | `/folders/{folder}/reels/{name}/export` | `{"format": "9x16"\|"4x5"\|"1x1"\|"16x9", "fit": "blur"\|"crop"\|"pad"\|"track"}` | updated `Reel`, with `exports[format]` holding `video` and `download` |
 | DELETE | `/folders/{folder}/reels/{name}` | | 204 |
 
 URL-encode folder names (`Me%20at%20the%20zoo`). Reel names look like `reel_01`.
@@ -73,6 +76,8 @@ PATCH rules:
   `{"vertical": 0.45, "size": 0.9, "box": true, "box_colour": "#000000", "box_opacity": 0.6}`.
   `vertical` is where the bottom of the captions sits, as a share of the height from the bottom (0.02–0.9).
   Keys you leave out keep their value. It applies to the reel and all its exports, and the GET response returns the effective `look`.
+- `look.template` picks the caption style: `classic`, `pop`, `boxed`, `glow`, `karaoke`, `single` or `minimal`.
+- `fit` sets how the 9:16 picture is framed: `blur`, `crop`, `pad` or `track` (follow the speaker; falls back to `blur` when no steady face is found).
 - `logo` (bool) shows or hides the brand logo on this reel. `restyle: true` re-applies the brand kit's caption style.
 - `hook` changes the on-screen title, and the first line of the post text follows it.
 - `caption` is the post text (credits, hashtags).

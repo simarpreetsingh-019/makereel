@@ -1,8 +1,9 @@
 """Render reels in any shape, with captions and an optional logo.
 
 Files per reel (all in the video's folder):
-  reel_NN.src.mp4      the moment in its original shape, loudness-normalised, no captions.
-                       The master copy every format is made from (a few MB).
+  reel_NN.src.mp4      the moment in its original shape plus a few seconds either side (so it can
+                       be trimmed or extended later), loudness-normalised, no captions. The master
+                       every format is made from. The reel itself is [src_offset, src_offset + length].
   reel_NN.raw.mp4      the main 9:16 version without captions, so caption edits only re-burn.
   reel_NN.mp4          the main reel: raw + captions (+ logo).
   reel_NN.<fmt>.mp4    other exports (4x5, 1x1, 16x9...), made on demand from src.
@@ -27,7 +28,7 @@ FORMATS: dict[str, tuple[int, int]] = {
     "1x1": (1080, 1080),    # feed posts, LinkedIn, X
     "16x9": (1920, 1080),   # YouTube, X, websites
 }
-FITS = ("blur", "crop", "pad")   # blurred fill · crop to fill · black bars
+FITS = ("blur", "crop", "pad", "track")   # blurred fill · crop to fill · black bars · follow the speaker
 LOGO_POSITIONS = ("top-left", "top-right", "bottom-left", "bottom-right")
 MAIN_FORMAT = "9x16"
 
@@ -48,9 +49,18 @@ def _check_format(fmt: str, fit: str) -> tuple[int, int]:
     return FORMATS[fmt]
 
 
-def reframe_filter(fmt: str, fit: str) -> str:
-    """Filter chain (input [0:v] → output [v]) that turns any shape into `fmt`."""
+def reframe_filter(fmt: str, fit: str, track: tuple[str, int, int] | None = None) -> str:
+    """Filter chain (input [0:v] → output [v]) that turns any shape into `fmt`.
+
+    fit="track" needs `track` from framing.crop_expression; without it, it falls back to blur.
+    """
     w, h = _check_format(fmt, fit)
+    if fit == "track":
+        if track is None:
+            fit = "blur"
+        else:
+            expr, cw, ch = track
+            return f"[0:v]crop=w={cw}:h={ch}:x='{expr}':y=0,scale={w}:{h},setsar=1,fps=30[v]"
     cover = f"scale={w}:{h}:force_original_aspect_ratio=increase:force_divisible_by=2,crop={w}:{h}"
     contain = f"scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2"
     if fit == "crop":
@@ -82,11 +92,18 @@ def _overlay_filters(label: str, ass: Path | None, fonts_dir: Path | None, logo:
 
 
 def _encode(inputs: list[Path], graph: str, out_label: str, out: Path, cwd: Path,
-            audio: str = "copy") -> None:
-    """Run one ffmpeg graph to a temp file, then swap it in (a failure never leaves a broken file)."""
+            audio: str = "copy", section: tuple[float, float] | None = None) -> None:
+    """Run one ffmpeg graph to a temp file, then swap it in (a failure never leaves a broken file).
+
+    `section` = (start, length) of input 0 to use (the reel's part of its master clip).
+    """
     tmp = out.with_name(out.stem + ".tmp.mp4")
     cmd = [media.binary("ffmpeg"), "-y", "-v", "error"]
+    if section is not None:
+        audio = "aac"   # cutting needs a re-encode of the audio too
     for i, path in enumerate(inputs):
+        if i == 0 and section is not None:
+            cmd += ["-ss", f"{section[0]:.3f}", "-t", f"{section[1]:.3f}"]
         if i > 0 and path.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
             cmd += ["-loop", "1"]   # a still logo lasts the whole video
         cmd += ["-i", str(path.resolve()) if path.parent != cwd else path.name]
@@ -107,9 +124,21 @@ def cut_source(src: Path, start: float, end: float, out: Path) -> None:
                "-movflags", "+faststart", str(out)])
 
 
-def make_raw(source: Path, raw: Path, fmt: str = MAIN_FORMAT, fit: str = "blur") -> None:
-    """Reframe the master into `fmt` without captions (cached so caption edits are fast)."""
-    _encode([source], reframe_filter(fmt, fit), "v", raw, raw.parent)
+def track_for(source: Path, fmt: str, fit: str, section: tuple[float, float] | None):
+    """Speaker-tracking crop for fit='track' (None otherwise, or when nobody is on screen)."""
+    if fit != "track":
+        return None
+    from . import framing
+    start, length = section or (0.0, media.duration(source))
+    w, h = FORMATS[fmt]
+    return framing.crop_expression(source, start, length, w, h)
+
+
+def make_raw(source: Path, raw: Path, fmt: str = MAIN_FORMAT, fit: str = "blur",
+             section: tuple[float, float] | None = None) -> None:
+    """Reframe the reel's part of the master into `fmt`, without captions (cached so caption edits are fast)."""
+    track = track_for(source, fmt, fit, section)
+    _encode([source], reframe_filter(fmt, fit, track), "v", raw, raw.parent, section=section)
 
 
 def burn(raw: Path, ass: Path, out: Path, logo: Logo | None = None, fonts_dir: Path | None = None) -> None:
@@ -122,13 +151,14 @@ def burn(raw: Path, ass: Path, out: Path, logo: Logo | None = None, fonts_dir: P
 
 
 def export(source: Path, ass: Path, out: Path, fmt: str, fit: str, logo: Logo | None = None,
-           fonts_dir: Path | None = None) -> None:
-    """One pass: master → any format, with captions and logo."""
+           fonts_dir: Path | None = None, section: tuple[float, float] | None = None) -> None:
+    """One pass: the reel's part of the master → any format, with captions and logo."""
     media.require_libass()
     w, _ = _check_format(fmt, fit)
     inputs = [source] + ([logo.path] if logo else [])
     graph, label = _overlay_filters("v", ass, fonts_dir, logo, w, 1)
-    _encode(inputs, reframe_filter(fmt, fit) + ";" + graph, label, out, out.parent)
+    track = track_for(source, fmt, fit, section)
+    _encode(inputs, reframe_filter(fmt, fit, track) + ";" + graph, label, out, out.parent, section=section)
 
 
 def _probe_width(path: Path) -> float:

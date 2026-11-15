@@ -16,6 +16,22 @@ import difflib
 import re
 from dataclasses import dataclass
 
+# --------------------------------------------------------------------------- templates
+# How the spoken word is shown inside its group. Every active tag starts with "\c&H..&" so
+# parse_words can find the active word; past words (karaoke) use "\1c", which it ignores.
+TEMPLATES: dict[str, dict] = {
+    "classic": {"label": "Classic", "active": r"\c{hl}\fscx108\fscy108", "upper": True, "group": 3},
+    "pop": {"label": "Pop", "active": r"\c{hl}\fscx135\fscy135\t(0,120,\fscx110\fscy110)",
+            "upper": True, "group": 3},
+    "boxed": {"label": "Boxed word", "active": r"\c&H00FFFFFF&\3c{hl}\bord{box}", "upper": True, "group": 3},
+    "glow": {"label": "Glow", "active": r"\c{hl}\3c{hl}\bord5\blur7", "upper": True, "group": 3},
+    "karaoke": {"label": "Karaoke fill", "active": r"\c{hl}\fscx108\fscy108", "past": r"\1c{hl}",
+                "upper": True, "group": 4},
+    "single": {"label": "One word", "active": r"\c{hl}\fscx118\fscy118", "upper": True, "group": 1},
+    "minimal": {"label": "Minimal", "active": r"\c{hl}", "upper": False, "group": 4},
+}
+DEFAULT_TEMPLATE = "classic"
+
 # --------------------------------------------------------------------------- style
 POSITIONS = {"bottom": 2, "middle": 5, "top": 8}   # ASS numpad alignment (centred)
 
@@ -95,18 +111,24 @@ def _ts(t: float) -> str:
     return f"{int(h)}:{int(m):02d}:{s:05.2f}"
 
 
-def _clean(w: str) -> str:
-    w = re.sub(r"[{}\\]", "", w).upper()
+def _clean(w: str, upper: bool = True) -> str:
+    w = re.sub(r"[{}\\]", "", w)
+    w = w.upper() if upper else w
     return w.rstrip(",.")  # keep ! and ? — they read well on screen
 
 
 def build_ass(words: list[dict], start: float, end: float, hook: str | None,
-              style: Style = DEFAULT_STYLE, group: int = 3, hook_secs: float = 3.0) -> str:
+              style: Style = DEFAULT_STYLE, template: str = DEFAULT_TEMPLATE, hook_secs: float = 3.0) -> str:
     """Words are on any clock; only those in [start, end) are used, re-based to start at 0."""
+    tpl = TEMPLATES.get(template, TEMPLATES[DEFAULT_TEMPLATE])
+    group, upper = tpl["group"], tpl["upper"]
+    box = max(6, round(min(style.width, style.height) * 0.080 * style.size * 0.22))
+    active = tpl["active"].replace("{hl}", style.highlight).replace("{box}", str(box))
+    past = tpl.get("past", "").replace("{hl}", style.highlight)
     lines = [style.header()]
     if hook:
         lines.append(f"Dialogue: 1,{_ts(0)},{_ts(hook_secs)},Hook,,0,0,0,,{_clean(hook)}\n")
-    ws = [w for w in words if start <= w["start"] < end and _clean(w["word"])]
+    ws = [w for w in words if start <= w["start"] < end and _clean(w["word"], upper)]
     for g in range(0, len(ws), group):
         chunk = ws[g:g + group]
         for i, w in enumerate(chunk):
@@ -117,9 +139,16 @@ def build_ass(words: list[dict], start: float, end: float, hook: str | None,
                 t1 = min(t1, ws[g + group]["start"] - start)
             if t1 - t0 < 0.05:
                 t1 = t0 + 0.05
-            text = " ".join(
-                f"{{\\c{style.highlight}\\fscx108\\fscy108}}{_clean(c['word'])}{{\\r}}" if j == i
-                else _clean(c["word"]) for j, c in enumerate(chunk))
+            parts = []
+            for j, c in enumerate(chunk):
+                word = _clean(c["word"], upper)
+                if j == i:
+                    parts.append(f"{{{active}}}{word}{{\\r}}")
+                elif j < i and past:
+                    parts.append(f"{{{past}}}{word}{{\\r}}")
+                else:
+                    parts.append(word)
+            text = " ".join(parts)
             lines.append(f"Dialogue: 0,{_ts(t0)},{_ts(t1)},Caption,,0,0,0,,{text}\n")
     return "".join(lines)
 
@@ -255,9 +284,10 @@ def clean_timings(words: list[dict]) -> list[dict]:
     return _monotonic(sorted([w for w in out if w["word"]], key=lambda w: w["start"]))
 
 
-def rebuild(ass: str, words: list[dict], hook: str | None, style: Style | None = None) -> str:
+def rebuild(ass: str, words: list[dict], hook: str | None, style: Style | None = None,
+            template: str = DEFAULT_TEMPLATE, length: float | None = None) -> str:
     """New caption file from timed words. Keeps the existing styles unless a new `style` is given."""
-    length = max([w["end"] for w in words] + [length_of(ass)])
-    body = build_ass(words, 0.0, length + 0.5, hook, style or DEFAULT_STYLE)
+    length = length if length is not None else max([w["end"] for w in words] + [length_of(ass)])
+    body = build_ass(words, 0.0, length + 0.5, hook, style or DEFAULT_STYLE, template)
     head = style.header() if style else header_of(ass)
     return head + body[body.index("Format: Layer"):].split("\n", 1)[1]

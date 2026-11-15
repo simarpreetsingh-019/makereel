@@ -146,7 +146,7 @@ def _summary(folder: str, name: str, post: dict, video: Path) -> dict:
             "can_export": (d / post.get("source_clip", "-")).is_file(),
             "logo": post.get("logo", True), "exports": exports, "look": _look(post),
             **{k: post.get(k) for k in ("hook", "caption", "creator", "creator_url", "source",
-                                        "score", "why", "start", "end", "fit")}}
+                                        "score", "why", "start", "end", "fit", "ai")}}
 
 
 def _look(post: dict) -> dict:
@@ -157,22 +157,75 @@ def _look(post: dict) -> dict:
     return {"vertical": style.vertical if style.vertical is not None else default_vertical, "size": style.size,
             "box": style.box, "box_colour": style.box_colour, "box_opacity": style.box_opacity,
             "font": style.font, "text_colour": style.text_colour, "highlight_colour": style.highlight_colour,
-            "outline_colour": style.outline_colour, "custom": bool(post.get("look"))}
+            "outline_colour": style.outline_colour, "template": branding.template_for(b, post.get("look")),
+            "custom": bool(post.get("look"))}
 
 
 def get_reel(folder: str, name: str) -> dict:
     meta_file, post = _reel_paths(folder, name)
     ass_text = (meta_file.parent / post["captions"]).read_text(encoding="utf-8")
     words = captions.parse_words(ass_text)
-    return {**_summary(folder, name, post, meta_file.parent / post["file"]),
-            "transcript": " ".join(w["word"] for w in words), "words": words, "ass": ass_text}
+    d = meta_file.parent
+    sec = _section(d, post)
+    src_len = media_duration(d / post["source_clip"]) if sec else None
+    return {**_summary(folder, name, post, d / post["file"]),
+            "transcript": " ".join(w["word"] for w in words), "words": words, "ass": ass_text,
+            "templates": {k: v["label"] for k, v in captions.TEMPLATES.items()},
+            "can_trim": bool(sec), "length": sec[1] if sec else captions.length_of(ass_text),
+            "room_before": sec[0] if sec else 0.0,
+            "room_after": max(0.0, src_len - sec[0] - sec[1]) if sec else 0.0}
+
+
+# --------------------------------------------------------------------------- helpers
+def media_duration(path: Path) -> float:
+    from ..core import media
+    return media.duration(path)
+
+
+def _section(d: Path, post: dict) -> tuple[float, float] | None:
+    """(offset, length) of the reel inside its master clip, or None for reels made before masters existed."""
+    src = d / post.get("source_clip", "-")
+    if not src.is_file():
+        return None
+    if "src_offset" in post and "length" in post:
+        return float(post["src_offset"]), float(post["length"])
+    return 0.0, media_duration(src)          # 0.3.0 masters: the reel is the whole file
+
+
+def _require_section(d: Path, post: dict) -> tuple[float, float]:
+    sec = _section(d, post)
+    if sec is None:
+        raise InvalidInput("this reel was made before editing tools needed its master clip",
+                           "Run its link again to get reels you can trim, split, reframe and export.")
+    return sec
+
+
+def _write_and_render(d: Path, meta_file: Path, post: dict, ass_text: str, brand: dict,
+                      reraw: bool = False) -> None:
+    """Save captions + metadata, (re)make the clean 9:16 if needed, burn, and refresh exports."""
+    (d / post["captions"]).write_text(ass_text, encoding="utf-8")
+    if reraw:
+        render.make_raw(d / post["source_clip"], d / post["raw"], render.MAIN_FORMAT,
+                        post.get("fit") or "blur", _section(d, post))
+    render.burn(d / post["raw"], d / post["captions"], d / post["file"],
+                branding.logo_for(brand, post.get("logo", True)), branding.fonts_dir())
+    meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
+    for fmt, item in list((post.get("exports") or {}).items()):   # keep exports in step with edits
+        if (d / item["file"]).exists():
+            export_reel(d.name, meta_file.stem, fmt, item.get("fit") or post.get("fit") or "blur")
+
+
+def _rebuild(post: dict, current: str, words: list[dict], hook: str | None, brand: dict, restyle: bool,
+             length: float | None = None) -> str:
+    style = branding.style_for(render.MAIN_FORMAT, brand, post.get("look")) if restyle else None
+    return captions.rebuild(current, words, hook, style, branding.template_for(brand, post.get("look")), length)
 
 
 # --------------------------------------------------------------------------- editing
 def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str | None = None,
                 transcript: str | None = None, words: list[dict] | None = None, offset: float | None = None,
                 ass: str | None = None, logo: bool | None = None, restyle: bool = False,
-                look: dict | None = None) -> dict:
+                look: dict | None = None, fit: str | None = None) -> dict:
     """Apply edits and re-render the reel (and any exports).
 
     - `transcript`: the caption words as a paragraph. Unchanged words keep their timing; edited,
@@ -184,22 +237,28 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
     - `ass`: the whole caption file, for advanced edits (wins over the options above).
     - `logo`: show the brand logo on this reel or not.
     - `restyle`: re-apply the current brand kit's caption style.
-    - `look`: this reel's caption placement and background, e.g. to avoid subtitles already in the video:
-      {"vertical": 0.4 (share of the height from the bottom), "size": 0.9, "box": true,
-       "box_colour": "#000000", "box_opacity": 0.6}. Keys left out keep their current value.
+    - `look`: caption placement, background and template, e.g. to avoid subtitles already in the video:
+      {"vertical": 0.4, "size": 0.9, "box": true, "box_colour": "#000000", "box_opacity": 0.6,
+       "template": "pop"}. Keys left out keep their current value.
+    - `fit`: how the 9:16 picture is framed: blur, crop, pad or track (follow the speaker).
     """
     meta_file, post = _reel_paths(folder, name)
     d = meta_file.parent
-    ass_file = d / post["captions"]
-    current = ass_file.read_text(encoding="utf-8")
+    current = (d / post["captions"]).read_text(encoding="utf-8")
     new_hook = hook.strip() if hook is not None and hook.strip() else post.get("hook")
     brand = load_settings().brand
+    reraw = False
     if look is not None:
         try:
             post["look"] = {**(post.get("look") or {}), **branding.clean_look(look)}
         except (TypeError, ValueError) as e:
             raise InvalidInput(str(e)) from e
         restyle = True
+    if fit is not None and fit != post.get("fit"):
+        if fit not in render.FITS:
+            raise InvalidInput(f"fit must be one of {', '.join(render.FITS)}")
+        _require_section(d, post)
+        post["fit"], reraw = fit, True
 
     if ass is not None and ass.strip() and ass != current:
         text = ass
@@ -222,9 +281,8 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
                 raise InvalidInput("shift captions by at most 10 seconds")
             timed = captions.shift(timed, offset)
             changed = True
-        style = branding.style_for(render.MAIN_FORMAT, brand, post.get("look")) if restyle else None
         if changed or restyle:
-            text = captions.rebuild(current, timed, new_hook, style)
+            text = _rebuild(post, current, timed, new_hook, brand, restyle, post.get("length"))
         elif new_hook != post.get("hook"):
             text = captions.set_hook(current, new_hook or "")
         else:
@@ -240,30 +298,146 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
     if logo is not None:
         post["logo"] = bool(logo)
 
-    ass_file.write_text(text, encoding="utf-8")
-    render.burn(d / post["raw"], ass_file, d / post["file"], branding.logo_for(brand, post.get("logo", True)),
-                branding.fonts_dir())
-    meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
-    for fmt, item in list((post.get("exports") or {}).items()):   # keep exports in step with edits
-        if (d / item["file"]).exists():
-            export_reel(folder, name, fmt, item.get("fit") or post.get("fit") or "blur")
+    _write_and_render(d, meta_file, post, text, brand, reraw)
     return get_reel(folder, name)
+
+
+def _fresh_words(d: Path, post: dict, section: tuple[float, float]) -> list[dict]:
+    """Precise word timings for a section of the master, on the reel's clock."""
+    clip = load_settings().clip
+    off, length = section
+    return [{**w, "start": round(w["start"] - off, 2), "end": round(w["end"] - off, 2)}
+            for w in transcribe.words_in(d / post["source_clip"], off, off + length, clip["model"],
+                                         clip["language"], precise=True)]
 
 
 def autosync(folder: str, name: str) -> dict:
     """Re-time the captions from the reel's own audio, keeping the user's corrected words."""
     meta_file, post = _reel_paths(folder, name)
     d = meta_file.parent
-    audio = d / post.get("source_clip", "-")
-    if not audio.is_file():
-        audio = d / post["raw"]
-    clip = load_settings().clip
-    fresh = transcribe.words_in_file(audio, clip["model"], clip["language"])
+    sec = _section(d, post)
+    if sec:
+        fresh = _fresh_words(d, post, sec)
+    else:
+        clip = load_settings().clip
+        fresh = transcribe.words_in_file(d / post["raw"], clip["model"], clip["language"])
     if not fresh:
         raise InvalidInput("no speech found in this reel, so there's nothing to sync to")
     current = captions.parse_words((d / post["captions"]).read_text(encoding="utf-8"))
     text = " ".join(w["word"] for w in current) or " ".join(w["word"] for w in fresh)
     return update_reel(folder, name, words=captions.align(text, fresh))
+
+
+def trim_reel(folder: str, name: str, start: float = 0.0, end: float = 0.0) -> dict:
+    """Move the reel's edges. start/end are seconds to move each edge: negative = earlier.
+
+    e.g. start=-2 adds two seconds before, end=-1.5 cuts the last one and a half seconds.
+    Captions you've corrected are kept; newly revealed audio is transcribed.
+    """
+    meta_file, post = _reel_paths(folder, name)
+    d = meta_file.parent
+    off, length = _require_section(d, post)
+    src_len = media_duration(d / post["source_clip"])
+    new_off = min(max(0.0, off + start), off + length - 1)
+    new_end = min(src_len, max(new_off + 1, off + length + end))
+    new_len = round(new_end - new_off, 3)
+    if new_len < 3:
+        raise InvalidInput("a reel must be at least 3 seconds long")
+    shift = new_off - off
+    current = (d / post["captions"]).read_text(encoding="utf-8")
+    kept = [{**w, "start": round(w["start"] - shift, 2), "end": round(w["end"] - shift, 2)}
+            for w in captions.parse_words(current)
+            if 0 <= w["start"] - shift < new_len]
+    old_from, old_to = -shift, length - shift          # where the old reel sits on the new clock
+    fresh = [w for w in _fresh_words(d, post, (new_off, new_len))
+             if w["start"] < old_from - 0.05 or w["start"] >= old_to - 0.05]
+    words = sorted(kept + fresh, key=lambda w: w["start"])
+
+    post["src_offset"], post["length"] = round(new_off, 3), new_len
+    post["start"] = round(post.get("start", 0) + shift, 2)
+    post["end"] = round(post["start"] + new_len, 2)
+    brand = load_settings().brand
+    text = _rebuild(post, current, words, post.get("hook"), brand, False, new_len)
+    _write_and_render(d, meta_file, post, text, brand, reraw=True)
+    return get_reel(folder, name)
+
+
+def split_reel(folder: str, name: str, at: float) -> dict:
+    """Cut a reel in two at `at` seconds. The second half becomes a new reel in the same folder."""
+    from ..core.pipeline import next_reel_name
+    meta_file, post = _reel_paths(folder, name)
+    d = meta_file.parent
+    off, length = _require_section(d, post)
+    if not 2 <= at <= length - 2:
+        raise InvalidInput("split at least 2 seconds from either end")
+    current = (d / post["captions"]).read_text(encoding="utf-8")
+    words = captions.parse_words(current)
+    brand = load_settings().brand
+
+    new = next_reel_name(d)
+    second = {**post, "name": new, "file": f"{new}.mp4", "raw": f"{new}.raw.mp4", "captions": f"{new}.ass",
+              "source_clip": f"{new}.src.mp4", "exports": {}, "src_offset": round(off + at, 3),
+              "length": round(length - at, 3), "start": round(post.get("start", 0) + at, 2)}
+    shutil.copyfile(d / post["source_clip"], d / second["source_clip"])   # each reel owns its master
+    later = [{**w, "start": round(w["start"] - at, 2), "end": round(w["end"] - at, 2)} for w in words
+             if w["start"] >= at]
+    (d / f"{new}.json").write_text("{}", encoding="utf-8")                 # reserve the name
+    _write_and_render(d, d / f"{new}.json", second,
+                      _rebuild(second, current, later, second.get("hook"), brand, False, second["length"]),
+                      brand, reraw=True)
+
+    post["length"], post["end"] = round(at, 3), round(post.get("start", 0) + at, 2)
+    earlier = [w for w in words if w["start"] < at]
+    _write_and_render(d, meta_file, post, _rebuild(post, current, earlier, post.get("hook"), brand, False, at),
+                      brand, reraw=True)
+    return list_reels(folder)
+
+
+def merge_reels(folder: str, names: list[str]) -> dict:
+    """Join reels (in the given order) into a new reel. The originals are kept."""
+    from ..core import media
+    from ..core.pipeline import next_reel_name
+    if len(names) < 2:
+        raise InvalidInput("pick at least two reels to join")
+    parts = []
+    for n in names:
+        meta_file, post = _reel_paths(folder, n)
+        parts.append((meta_file.parent, post, _require_section(meta_file.parent, post)))
+    d = parts[0][0]
+    first = parts[0][1]
+    new = next_reel_name(d)
+    src = d / f"{new}.src.mp4"
+
+    # one master from the reels' sections, all scaled to the first one's frame size
+    w, h = (int(x) for x in media.run([media.binary("ffprobe"), "-v", "error", "-select_streams", "v:0",
+                                       "-show_entries", "stream=width,height", "-of", "csv=p=0",
+                                       str(d / first["source_clip"])], capture=True).decode().split(",")[:2])
+    cmd = [media.binary("ffmpeg"), "-y", "-v", "error"]
+    chains, labels = [], ""
+    for i, (pd, post, (off, length)) in enumerate(parts):
+        cmd += ["-ss", f"{off:.3f}", "-t", f"{length:.3f}", "-i", str(pd / post["source_clip"])]
+        chains.append(f"[{i}:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,"
+                      f"setsar=1,fps=30[v{i}];[{i}:a]aresample=48000[a{i}]")
+        labels += f"[v{i}][a{i}]"
+    graph = ";".join(chains) + f";{labels}concat=n={len(parts)}:v=1:a=1[v][a]"
+    media.run(cmd + ["-filter_complex", graph, "-map", "[v]", "-map", "[a]", *media.encoder_args("raw"),
+                     "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(src)])
+
+    words, t = [], 0.0
+    for pd, post, (_, length) in parts:
+        ass_text = (pd / post["captions"]).read_text(encoding="utf-8")
+        words += [{**x, "start": round(x["start"] + t, 2), "end": round(x["end"] + t, 2)}
+                  for x in captions.parse_words(ass_text)]
+        t += length
+    merged = {**first, "name": new, "file": f"{new}.mp4", "raw": f"{new}.raw.mp4", "captions": f"{new}.ass",
+              "source_clip": src.name, "exports": {}, "src_offset": 0.0, "length": round(t, 3),
+              "end": round(first.get("start", 0) + t, 2), "merged_from": names}
+    brand = load_settings().brand
+    current = (d / first["captions"]).read_text(encoding="utf-8")
+    (d / f"{new}.json").write_text("{}", encoding="utf-8")
+    _write_and_render(d, d / f"{new}.json", merged,
+                      _rebuild(merged, current, words, first.get("hook"), brand, False, t), brand, reraw=True)
+    return get_reel(folder, new)
 
 
 def export_reel(folder: str, name: str, fmt: str, fit: str | None = None) -> dict:
@@ -273,19 +447,16 @@ def export_reel(folder: str, name: str, fmt: str, fit: str | None = None) -> dic
     fit = fit or post.get("fit") or "blur"
     if fmt not in render.FORMATS or fit not in render.FITS:
         raise InvalidInput(f"format must be one of {', '.join(render.FORMATS)}; fit one of {', '.join(render.FITS)}")
-    source = d / post.get("source_clip", "-")
-    if not source.is_file():
-        raise InvalidInput("this reel was made before exports existed",
-                           "Run its link again to get reels that can be exported in any format.")
+    section = _require_section(d, post)
     brand = load_settings().brand
     main_ass = (d / post["captions"]).read_text(encoding="utf-8")
     words, hook = captions.parse_words(main_ass), captions.parse_hook(main_ass)
     ass = d / f"{name}.{fmt}.ass"
-    ass.write_text(captions.rebuild(main_ass, words, hook, branding.style_for(fmt, brand, post.get("look"))),
-                   encoding="utf-8")
+    ass.write_text(captions.rebuild(main_ass, words, hook, branding.style_for(fmt, brand, post.get("look")),
+                                    branding.template_for(brand, post.get("look")), section[1]), encoding="utf-8")
     out = d / f"{name}.{fmt}.mp4"
-    render.export(source, ass, out, fmt, fit, branding.logo_for(brand, post.get("logo", True)),
-                  branding.fonts_dir())
+    render.export(d / post["source_clip"], ass, out, fmt, fit, branding.logo_for(brand, post.get("logo", True)),
+                  branding.fonts_dir(), section)
     post.setdefault("exports", {})[fmt] = {"file": out.name, "fit": fit, "captions": ass.name}
     meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
     return get_reel(folder, name)

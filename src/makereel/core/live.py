@@ -41,6 +41,7 @@ class LiveSession:
     def __init__(self, info: sources.SourceInfo, out_dir: Path, work_dir: Path, clip: dict, brand: dict,
                  buffer_minutes: int = 10, clips_per_hour: int = 6, max_height: int = 720):
         self.info, self.clip, self.brand, self.max_height = info, clip, brand, max_height
+        self.ai: dict | None = None     # set by the runner when the AI judge is on
         self.out = out_dir
         self.buf = work_dir / f"live_{info.id}"
         self.buf.mkdir(parents=True, exist_ok=True)
@@ -181,7 +182,8 @@ class LiveSession:
         try:
             chat = np.array([self.chat.get(win_start + i, 0) for i in range(int(media.duration(win)) + 1)])
             meta = {**self.info.to_meta(), "offset": float(win_start)}
-            pipeline.process(win, meta, self.out, {**self.clip, "max_clips": 1}, self.brand, chat_counts=chat)
+            pipeline.process(win, meta, self.out, {**self.clip, "max_clips": 1}, self.brand, chat_counts=chat,
+                             ai=self.ai)
             self.made.append(time.time())
         finally:
             win.unlink(missing_ok=True)

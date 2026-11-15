@@ -50,7 +50,7 @@ passes a one-frame test; otherwise it falls back to `libx264`.
 | `clip.max_clips` | 8 | reels per video (1–50) |
 | `clip.min_len` / `clip.max_len` | 15 / 45 | reel length in seconds |
 | `clip.model` | `base` | speech model: `tiny`, `base`, `small`, `medium` or `large-v3` |
-| `clip.layout` | `blur` | `blur` (whole frame over a blurred fill) or `crop` |
+| `clip.layout` | `blur` | `blur` (whole frame over a blurred fill), `crop`, `pad` (black bars) or `track` (follow the speaker) |
 | `clip.language` | auto | e.g. `en`, `hi` |
 | `clip.silence` | false | cut dead air with auto-editor (`pip install -e ".[silence]"`) |
 
@@ -66,9 +66,23 @@ passes a one-frame test; otherwise it falls back to `libx264`.
 | `text_colour` / `highlight_colour` / `outline_colour` | `#FFFFFF` / `#FFDD00` / `#000000` | caption colours |
 | `caption_position` | `bottom` | `bottom` (lower third), `middle` or `top` |
 | `caption_size` | 1.0 | 0.5–2 × the default size |
+| `caption_template` | `classic` | default caption style: `classic`, `pop`, `boxed`, `glow`, `karaoke`, `single` or `minimal` |
 | `caption_box` | false | a background box behind captions (helps over busy video or video with its own subtitles) |
 | `box_colour` / `box_opacity` | `#000000` / 0.6 | background colour, and how solid it is (0 = invisible, 1 = solid) |
 | `credit_footer` | true | end the post text with "✂️ Made with makereel". It's opt-out, and is never put on the video. |
+
+### AI judge (`ai`): optional
+
+| Key | Default | Meaning |
+|---|---|---|
+| `provider` | `off` | `off`; `local` (Ollama, LM Studio or any OpenAI-compatible server on this machine; nothing leaves it); `claude` (your Anthropic key, `pip install "makereel[ai]"`); or `openai` (any OpenAI-compatible API with your key: OpenAI, OpenRouter, Groq...) |
+| `model` | provider default | `llama3.1:8b` for local and `claude-opus-5-5` for claude; required for openai |
+| `base_url` | provider default | `http://localhost:11434/v1` for local |
+| `weight` | 0.5 | how much the AI's scores count against loudness, chat and words (0–1) |
+
+The API key goes in `.env` as `MAKEREEL_AI_KEY` (or `ANTHROPIC_API_KEY` for Claude), never in `makereel.json`.
+The judge only reads the shortlist's transcripts, a few thousand tokens per video. If anything fails, it
+falls back to the signal-only ranking.
 
 Each reel can override the height, size and background in Edit → **Look**. That's how to deal with
 videos that already have subtitles burned in: move the captions above them, or cover them with a solid background.

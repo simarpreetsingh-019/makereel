@@ -114,11 +114,35 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
                                    hook=body.get("hook"), caption=body.get("caption"),
                                    transcript=body.get("transcript"), words=body.get("words"), offset=offset,
                                    ass=body.get("ass"), logo=body.get("logo"), restyle=bool(body.get("restyle")),
-                                   look=body.get("look"))
+                                   look=body.get("look"), fit=body.get("fit"))
 
     @api.post("/folders/{folder}/reels/{name}/sync")
     def sync_reel(req: Request):
         return library.autosync(req.params["folder"], req.params["name"])
+
+    @api.post("/folders/{folder}/reels/{name}/trim")
+    def trim_reel(req: Request):
+        body = req.json()
+        try:
+            start, end = float(body.get("start") or 0), float(body.get("end") or 0)
+        except (TypeError, ValueError) as e:
+            raise InvalidInput("start and end are seconds to move each edge, e.g. -2 or 1.5") from e
+        return library.trim_reel(req.params["folder"], req.params["name"], start, end)
+
+    @api.post("/folders/{folder}/reels/{name}/split")
+    def split_reel(req: Request):
+        try:
+            at = float(req.json().get("at"))
+        except (TypeError, ValueError) as e:
+            raise InvalidInput("give the split point in seconds, e.g. {\"at\": 12.5}") from e
+        return library.split_reel(req.params["folder"], req.params["name"], at)
+
+    @api.post("/folders/{folder}/merge")
+    def merge(req: Request):
+        names = req.json().get("reels")
+        if not isinstance(names, list):
+            raise InvalidInput('give the reels to join in order, e.g. {"reels": ["reel_01", "reel_03"]}')
+        return Response(library.merge_reels(req.params["folder"], [str(n) for n in names]), 201)
 
     @api.post("/folders/{folder}/reels/{name}/export")
     def export_reel(req: Request):

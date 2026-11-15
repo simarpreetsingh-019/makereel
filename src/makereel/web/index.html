@@ -13,7 +13,7 @@
   <nav>
     <a href="#/create" data-tab="create">Create</a>
     <a href="#/library" data-tab="library">Reels</a>
-    <a href="#/auto" data-tab="auto">24/7</a>
+    <a href="#/auto" data-tab="auto">Settings</a>
     <a href="#/brand" data-tab="brand">Brand</a>
     <a href="#/system" data-tab="system">System</a>
   </nav>
@@ -77,6 +77,23 @@
       <p class="hint">Checks each channel every few minutes and uses almost no CPU while nobody is live.
         Keep makereel running (or start it with <code>makereel web --watch</code> on a machine that stays on).</p>
     </div>
+    <div class="card">
+      <h2>AI judge <span class="hint" style="font-weight:400">(optional)</span></h2>
+      <p class="hint" style="margin-top:0">An AI model reads the moments makereel shortlisted and scores them like an editor (hook, engagement,
+        value, shareability), then writes better titles. Without it, picks come from loudness, chat and words only.</p>
+      <div class="opts" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+        <label class="field">Provider<select id="ai-provider">
+          <option value="off">Off</option>
+          <option value="local">Local model on this computer (Ollama, LM Studio)</option>
+          <option value="claude">Claude (your API key)</option>
+          <option value="openai">OpenAI-compatible API (your key)</option></select></label>
+        <label class="field">Model<input id="ai-model" placeholder="provider default"></label>
+        <label class="field">Server address<input id="ai-base_url" placeholder="provider default"></label>
+        <label class="field">AI influence <span id="ai-weight-v"></span><input type="range" id="ai-weight" min="0" max="1" step="0.05"></label>
+      </div>
+      <p class="hint" id="ai-help"></p>
+      <button class="btn primary" id="ai-save">Save AI settings</button>
+    </div>
     <div class="grid2">
       <div class="card">
         <h2>Channels</h2>
@@ -121,6 +138,10 @@
           <h2>Captions</h2>
           <div class="opts" style="grid-template-columns:1fr 1fr">
             <label class="field">Font<input id="br-font" list="br-font-list"><datalist id="br-font-list"></datalist></label>
+            <label class="field">Default caption style<select id="br-caption_template">
+              <option value="classic">Classic</option><option value="pop">Pop</option><option value="boxed">Boxed word</option>
+              <option value="glow">Glow</option><option value="karaoke">Karaoke fill</option><option value="single">One word</option>
+              <option value="minimal">Minimal</option></select></label>
             <label class="field">Position<select id="br-caption_position"><option value="bottom">Lower third</option><option value="middle">Middle</option><option value="top">Top</option></select></label>
             <label class="field">Text colour<input type="color" id="br-text_colour"></label>
             <label class="field">Highlight colour<input type="color" id="br-highlight_colour"></label>
@@ -183,6 +204,7 @@
       <button data-edtab="text" class="on">Text</button>
       <button data-edtab="timing">Timing</button>
       <button data-edtab="look">Look</button>
+      <button data-edtab="cut">Cut</button>
       <button data-edtab="export">Export</button>
     </div>
     <span class="hint" id="ed-msg" style="margin:0 0 0 auto"></span>
@@ -260,6 +282,16 @@
       <p class="hint" style="text-align:center">Live preview. Pause on a frame that shows the video's own subtitles.</p>
     </div>
     <div class="stack">
+      <div class="field">Caption style
+        <div class="chips" id="lk-templates"></div>
+      </div>
+      <label class="field">Framing
+        <select id="lk-fit">
+          <option value="blur">Whole frame + blurred background</option>
+          <option value="track">Follow the speaker (face tracking)</option>
+          <option value="crop">Crop the centre</option>
+          <option value="pad">Black bars</option>
+        </select></label>
       <div class="card soft">
         <b>Video already has subtitles?</b>
         <p class="hint" style="margin:4px 0 0">Move the captions above them, or turn on a solid background to cover them.</p>
@@ -285,6 +317,42 @@
         <button class="btn" id="lk-reset" type="button">Undo changes</button>
       </div>
       <p class="hint" style="margin:0">Applies to this reel and all its export formats. Set the default for new reels in the Brand tab.</p>
+    </div>
+  </div>
+
+  <div class="editor" data-edpanel="cut" hidden>
+    <div>
+      <video id="cut-video" controls playsinline></video>
+      <p class="hint" style="text-align:center"><span id="cut-time">0.0 s</span> of <span id="cut-len"></span></p>
+    </div>
+    <div class="stack">
+      <p class="hint" id="cut-note" style="color:var(--warn);margin:0"></p>
+      <div class="card soft">
+        <b>Trim or extend</b>
+        <p class="hint" style="margin:4px 0 10px">Move each edge earlier (−) or later (+). Up to <span id="cut-room"></span> of extra video is kept around this reel.</p>
+        <div class="trim-row"><span>Start</span>
+          <button class="btn small" data-trim="start" data-d="-1">−1 s</button>
+          <button class="btn small" data-trim="start" data-d="-0.25">−¼</button>
+          <b id="cut-start">0.00 s</b>
+          <button class="btn small" data-trim="start" data-d="0.25">+¼</button>
+          <button class="btn small" data-trim="start" data-d="1">+1 s</button>
+          <button class="btn small" data-trim-now="start" title="Start the reel at the playhead">at playhead</button></div>
+        <div class="trim-row"><span>End</span>
+          <button class="btn small" data-trim="end" data-d="-1">−1 s</button>
+          <button class="btn small" data-trim="end" data-d="-0.25">−¼</button>
+          <b id="cut-end">0.00 s</b>
+          <button class="btn small" data-trim="end" data-d="0.25">+¼</button>
+          <button class="btn small" data-trim="end" data-d="1">+1 s</button>
+          <button class="btn small" data-trim-now="end" title="End the reel at the playhead">at playhead</button></div>
+        <div class="row" style="margin-top:10px"><button class="btn primary" id="cut-apply">Apply trim</button>
+          <span class="hint" id="cut-result" style="margin:0"></span></div>
+      </div>
+      <div class="card soft">
+        <b>Split in two</b>
+        <p class="hint" style="margin:4px 0 10px">Pause where you want the cut. The second part becomes a new reel in this folder.</p>
+        <button class="btn" id="cut-split">Split at playhead</button>
+      </div>
+      <p class="hint" style="margin:0">To join reels, use <b>Join</b> in the folder view.</p>
     </div>
   </div>
 
