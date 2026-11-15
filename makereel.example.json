@@ -1,0 +1,21 @@
+{
+  "channels": ["@SomeGTAStreamer", "https://www.twitch.tv/somestreamer"],
+  "inbox": "inbox.txt",
+  "poll_minutes": 4,
+  "max_parallel_live": 2,
+  "keep_days": 7,
+  "keep_source": false,
+  "buffer_minutes": 10,
+  "clips_per_hour": 6,
+  "max_height": 720,
+  "clip": {
+    "profile": "gameplay",
+    "max_clips": 8,
+    "min_len": 15,
+    "max_len": 45,
+    "model": "base",
+    "layout": "blur",
+    "language": null,
+    "silence": false
+  }
+}

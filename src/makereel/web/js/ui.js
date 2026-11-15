@@ -1,0 +1,54 @@
+// Small shared UI helpers.
+
+export const $ = (sel, root = document) => root.querySelector(sel);
+
+const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
+
+let toastTimer;
+export function toast(message) {
+  const t = $("#toast");
+  t.textContent = message;
+  t.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("on"), 2600);
+}
+
+/** Show an error from the API (message + how to fix it). */
+export function showError(err) {
+  toast(err.hint ? `${err.message} — ${err.hint}` : err.message || String(err));
+}
+
+/** Run an async action with the button disabled; errors become toasts. */
+export async function busy(button, fn) {
+  if (button) button.disabled = true;
+  try {
+    return await fn();
+  } catch (err) {
+    showError(err);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+export async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Copied post text with credits");
+  } catch {
+    window.prompt("Copy this:", text);
+  }
+}
+
+export const timeAgo = (t) => {
+  const s = Date.now() / 1000 - t;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  return new Date(t * 1000).toLocaleDateString();
+};
+
+// Only one video plays at a time: starting one pauses every other (captures events from all <video>s).
+document.addEventListener("play", (e) => {
+  document.querySelectorAll("video").forEach((v) => { if (v !== e.target && !v.paused) v.pause(); });
+}, true);

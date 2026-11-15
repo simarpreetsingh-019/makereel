@@ -1,0 +1,21 @@
+# Linux (e.g. an old laptop / mini PC / Raspberry Pi 5 as a 24/7 box)
+# cp deploy/makereel.service ~/.config/systemd/user/ && systemctl --user enable --now makereel
+# (edit WorkingDirectory first; run `loginctl enable-linger $USER` so it runs while logged out)
+[Unit]
+Description=makereel web app + channel watcher
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/makereel
+ExecStart=%h/makereel/.venv/bin/makereel web --watch --no-browser
+Environment=MAKEREEL_THREADS=2 PYTHONUNBUFFERED=1
+Nice=10
+CPUSchedulingPolicy=batch
+IOSchedulingClass=idle
+CPUQuota=200%
+MemoryMax=1500M
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=default.target

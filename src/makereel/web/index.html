@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>makereel</title>
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+<header>
+  <h1>make<b>reel</b></h1>
+  <nav>
+    <a href="#/create" data-tab="create">Create</a>
+    <a href="#/library" data-tab="library">Reels</a>
+    <a href="#/auto" data-tab="auto">24/7</a>
+  </nav>
+  <div class="sys" id="sys"></div>
+</header>
+
+<main>
+  <div id="banner"></div>
+
+  <!-- Create: new jobs + job list -->
+  <section id="tab-create" class="stack">
+    <div class="card">
+      <h2>Paste any link</h2>
+      <form id="link-form" class="row">
+        <input class="url" name="url" type="url" required autocomplete="off"
+               placeholder="Live stream, past stream, long video or Short">
+        <button class="btn primary">Make reels</button>
+      </form>
+      <p class="hint">Live streams are recorded and clipped as big moments happen. Past streams use the chat replay. Each video gets its own folder under Reels.</p>
+      <details>
+        <summary>Options</summary>
+        <div class="opts" id="create-options">
+          <label class="field">Type<select name="profile"><option value="">Gameplay (default)</option><option value="talk">Talk / podcast</option></select></label>
+          <label class="field">Layout<select name="layout"><option value="">Full frame + blur</option><option value="crop">Crop to fill</option></select></label>
+          <label class="field">Max reels<input name="max_clips" type="number" min="1" max="50" placeholder="8"></label>
+          <label class="field">Min length (s)<input name="min_len" type="number" min="3" placeholder="15"></label>
+          <label class="field">Max length (s)<input name="max_len" type="number" min="5" placeholder="45"></label>
+          <label class="field">Language<input name="language" placeholder="auto (en, hi…)"></label>
+          <label class="field">Speech model<select name="model"><option value="">base (default)</option><option>tiny</option><option>small</option><option>medium</option></select></label>
+          <label class="field">Only this part<input name="section" placeholder="1:00:00-2:30:00"></label>
+        </div>
+      </details>
+      <details>
+        <summary>Or upload a video file</summary>
+        <div class="row" style="margin-top:10px">
+          <input type="file" id="upload-file" accept="video/*">
+          <input id="upload-credit" placeholder="Creator name">
+          <input id="upload-credit-url" placeholder="Creator link">
+          <button class="btn" id="upload-btn" type="button">Upload &amp; clip</button>
+        </div>
+        <p class="hint" id="upload-progress"></p>
+      </details>
+    </div>
+    <div class="card">
+      <h2>Jobs</h2>
+      <div id="jobs"></div>
+    </div>
+  </section>
+
+  <!-- Reels: folders, then reels in a folder -->
+  <section id="tab-library" hidden>
+    <div class="crumbs" id="library-crumbs"></div>
+    <input id="library-search" placeholder="Search folders by title or creator" style="width:100%;margin-bottom:16px">
+    <div id="library-body"></div>
+  </section>
+
+  <!-- 24/7 -->
+  <section id="tab-auto" class="stack" hidden>
+    <div class="card">
+      <label class="switch"><input type="checkbox" id="watch"> Watch my channels and clip them when they go live</label>
+      <p class="hint">Checks each channel every few minutes and uses almost no CPU while nobody is live.
+        Keep makereel running (or start it with <code>makereel web --watch</code> on a machine that stays on).</p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h2>Channels</h2>
+        <textarea id="channels" rows="9" placeholder="@streamer&#10;https://www.youtube.com/@another&#10;twitch.tv/name&#10;kick.com/name"></textarea>
+        <p class="hint">One per line: YouTube @handles or channel links, Twitch or Kick.</p>
+      </div>
+      <div class="card">
+        <h2>Limits</h2>
+        <div class="opts" style="grid-template-columns:1fr 1fr">
+          <label class="field">Check every (min)<input id="poll_minutes" type="number" min="1"></label>
+          <label class="field">Reels per hour, per stream<input id="clips_per_hour" type="number" min="1"></label>
+          <label class="field">Live streams at once<input id="max_parallel_live" type="number" min="1"></label>
+          <label class="field">Buffer (min)<input id="buffer_minutes" type="number" min="1"></label>
+          <label class="field">Delete reels after (days)<input id="keep_days" type="number" min="1"></label>
+        </div>
+      </div>
+    </div>
+    <div><button class="btn primary" id="save-settings">Save</button></div>
+  </section>
+</main>
+
+<!-- Reel editor -->
+<dialog id="editor">
+  <div class="editor">
+    <div>
+      <video id="ed-video" controls playsinline></video>
+      <div class="row" style="margin-top:10px">
+        <a class="btn small" id="ed-download" href="#">Download</a>
+        <button class="btn small" id="ed-copy" type="button">Copy post text</button>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="row" style="justify-content:space-between"><h2 id="ed-title" style="margin:0">Edit reel</h2>
+        <button class="btn small" id="ed-close" type="button">Close</button></div>
+      <label class="field">On-screen title<input id="ed-hook"></label>
+      <label class="field">
+        <span>Captions <span id="ed-words"></span></span>
+        <textarea id="ed-transcript" class="transcript" rows="6" spellcheck="true"></textarea>
+        <span class="hint" style="margin:0">Fix any word right here. Keeping the same number of words keeps exact timing; adding or removing words spreads them evenly.</span>
+      </label>
+      <label class="field">Post text (credits included)<textarea id="ed-caption" rows="7"></textarea></label>
+      <details><summary>Advanced: caption file (.ass): fonts, colours, position, timing</summary>
+        <textarea id="ed-ass" rows="12" style="font:12px var(--mono);margin-top:8px"></textarea>
+      </details>
+      <div class="row">
+        <button class="btn primary" id="ed-save" type="button">Save &amp; re-render</button>
+        <span class="hint" id="ed-msg" style="margin:0"></span>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

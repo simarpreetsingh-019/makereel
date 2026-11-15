@@ -1,0 +1,85 @@
+// "Reels" tab: one folder per source video; open a folder to see and edit its reels.
+import { api, media } from "../api.js";
+import { store } from "../store.js";
+import { $, busy, copyText, esc, timeAgo, toast } from "../ui.js";
+import { openEditor } from "./editor.js";
+
+let lastDrawn = "";   // avoid redrawing (and restarting videos) when nothing changed
+
+export async function load(folder) {
+  if (folder) store.set({ folder: await api.folder(folder) });
+  else store.set({ folders: (await api.folders()).folders, folder: null });
+}
+
+function foldersHTML(folders, query) {
+  const q = query.toLowerCase();
+  const list = folders.filter((f) => !q || `${f.title} ${f.channel}`.toLowerCase().includes(q));
+  if (!list.length) return `<div class="empty">${folders.length ? "No folder matches." : "No reels yet. Paste a link in Create."}</div>`;
+  return `<div class="folders">${list.map((f) => `
+    <button class="folder" data-folder="${esc(f.folder)}">
+      <div class="cover">${f.cover ? `<video src="${esc(media(f.cover))}#t=1" preload="metadata" muted></video>` : `<span class="icon">📁</span>`}</div>
+      <div class="meta">
+        <div class="name">${f.live ? "🔴 " : ""}${esc(f.title)}</div>
+        <div class="sub">${esc(f.channel || "")}${f.channel ? " · " : ""}${f.count} reel${f.count === 1 ? "" : "s"} · ${timeAgo(f.updated)}</div>
+      </div>
+    </button>`).join("")}</div>`;
+}
+
+function reelsHTML(data) {
+  if (!data.reels.length) return `<div class="empty">This folder has no reels yet${data.info?.live_status === "is_live" ? " (it fills up as the stream has big moments)" : ""}.</div>`;
+  return `<div class="reels">${data.reels.map((r) => `
+    <div class="reel">
+      <video src="${esc(media(r.video))}" controls playsinline preload="metadata"></video>
+      <div class="body">
+        <div class="hook">${esc(r.hook)}</div>
+        <div class="sub">${esc(r.name)} · ${Math.round(r.end - r.start)}s · score ${r.score}</div>
+        <div class="acts">
+          <button class="btn small" data-act="edit" data-name="${r.name}">Edit</button>
+          <button class="btn small" data-act="copy" data-name="${r.name}">Copy post text</button>
+          <a class="btn small" href="${esc(media(r.download))}">Download</a>
+          <button class="btn small danger" data-act="delete" data-name="${r.name}">Delete</button>
+        </div>
+      </div>
+    </div>`).join("")}</div>`;
+}
+
+export function render(state) {
+  const query = $("#library-search").value;
+  const inFolder = state.route.view === "folder" && state.folder;
+  const key = JSON.stringify([state.route, inFolder ? state.folder : state.folders, query]);
+  if (key === lastDrawn) return;
+  lastDrawn = key;
+
+  $("#library-search").hidden = Boolean(inFolder);
+  $("#library-crumbs").innerHTML = inFolder
+    ? `<a class="btn small" href="#/library">← All folders</a><h2>${esc(state.folder.info?.title || state.folder.folder)}</h2>
+       ${state.folder.info?.url ? `<a class="hint" style="margin:0" href="${esc(state.folder.info.url)}" target="_blank" rel="noopener">original video ↗</a>` : ""}
+       <button class="btn small danger" id="delete-folder" style="margin-left:auto">Delete folder</button>`
+    : `<h2>Folders</h2>`;
+  $("#library-body").innerHTML = inFolder ? reelsHTML(state.folder) : foldersHTML(state.folders, query);
+}
+
+export function mount() {
+  $("#library-search").addEventListener("input", () => render(store.state));
+
+  $("#library-body").addEventListener("click", (e) => {
+    const folderBtn = e.target.closest(".folder");
+    if (folderBtn) { location.hash = `#/library/${encodeURIComponent(folderBtn.dataset.folder)}`; return; }
+    const btn = e.target.closest("[data-act]");
+    if (!btn) return;
+    const { folder, reels } = store.state.folder;
+    const reel = reels.find((r) => r.name === btn.dataset.name);
+    if (btn.dataset.act === "edit") openEditor(folder, reel.name, () => load(folder));
+    if (btn.dataset.act === "copy") copyText(reel.caption);
+    if (btn.dataset.act === "delete" && confirm(`Delete ${reel.name}? This can't be undone.`)) {
+      busy(btn, async () => { await api.deleteReel(folder, reel.name); toast("Reel deleted"); await load(folder); });
+    }
+  });
+
+  $("#library-crumbs").addEventListener("click", (e) => {
+    if (e.target.id !== "delete-folder") return;
+    const { folder, reels } = store.state.folder;
+    if (!confirm(`Delete "${folder}" and its ${reels.length} reels? This can't be undone.`)) return;
+    busy(e.target, async () => { await api.deleteFolder(folder); toast("Folder deleted"); location.hash = "#/library"; });
+  });
+}

@@ -1,0 +1,9 @@
+.venv
+.git
+output
+downloads
+logs
+.env
+makereel.json
+**/__pycache__
+*.egg-info
