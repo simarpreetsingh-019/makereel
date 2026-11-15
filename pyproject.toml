@@ -1,6 +1,6 @@
 [project]
 name = "makereel"
-version = "0.2.0"
+version = "0.3.0"
 description = "Turn any live stream or video into captioned 9:16 reels with full creator credits"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -9,6 +9,7 @@ dependencies = [
   "faster-whisper>=1.0",
   "scenedetect[opencv-headless]>=0.6.4",
   "numpy",
+  "psutil>=5.9",
 ]
 
 [project.optional-dependencies]

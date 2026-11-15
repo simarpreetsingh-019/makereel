@@ -38,9 +38,9 @@ CHAT_BACKLOG_SECS = 45           # ignore chat for this long: yt-dlp replays old
 class LiveSession:
     """Records one live stream and turns spikes into reels in `out_dir`. Stop with `.stop.set()`."""
 
-    def __init__(self, info: sources.SourceInfo, out_dir: Path, work_dir: Path, clip: dict,
+    def __init__(self, info: sources.SourceInfo, out_dir: Path, work_dir: Path, clip: dict, brand: dict,
                  buffer_minutes: int = 10, clips_per_hour: int = 6, max_height: int = 720):
-        self.info, self.clip, self.max_height = info, clip, max_height
+        self.info, self.clip, self.brand, self.max_height = info, clip, brand, max_height
         self.out = out_dir
         self.buf = work_dir / f"live_{info.id}"
         self.buf.mkdir(parents=True, exist_ok=True)
@@ -181,7 +181,7 @@ class LiveSession:
         try:
             chat = np.array([self.chat.get(win_start + i, 0) for i in range(int(media.duration(win)) + 1)])
             meta = {**self.info.to_meta(), "offset": float(win_start)}
-            pipeline.process(win, meta, self.out, {**self.clip, "max_clips": 1}, chat_counts=chat)
+            pipeline.process(win, meta, self.out, {**self.clip, "max_clips": 1}, self.brand, chat_counts=chat)
             self.made.append(time.time())
         finally:
             win.unlink(missing_ok=True)

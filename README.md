@@ -5,7 +5,11 @@ and get captioned 9:16 reels with full creator credits, ready for Instagram, You
 
 - **Any link, auto-detected.** Live streams are recorded and clipped as big moments happen. Past streams use the chat replay.
 - **One folder per video.** Each folder is named after the video's title, with all its reels inside.
-- **Editable captions.** Captions are text, not images. Fix any word in a paragraph editor and re-render in seconds.
+- **Editable, in-sync captions.** Captions are text, not images, and are timed from each reel's own audio. Fix words in a paragraph,
+  auto-sync, shift them, or tap along to the audio, all with a live preview.
+- **Any shape.** Export each reel as 9:16, 4:5, 1:1 or 16:9 (blurred fill, crop or black bars) in seconds.
+- **Brand kit.** Your logo, fonts and caption colours on every reel. The "Made with makereel" line in the post text is opt-out.
+- **Benchmarks.** Measure speed, CPU, RAM and disk on any device, and compare versions.
 - **Credits on every post.** Creator, channel link, original title, a link to the exact second, and their tags.
 - **Runs on your own machine** (Windows, macOS, Linux or a server) at low power, 24/7 if you like.
 
@@ -34,7 +38,9 @@ From the terminal instead:
 makereel run "<any link>"                         # live → clips as it streams; anything else → clips now
 makereel run "<long VOD>" --section "1:00:00-2:30:00"
 makereel local gameplay.mp4 --credit "Name" --credit-url "https://youtube.com/@name"
-makereel rerender "Me at the zoo" reel_01 --transcript "fixed caption text…"
+makereel rerender "Me at the zoo" reel_01 --transcript "fixed caption text…"   # or --sync / --offset -0.2
+makereel export "Me at the zoo" reel_01 --format 4x5 --fit blur
+makereel bench                                    # speed, CPU, RAM, disk on this device
 makereel daemon                                   # 24/7 channel watcher without the web UI
 ```
 
@@ -57,6 +63,7 @@ Live streams use a rolling buffer (idea from [PeakCut](https://github.com/haziqa
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every environment variable and setting |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Windows, macOS, Linux, Docker, servers, 24/7 low-power setup |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Setting up, tests, lint, conventions, adding a route |
+| [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | What's measured, how to share results, results table |
 | [docs/CLIENT_SIDE_PLAN.md](docs/CLIENT_SIDE_PLAN.md) | Plan: offer makereel as a website that runs on each visitor's own device (no servers to pay for) |
 | [CHANGELOG.md](CHANGELOG.md) | What changed |
 

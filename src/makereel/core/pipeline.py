@@ -16,7 +16,8 @@ from typing import Any
 import numpy as np
 
 from ..errors import MediaError
-from . import highlights, media, render, signals, transcribe
+from . import branding, captions, highlights, media, render, signals, transcribe
+from .metrics import stage
 
 log = logging.getLogger(__name__)
 
@@ -27,19 +28,21 @@ BASE_TAGS = {
 FOLDER_FILE = "folder.json"   # describes the source video of a folder
 
 
-def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any],
+def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand: dict[str, Any],
             chat: Path | None = None, chat_counts: np.ndarray | None = None) -> list[dict]:
     """Make up to clip['max_clips'] reels from `video` into `out_dir`. Returns their metadata."""
     out_dir.mkdir(parents=True, exist_ok=True)
     write_folder_info(out_dir, meta)
-    total = media.duration(video)
+    with stage("probe"):
+        total = media.duration(video)
     if total < 3:
         raise MediaError(f"{video.name} is empty or unreadable")
     n = max(1, int(total))
 
     if total <= clip["max_len"] * 1.5:
         # A Short or short video: one reel, trimmed to max_len around the loudest bit.
-        loud = signals.loudness(video)
+        with stage("signals"):
+            loud = signals.loudness(video)
         peak = int(np.argmax(loud)) if len(loud) else 0
         start = 0.0 if total <= clip["max_len"] else max(0.0, min(peak - clip["max_len"] * 0.6,
                                                                   total - clip["max_len"]))
@@ -48,15 +51,18 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any],
         log.info("[1/3] short video (%.0fs): making one reel", total)
     else:
         log.info("[1/3] scanning %.0f min for loudness and chat spikes", total / 60)
-        loud = signals.loudness(video)
-        counts = chat_counts if chat_counts is not None else signals.chat_activity(chat, n, meta.get("offset", 0.0))
-        curve, parts = highlights.signal_curve(n, loud, counts, clip["profile"])
-        cands = highlights.candidates(curve, k=clip["max_clips"] * 3)
+        with stage("signals"):
+            loud = signals.loudness(video)
+            counts = (chat_counts if chat_counts is not None
+                      else signals.chat_activity(chat, n, meta.get("offset", 0.0)))
+            curve, parts = highlights.signal_curve(n, loud, counts, clip["profile"])
+            cands = highlights.candidates(curve, k=clip["max_clips"] * 3)
 
     log.info("[2/3] transcribing %d candidate windows (whisper %s)", len(cands), clip["model"])
     for c in cands:
-        words = transcribe.words_in(video, max(0, c.start - 6), min(total, c.end + 8),
-                                    clip["model"], clip["language"])
+        with stage("transcribe"):
+            words = transcribe.words_in(video, max(0, c.start - 6), min(total, c.end + 8),
+                                        clip["model"], clip["language"])
         highlights.rescore(c, words, parts, clip["profile"])
     best = sorted(cands, key=lambda c: c.score, reverse=True)[: clip["max_clips"]]
 
@@ -64,7 +70,7 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any],
     results = []
     for c in best:
         try:
-            results.append(_render_one(video, c, meta, out_dir, clip, total))
+            results.append(_render_one(video, c, meta, out_dir, clip, brand, total))
         except MediaError as e:  # one bad clip shouldn't lose the others
             log.error("   reel at %.0fs failed: %s", c.start, e.message)
     if best and not results:
@@ -72,22 +78,54 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any],
     return results
 
 
-def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip: dict, total: float) -> dict:
+def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip: dict, brand: dict,
+                total: float) -> dict:
     highlights.snap(c, clip["min_len"], clip["max_len"], total)
-    cuts = signals.scene_cuts(video, c.start, c.start + 3)
+    with stage("scenes"):
+        cuts = signals.scene_cuts(video, c.start, c.start + 3)
     if cuts:
         c.start = round(cuts[0], 2)
     hook = make_hook(c.text)
     name = next_reel_name(out_dir)
-    files = render.render_clip(video, c.start, c.end, c.words, out_dir / f"{name}.mp4", clip["layout"], hook)
+    src, raw, ass, out = (out_dir / f"{name}{ext}" for ext in (".src.mp4", ".raw.mp4", ".ass", ".mp4"))
+
+    with stage("render"):
+        render.cut_source(video, c.start, c.end, src)
+    with stage("sync"):
+        words = synced_words(src, c.words, c.start, clip)
+    ass.write_text(captions.build_ass(words, 0.0, c.end - c.start, hook,
+                                      branding.style_for(render.MAIN_FORMAT, brand)), encoding="utf-8")
+    with stage("render"):
+        render.make_raw(src, raw, render.MAIN_FORMAT, clip["layout"])
+        render.burn(raw, ass, out, branding.logo_for(brand), branding.fonts_dir())
     if clip.get("silence"):
-        render.trim_silence(out_dir / files["file"])
-    post = {**files, "folder": out_dir.name, "name": name, "score": round(c.score, 2), "why": c.reasons, "hook": hook,
-            "start": c.start, "end": c.end, "layout": clip["layout"],
-            **credits(meta, c.start, clip["profile"], hook)}
+        render.trim_silence(out)
+
+    post = {"file": out.name, "raw": raw.name, "source_clip": src.name, "captions": ass.name,
+            "folder": out_dir.name, "name": name, "format": render.MAIN_FORMAT, "fit": clip["layout"],
+            "logo": True, "exports": {}, "score": round(c.score, 2), "why": c.reasons, "hook": hook,
+            "start": c.start, "end": c.end, **credits(meta, c.start, clip["profile"], hook, brand)}
     (out_dir / f"{name}.json").write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
-    log.info("   %s  %.1f-%.1fs  score %.2f  %s", name, post["start"], post["end"], c.score, c.reasons)
+    log.info("   %s  %.1f-%.1fs  score %.2f  %s", name, c.start, c.end, c.score, c.reasons)
     return post
+
+
+def synced_words(clip_file: Path, source_words: list[dict], clip_start: float, clip: dict) -> list[dict]:
+    """Caption timings measured on the finished clip itself (auto-sync).
+
+    The first transcription ran on the long source with fast settings; cutting and re-encoding can
+    shift things by a few hundred milliseconds. Re-transcribing the short clip precisely gives
+    timings on exactly the audio viewers hear. Falls back to the source timings if it finds nothing.
+    """
+    try:
+        precise = transcribe.words_in_file(clip_file, clip["model"], clip["language"])
+    except MediaError as e:
+        log.warning("   caption sync skipped: %s", e.message)
+        precise = []
+    if precise:
+        return precise
+    return [{**w, "start": w["start"] - clip_start, "end": w["end"] - clip_start} for w in source_words
+            if w["start"] >= clip_start]
 
 
 def next_reel_name(out_dir: Path) -> str:
@@ -102,7 +140,10 @@ def write_folder_info(out_dir: Path, meta: dict) -> None:
     (out_dir / FOLDER_FILE).write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def credits(meta: dict, start: float, profile: str, hook: str) -> dict:
+CREDIT_FOOTER = "✂️ Made with makereel"
+
+
+def credits(meta: dict, start: float, profile: str, hook: str, brand: dict | None = None) -> dict:
     """Credit block for every post: creator, link to the exact moment, tags."""
     t = int(start + meta.get("offset", 0.0))
     url = meta.get("url", "")
@@ -116,6 +157,8 @@ def credits(meta: dict, start: float, profile: str, hook: str) -> dict:
         lines.append(f"🎥 Credit: {creator} ({meta.get('channel_url') or url})")
     lines += [f"📺 Original: \"{meta.get('title', '')}\"", f"⏱ Moment: {moment}",
               "All rights belong to the original creator.", "", " ".join(dict.fromkeys(tags))]
+    if brand is None or brand.get("credit_footer", True):
+        lines += ["", CREDIT_FOOTER]
     return {"source": moment, "source_time": t, "creator": creator,
             "creator_url": meta.get("channel_url"), "caption": "\n".join(lines)}
 

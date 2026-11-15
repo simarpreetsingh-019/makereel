@@ -34,8 +34,10 @@ makereel/
 │   │   ├── signals.py       loudness, chat activity, scene cuts
 │   │   ├── highlights.py    scoring curve, candidates, rescoring, edge snapping
 │   │   ├── transcribe.py    faster-whisper on candidate windows only
-│   │   ├── captions.py      build / parse / rebuild .ass caption files
-│   │   ├── render.py        reframe to 9:16, burn captions, optional silence trim
+│   │   ├── captions.py      build / parse / align / shift / restyle .ass caption files
+│   │   ├── branding.py      brand kit → caption Style + logo overlay
+│   │   ├── metrics.py       stage timers for benchmarks
+│   │   ├── render.py        master clip, any format (9:16, 4:5, 1:1, 16:9) × fit, captions, logo
 │   │   ├── pipeline.py      video → reels (+ credits, hook, folder.json)
 │   │   └── live.py          LiveSession: rolling buffer + spike detection
 │   ├── services/
@@ -55,7 +57,7 @@ makereel/
 │           ├── api.js       API client (ApiError with message + hint)
 │           ├── store.js     single app state + subscribe
 │           ├── ui.js        helpers (toast, busy buttons, one-video-at-a-time)
-│           └── views/       create.js · library.js · editor.js · auto.js
+│           └── views/       create · library · editor (text/timing/export) · auto · brand · system
 ├── tests/                   pytest unit tests (no network, no ffmpeg needed)
 ├── docs/
 ├── deploy/                  macOS launchd, Linux systemd, Windows PowerShell
@@ -86,14 +88,37 @@ two different videos with the same title get the video id appended). Inside it:
 | File | Purpose |
 |---|---|
 | `folder.json` | source video: id, title, channel, link, live status |
-| `reel_NN.mp4` | the reel, captions burned in |
-| `reel_NN.raw.mp4` | the same moment without captions, so caption edits only re-burn (seconds) |
+| `reel_NN.mp4` | the reel (9:16), captions and logo burned in |
+| `reel_NN.src.mp4` | the moment in its original shape: the master every export format is made from |
+| `reel_NN.raw.mp4` | the 9:16 version without captions, so caption edits only re-burn (seconds) |
+| `reel_NN.<fmt>.mp4` / `.ass` | exports in other formats (`4x5`, `1x1`, `16x9`), made on demand |
 | `reel_NN.ass` | the captions as text (styles, timing, one highlighted word per line) |
 | `reel_NN.json` | post text with credits, on-screen title, score, why it was picked, timing |
 
 The caption text shown in the editor is read back from the `.ass` file itself (`captions.parse_words`),
-so there is a single source of truth. Editing keeps each word's timing when the word count is unchanged,
-and spreads the words evenly over the same span when words are added or removed (`captions.retime`).
+so there is a single source of truth.
+
+## Caption sync
+
+Captions drift when word timings are measured on one piece of audio and shown on another. makereel avoids that in three ways:
+
+1. **Automatic, at creation.** Candidate moments are first found with a fast transcription of the long
+   source. After a reel is cut, its own audio (`reel_NN.src.mp4`) is transcribed again with precise
+   settings (beam 5, tighter voice detection). The captions are timed from that, so they match exactly
+   what viewers hear (`pipeline.synced_words`).
+2. **Auto-sync button (and `makereel rerender --sync`).** Re-times an existing reel from its own audio.
+   The user's corrected words are kept, because `captions.align` maps them onto the fresh timings.
+3. **Manual tools in the editor (Timing tab).** The clean video plays with a live caption overlay, so
+   there's no re-render while adjusting. You can:
+   - shift every caption earlier or later with a slider
+   - nudge single words by ±0.1 s
+   - "set to now" at the playhead
+   - use **tap to sync**: play the reel and press Space as each word is spoken
+
+   Then save to re-render. Edits also update any exports.
+
+Text edits use the same alignment. Words you didn't touch keep their timing, and changed, added or removed
+words are fitted between them.
 
 ## State
 

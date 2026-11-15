@@ -50,15 +50,27 @@ def release_if_idle(seconds: float = 600) -> None:
 
 
 def words_in(video: Path, start: float, end: float, size: str = "base",
-             language: str | None = None) -> list[dict]:
-    """Transcribe [start, end] of a file; word times are on the file's clock."""
+             language: str | None = None, precise: bool = False) -> list[dict]:
+    """Transcribe [start, end] of a file; word times are on the file's clock.
+
+    precise=True is for syncing captions on a finished reel: a wider beam search for better
+    words and word timings. It costs a little more, but reels are short.
+    """
     pcm = media.run([media.binary("ffmpeg"), "-v", "error", "-ss", f"{start:.2f}", "-to", f"{end:.2f}",
                      "-i", str(video), "-vn", "-ac", "1", "-ar", "16000", "-f", "s16le", "-"], capture=True)
     audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
     if len(audio) < 16000:  # under a second: nothing worth transcribing
         return []
     with _lock:
-        segments, _ = _get(size).transcribe(audio, word_timestamps=True, vad_filter=True,
-                                            language=language, beam_size=1)
+        segments, _ = _get(size).transcribe(
+            audio, word_timestamps=True, language=language,
+            beam_size=5 if precise else 1,
+            vad_filter=True, vad_parameters={"min_silence_duration_ms": 300 if precise else 2000},
+            condition_on_previous_text=not precise)
         return [{"start": round(w.start + start, 2), "end": round(w.end + start, 2), "word": w.word.strip()}
                 for s in segments for w in (s.words or [])]
+
+
+def words_in_file(video: Path, size: str = "base", language: str | None = None) -> list[dict]:
+    """Precise word timings for a whole (short) file, e.g. a rendered reel."""
+    return words_in(video, 0.0, media.duration(video), size, language, precise=True)

@@ -14,6 +14,8 @@
     <a href="#/create" data-tab="create">Create</a>
     <a href="#/library" data-tab="library">Reels</a>
     <a href="#/auto" data-tab="auto">24/7</a>
+    <a href="#/brand" data-tab="brand">Brand</a>
+    <a href="#/system" data-tab="system">System</a>
   </nav>
   <div class="sys" id="sys"></div>
 </header>
@@ -94,11 +96,95 @@
     </div>
     <div><button class="btn primary" id="save-settings">Save</button></div>
   </section>
+  <!-- Brand kit -->
+  <section id="tab-brand" hidden>
+    <div class="brand-grid">
+      <div class="stack">
+        <div class="card">
+          <h2>Logo</h2>
+          <div class="row">
+            <div class="logo-box"><img id="br-logo-img" alt="Your logo" hidden><span id="br-logo-none" class="hint" style="margin:0">No logo</span></div>
+            <label class="btn">Upload logo<input type="file" id="br-logo-file" accept="image/png,image/webp,image/jpeg" hidden></label>
+            <button class="btn danger" id="br-logo-remove" hidden>Remove</button>
+          </div>
+          <p class="hint">A PNG with a transparent background looks best.</p>
+          <div class="opts" style="grid-template-columns:1fr 1fr">
+            <label class="switch"><input type="checkbox" id="br-logo_enabled"> Show on reels</label>
+            <label class="field">Position<select id="br-logo_position">
+              <option value="top-left">Top left</option><option value="top-right">Top right</option>
+              <option value="bottom-left">Bottom left</option><option value="bottom-right">Bottom right</option></select></label>
+            <label class="field">Size <span id="br-logo_scale-v"></span><input type="range" id="br-logo_scale" min="0.05" max="0.4" step="0.01"></label>
+            <label class="field">Opacity <span id="br-logo_opacity-v"></span><input type="range" id="br-logo_opacity" min="0.1" max="1" step="0.05"></label>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Captions</h2>
+          <div class="opts" style="grid-template-columns:1fr 1fr">
+            <label class="field">Font<input id="br-font" list="br-font-list"><datalist id="br-font-list"></datalist></label>
+            <label class="field">Position<select id="br-caption_position"><option value="bottom">Lower third</option><option value="middle">Middle</option><option value="top">Top</option></select></label>
+            <label class="field">Text colour<input type="color" id="br-text_colour"></label>
+            <label class="field">Highlight colour<input type="color" id="br-highlight_colour"></label>
+            <label class="field">Outline colour<input type="color" id="br-outline_colour"></label>
+            <label class="field">Size <span id="br-caption_size-v"></span><input type="range" id="br-caption_size" min="0.6" max="1.6" step="0.05"></label>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <label class="btn small">Upload a font (.ttf/.otf)<input type="file" id="br-font-file" accept=".ttf,.otf" hidden></label>
+            <div id="br-fonts"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Post text</h2>
+          <label class="switch"><input type="checkbox" id="br-credit_footer"> Add “✂️ Made with makereel” at the end of the post text</label>
+          <p class="hint">Helps others find the tool. Turn it off any time; it's never put on the video itself.</p>
+        </div>
+        <div><button class="btn primary" id="br-save">Save brand</button></div>
+      </div>
+      <div>
+        <div class="phone" id="br-preview">
+          <img id="br-prev-logo" alt="" hidden>
+          <div class="prev-hook">YOUR TITLE HERE</div>
+          <div class="prev-caption" id="br-prev-caption">THIS IS <b>HOW</b> IT LOOKS</div>
+        </div>
+        <p class="hint" style="text-align:center">Preview. <span id="br-prev-footer">Post text ends with the makereel credit.</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- System + benchmarks -->
+  <section id="tab-system" class="stack" hidden>
+    <div class="grid2">
+      <div class="card"><h2>This device</h2><div id="sys-device">Loading…</div></div>
+      <div class="card">
+        <h2>Benchmark</h2>
+        <p class="hint" style="margin-top:0">Makes a reel from a fixed 19-second test video and measures time, CPU, memory and disk.
+          It uses this device's processor for about a minute. Results stay on this device unless you choose to share them.</p>
+        <label class="switch" style="font-weight:400;margin-top:8px"><input type="checkbox" id="sys-consent"> Allow the benchmark to run on this device</label>
+        <div class="row" style="margin-top:12px">
+          <select id="sys-model"><option value="">Speech model from settings</option><option>tiny</option><option>base</option><option>small</option></select>
+          <button class="btn primary" id="sys-run">Run benchmark</button>
+          <span class="hint" id="sys-status" style="margin:0"></span>
+        </div>
+      </div>
+    </div>
+    <div class="card"><h2>Result</h2><div id="sys-result"><div class="empty">Run a benchmark to see results.</div></div></div>
+    <div class="card"><h2>History</h2><div id="sys-runs"></div></div>
+  </section>
 </main>
 
 <!-- Reel editor -->
 <dialog id="editor">
-  <div class="editor">
+  <div class="ed-head">
+    <h2 id="ed-title" style="margin:0">Edit reel</h2>
+    <div class="tabs">
+      <button data-edtab="text" class="on">Text</button>
+      <button data-edtab="timing">Timing</button>
+      <button data-edtab="export">Export</button>
+    </div>
+    <span class="hint" id="ed-msg" style="margin:0 0 0 auto"></span>
+    <button class="btn small" id="ed-close" type="button">Close</button>
+  </div>
+
+  <div class="editor" data-edpanel="text">
     <div>
       <video id="ed-video" controls playsinline></video>
       <div class="row" style="margin-top:10px">
@@ -107,22 +193,69 @@
       </div>
     </div>
     <div class="stack">
-      <div class="row" style="justify-content:space-between"><h2 id="ed-title" style="margin:0">Edit reel</h2>
-        <button class="btn small" id="ed-close" type="button">Close</button></div>
       <label class="field">On-screen title<input id="ed-hook"></label>
       <label class="field">
         <span>Captions <span id="ed-words"></span></span>
         <textarea id="ed-transcript" class="transcript" rows="6" spellcheck="true"></textarea>
-        <span class="hint" style="margin:0">Fix any word right here. Keeping the same number of words keeps exact timing; adding or removing words spreads them evenly.</span>
+        <span class="hint" style="margin:0">Fix any word right here. Words you don't touch keep their exact timing; edited, added or removed words are fitted around them.</span>
       </label>
       <label class="field">Post text (credits included)<textarea id="ed-caption" rows="7"></textarea></label>
+      <label class="switch" style="font-weight:400"><input type="checkbox" id="ed-logo"> Show my logo on this reel</label>
       <details><summary>Advanced: caption file (.ass): fonts, colours, position, timing</summary>
         <textarea id="ed-ass" rows="12" style="font:12px var(--mono);margin-top:8px"></textarea>
       </details>
       <div class="row">
         <button class="btn primary" id="ed-save" type="button">Save &amp; re-render</button>
-        <span class="hint" id="ed-msg" style="margin:0"></span>
+        <button class="btn" id="ed-restyle" type="button" title="Use the fonts and colours from the Brand tab">Apply brand style</button>
       </div>
+    </div>
+  </div>
+
+  <div class="editor" data-edpanel="timing" hidden>
+    <div>
+      <div class="tm-stage">
+        <video id="tm-video" controls playsinline></video>
+        <div class="tm-caption" id="tm-caption"></div>
+      </div>
+      <div class="row" style="margin-top:8px;justify-content:space-between">
+        <span class="hint" style="margin:0">Live preview · <span id="tm-time">0.00 s</span></span>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="card soft">
+        <b>Automatic</b>
+        <p class="hint" style="margin:4px 0 10px">Listens to this reel's own audio again and re-times every word. Your corrected words are kept.</p>
+        <button class="btn primary" id="tm-auto" type="button">Auto-sync from audio</button>
+      </div>
+      <div class="card soft">
+        <b>Shift everything</b>
+        <p class="hint" style="margin:4px 0 6px">Captions early? Drag right. Late? Drag left. The preview updates live.</p>
+        <div class="row"><input type="range" id="tm-offset" min="-1.5" max="1.5" step="0.05" value="0" style="flex:1"><b id="tm-offset-label">0.00 s</b></div>
+      </div>
+      <div class="card soft">
+        <b>Fix individual words</b>
+        <p class="hint" style="margin:4px 0 8px">Click a time to play from there; nudge with − / +, or pause on the word and press “set to now”.
+          <b>Tap to sync</b> plays the reel; press Space as each word is spoken.</p>
+        <div class="row"><button class="btn small" id="tm-tap" type="button">Tap to sync</button><span class="hint" id="tm-hint" style="margin:0"></span></div>
+        <div class="word-list" id="tm-list"></div>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="tm-save" type="button">Save timing &amp; re-render</button>
+        <button class="btn" id="tm-reset" type="button">Undo changes</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="editor single" data-edpanel="export" hidden>
+    <div class="stack">
+      <div class="row">
+        <label class="field" style="min-width:220px">How to fit the picture
+          <select id="ex-fit"><option value="blur">Blurred background (keeps the whole frame)</option>
+            <option value="crop">Crop to fill (no borders)</option><option value="pad">Black bars</option></select></label>
+      </div>
+      <p class="hint" id="ex-note" style="color:var(--warn)"></p>
+      <div id="ex-formats"></div>
+      <p class="hint">Captions and your logo are re-laid-out for each shape. Edits you save later update every export automatically.</p>
     </div>
   </div>
 </dialog>

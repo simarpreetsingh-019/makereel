@@ -37,6 +37,7 @@ function reelsHTML(data) {
           <button class="btn small" data-act="edit" data-name="${r.name}">Edit</button>
           <button class="btn small" data-act="copy" data-name="${r.name}">Copy post text</button>
           <a class="btn small" href="${esc(media(r.download))}">Download</a>
+          <button class="btn small" data-act="export" data-name="${r.name}">Formats</button>
           <button class="btn small danger" data-act="delete" data-name="${r.name}">Delete</button>
         </div>
       </div>
@@ -70,6 +71,7 @@ export function mount() {
     const { folder, reels } = store.state.folder;
     const reel = reels.find((r) => r.name === btn.dataset.name);
     if (btn.dataset.act === "edit") openEditor(folder, reel.name, () => load(folder));
+    if (btn.dataset.act === "export") openEditor(folder, reel.name, () => load(folder), "export");
     if (btn.dataset.act === "copy") copyText(reel.caption);
     if (btn.dataset.act === "delete" && confirm(`Delete ${reel.name}? This can't be undone.`)) {
       busy(btn, async () => { await api.deleteReel(folder, reel.name); toast("Reel deleted"); await load(folder); });

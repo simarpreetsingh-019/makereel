@@ -1,35 +1,81 @@
-"""Build an editable .ass subtitle file for a clip.
+"""Editable .ass caption files: build, read back, re-time, re-style.
 
-Open any `*.ass` next to a reel in a text editor (or Aegisub) to fix words, timing or style,
-then re-render from the web app (Reels → Edit) or `makereel rerender <clip>.json`. Nothing is baked into images.
+Open any `reel_NN.ass` in a text editor (or Aegisub) to fix words, timing or style, then re-render
+from the web app (Reels → Edit) or `makereel rerender`. Nothing is baked into images.
 
-Look & feel lives in the [V4+ Styles] block: change the font, size, colours or position there
-once. Colours are &HAABBGGRR (alpha, blue, green, red), e.g. yellow = &H0000DDFF.
+Look & feel lives in the [V4+ Styles] block, generated from a `Style` (export shape + brand kit).
+ASS colours are &HAABBGGRR (alpha, blue, green, red); `ass_colour("#FFDD00")` converts from CSS hex.
+
+Timing model: every word has a start and end on the reel's clock. One Caption line is written
+per word (that word highlighted inside its group of `group` words), so the timings can be read
+back exactly with `parse_words`. That makes the .ass file the single source of truth.
 """
 from __future__ import annotations
 
+import difflib
 import re
+from dataclasses import dataclass
 
-HIGHLIGHT = "&H0000DDFF&"  # active word colour (yellow)
-
-HEADER = """[Script Info]
-; Made by makereel. Edit freely, then re-render (web app: Edit -> Save, or: makereel rerender <clip>.json)
-ScriptType: v4.00+
-PlayResX: 1080
-PlayResY: 1920
-WrapStyle: 0
-ScaledBorderAndShadow: yes
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,Arial Black,86,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,2,60,60,560,1
-Style: Hook,Arial Black,62,&H00FFFFFF,&H00FFFFFF,&H00000000,&H50000000,-1,0,0,0,100,100,0,0,3,18,0,8,80,80,220,1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
+# --------------------------------------------------------------------------- style
+POSITIONS = {"bottom": 2, "middle": 5, "top": 8}   # ASS numpad alignment (centred)
 
 
+def ass_colour(hex_colour: str, alpha: int = 0) -> str:
+    """'#RRGGBB' -> '&HAABBGGRR' (alpha 0 = opaque)."""
+    h = hex_colour.lstrip("#")
+    if not re.fullmatch(r"[0-9A-Fa-f]{6}", h):
+        raise ValueError(f"not a colour: {hex_colour!r}")
+    r, g, b = h[0:2], h[2:4], h[4:6]
+    return f"&H{alpha:02X}{b}{g}{r}".upper()
+
+
+@dataclass(frozen=True)
+class Style:
+    width: int = 1080
+    height: int = 1920
+    font: str = "Arial Black"
+    text_colour: str = "#FFFFFF"
+    highlight_colour: str = "#FFDD00"
+    outline_colour: str = "#000000"
+    position: str = "bottom"       # bottom | middle | top (captions); the title sits at the top
+    size: float = 1.0              # scale on the default caption size
+
+    def header(self) -> str:
+        short = min(self.width, self.height)          # scale text by the short side
+        cap = round(short * 0.080 * self.size)        # 86 px on a 1080-wide reel
+        hook = round(short * 0.057 * self.size)
+        margin_v = {"bottom": round(self.height * 0.29), "middle": 0, "top": round(self.height * 0.22)}[
+            self.position] if self.height > self.width else round(self.height * 0.08)
+        hook_margin = round(self.height * 0.115) if self.height > self.width else round(self.height * 0.06)
+        side = round(self.width * 0.055)
+        text, outline = ass_colour(self.text_colour), ass_colour(self.outline_colour)
+        return (
+            "[Script Info]\n"
+            "; Made by makereel. Edit freely, then re-render (web app: Edit -> Save)\n"
+            "ScriptType: v4.00+\n"
+            f"PlayResX: {self.width}\nPlayResY: {self.height}\n"
+            "WrapStyle: 0\nScaledBorderAndShadow: yes\n\n"
+            "[V4+ Styles]\n"
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
+            "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
+            "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+            f"Style: Caption,{self.font},{cap},{text},{text},{outline},&H80000000,-1,0,0,0,100,100,0,0,1,"
+            f"{max(2, round(cap * 0.08))},2,{POSITIONS[self.position]},{side},{side},{margin_v},1\n"
+            f"Style: Hook,{self.font},{hook},&H00FFFFFF,&H00FFFFFF,&H00000000,&H50000000,-1,0,0,0,100,100,0,0,"
+            f"3,{round(hook * 0.29)},0,8,{side + 20},{side + 20},{hook_margin},1\n\n"
+            "[Events]\n"
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+        )
+
+    @property
+    def highlight(self) -> str:
+        return ass_colour(self.highlight_colour) + "&"
+
+
+DEFAULT_STYLE = Style()
+
+
+# --------------------------------------------------------------------------- building
 def _ts(t: float) -> str:
     t = max(0.0, t)
     h, rem = divmod(t, 3600)
@@ -43,9 +89,9 @@ def _clean(w: str) -> str:
 
 
 def build_ass(words: list[dict], start: float, end: float, hook: str | None,
-              group: int = 3, hook_secs: float = 3.0) -> str:
-    """Words are on the source clock; output times are relative to `start`."""
-    lines = [HEADER]
+              style: Style = DEFAULT_STYLE, group: int = 3, hook_secs: float = 3.0) -> str:
+    """Words are on any clock; only those in [start, end) are used, re-based to start at 0."""
+    lines = [style.header()]
     if hook:
         lines.append(f"Dialogue: 1,{_ts(0)},{_ts(hook_secs)},Hook,,0,0,0,,{_clean(hook)}\n")
     ws = [w for w in words if start <= w["start"] < end and _clean(w["word"])]
@@ -53,12 +99,14 @@ def build_ass(words: list[dict], start: float, end: float, hook: str | None,
         chunk = ws[g:g + group]
         for i, w in enumerate(chunk):
             t0 = w["start"] - start
-            nxt = chunk[i + 1]["start"] if i + 1 < len(chunk) else w["end"] + 0.25
+            nxt = chunk[i + 1]["start"] if i + 1 < len(chunk) else max(w["end"], w["start"] + 0.1) + 0.25
             t1 = min(nxt, end) - start
             if g + group < len(ws):  # don't overlap the next group
                 t1 = min(t1, ws[g + group]["start"] - start)
+            if t1 - t0 < 0.05:
+                t1 = t0 + 0.05
             text = " ".join(
-                f"{{\\c{HIGHLIGHT}\\fscx108\\fscy108}}{_clean(c['word'])}{{\\r}}" if j == i
+                f"{{\\c{style.highlight}\\fscx108\\fscy108}}{_clean(c['word'])}{{\\r}}" if j == i
                 else _clean(c["word"]) for j, c in enumerate(chunk))
             lines.append(f"Dialogue: 0,{_ts(t0)},{_ts(t1)},Caption,,0,0,0,,{text}\n")
     return "".join(lines)
@@ -70,7 +118,7 @@ def set_hook(ass: str, hook: str) -> str:
                    for l in ass.splitlines(keepends=True))
 
 
-# --------------------------------------------------------------------------- transcript editing
+# --------------------------------------------------------------------------- reading back
 _TIME = re.compile(r"(\d+):(\d\d):(\d\d(?:\.\d+)?)")
 _ACTIVE = re.compile(r"\{\\c&H[0-9A-Fa-f]+&[^}]*\}(.*?)\{\\r\}")
 
@@ -81,10 +129,7 @@ def _secs(ts: str) -> float:
 
 
 def parse_words(ass: str) -> list[dict]:
-    """Recover the timed words from a caption file (one highlighted word per Caption line).
-
-    Times are relative to the reel's start. This is what the transcript editor shows.
-    """
+    """The timed words of a caption file, on the reel's clock (one highlighted word per Caption line)."""
     words = []
     for line in ass.splitlines():
         if not line.startswith("Dialogue:") or ",Caption," not in line:
@@ -96,38 +141,111 @@ def parse_words(ass: str) -> list[dict]:
     return words
 
 
+def parse_hook(ass: str) -> str | None:
+    for line in ass.splitlines():
+        if line.startswith("Dialogue:") and ",Hook,," in line:
+            return line.rsplit(",,", 1)[1]
+    return None
+
+
 def header_of(ass: str) -> str:
     """Everything up to and including the [Events] Format line (keeps the user's style edits)."""
-    marker = "Format: Layer"
-    i = ass.find(marker, ass.find("[Events]"))
-    return ass[: ass.index("\n", i) + 1] if i >= 0 else HEADER
+    i = ass.find("Format: Layer", ass.find("[Events]"))
+    return ass[: ass.index("\n", i) + 1] if i >= 0 else DEFAULT_STYLE.header()
 
 
-def retime(words: list[dict], text: str) -> list[dict]:
-    """Map an edited transcript back onto the original word timings.
-
-    Same number of words -> each keeps its slot (pure spelling fixes). Otherwise the new words
-    are spread evenly over the same total span, so added or removed words still stay in sync.
-    """
-    new = text.split()
-    if not new or not words:
-        return []
-    if len(new) == len(words):
-        return [{**w, "word": n} for w, n in zip(words, new, strict=True)]
-    start, end = words[0]["start"], words[-1]["end"]
-    step = (end - start) / len(new)
-    return [{"start": round(start + i * step, 2), "end": round(start + (i + 1) * step, 2), "word": n}
-            for i, n in enumerate(new)]
-
-
-def rebuild(ass: str, text: str, hook: str | None) -> str:
-    """New caption file from an edited transcript, keeping styles and the reel's length."""
-    words = retime(parse_words(ass), text)
-    length = max([w["end"] for w in words] + [_last_end(ass)])
-    body = build_ass(words, 0.0, length + 0.5, hook)
-    return header_of(ass) + body[len(HEADER):]
-
-
-def _last_end(ass: str) -> float:
+def length_of(ass: str) -> float:
     ends = [_secs(l.split(",", 3)[2]) for l in ass.splitlines() if l.startswith("Dialogue:")]
     return max(ends, default=0.0)
+
+
+# --------------------------------------------------------------------------- timing
+def _norm(word: str) -> str:
+    return re.sub(r"[^\w']", "", word.lower())
+
+
+def align(text: str, timed: list[dict]) -> list[dict]:
+    """Give each word of `text` a time, taken from the best-matching word in `timed`.
+
+    Words that match (same spelling, ignoring case and punctuation) keep that word's timing;
+    changed, added or missing words are fitted between their matched neighbours. This keeps
+    captions in sync when the user rewrites part of the text, and is how auto-sync maps the
+    user's corrected words onto a fresh transcription.
+    """
+    new = text.split()
+    if not new:
+        return []
+    if not timed:
+        return []
+    out: list[dict | None] = [None] * len(new)
+    sm = difflib.SequenceMatcher(a=[_norm(w) for w in new], b=[_norm(w["word"]) for w in timed],
+                                 autojunk=False)
+    for tag, a0, a1, b0, b1 in sm.get_opcodes():
+        if tag == "equal" or (tag == "replace" and a1 - a0 == b1 - b0):
+            for k in range(a1 - a0):   # 1:1 (exact, or a same-length correction)
+                t = timed[b0 + k]
+                out[a0 + k] = {"start": t["start"], "end": t["end"], "word": new[a0 + k]}
+        elif tag == "replace" and b1 > b0:   # different counts: spread over the replaced span
+            s, e = timed[b0]["start"], timed[b1 - 1]["end"]
+            step = (e - s) / (a1 - a0)
+            for k in range(a1 - a0):
+                out[a0 + k] = {"start": round(s + k * step, 2), "end": round(s + (k + 1) * step, 2),
+                               "word": new[a0 + k]}
+    # inserted words (no counterpart): fit them into the gap between their neighbours
+    i = 0
+    while i < len(out):
+        if out[i] is not None:
+            i += 1
+            continue
+        j = i
+        while j < len(out) and out[j] is None:
+            j += 1
+        lo = out[i - 1]["end"] if i > 0 else (timed[0]["start"])            # type: ignore[index]
+        hi = out[j]["start"] if j < len(out) else max(lo + 0.3 * (j - i), timed[-1]["end"])  # type: ignore[index]
+        first = i
+        if hi - lo < 0.15 * (j - i) and i > 0:
+            # no gap to fit into: share the previous word's slot with the inserted words
+            first, lo = i - 1, out[i - 1]["start"]                         # type: ignore[index]
+        if hi <= lo:
+            hi = lo + 0.25 * (j - first)
+        step = (hi - lo) / (j - first)
+        for k in range(first, j):
+            out[k] = {"start": round(lo + (k - first) * step, 2), "end": round(lo + (k - first + 1) * step, 2),
+                      "word": new[k]}
+        i = j
+    return _monotonic(out)  # type: ignore[arg-type]
+
+
+def _monotonic(words: list[dict]) -> list[dict]:
+    """Starts never go backwards; ends are never before starts."""
+    last = 0.0
+    for w in words:
+        w["start"] = round(max(w["start"], last), 2)
+        w["end"] = round(max(w["end"], w["start"] + 0.05), 2)
+        last = w["start"]
+    return words
+
+
+def shift(words: list[dict], seconds: float) -> list[dict]:
+    """Move every caption earlier (negative) or later (positive)."""
+    return _monotonic([{**w, "start": max(0.0, w["start"] + seconds), "end": max(0.05, w["end"] + seconds)}
+                       for w in words])
+
+
+def clean_timings(words: list[dict]) -> list[dict]:
+    """Validate words coming from the timing editor."""
+    out = []
+    for w in words:
+        try:
+            out.append({"start": float(w["start"]), "end": float(w["end"]), "word": str(w["word"]).strip()})
+        except (KeyError, TypeError, ValueError) as e:
+            raise ValueError("each word needs start, end and word") from e
+    return _monotonic(sorted([w for w in out if w["word"]], key=lambda w: w["start"]))
+
+
+def rebuild(ass: str, words: list[dict], hook: str | None, style: Style | None = None) -> str:
+    """New caption file from timed words. Keeps the existing styles unless a new `style` is given."""
+    length = max([w["end"] for w in words] + [length_of(ass)])
+    body = build_ass(words, 0.0, length + 0.5, hook, style or DEFAULT_STYLE)
+    head = style.header() if style else header_of(ass)
+    return head + body[body.index("Format: Layer"):].split("\n", 1)[1]

@@ -57,6 +57,7 @@ class Job:
     finished: float | None = None
     log: list[str] = field(default_factory=list, repr=False)
     session: LiveSession | None = field(default=None, repr=False)
+    result: dict | None = None        # e.g. a benchmark's result id
 
     def append_log(self, line: str) -> None:
         self.log.append(line)
@@ -66,7 +67,7 @@ class Job:
     def to_dict(self, with_log: bool = False) -> dict:
         d = {"id": self.id, "kind": self.kind, "target": self.target, "status": self.status.value,
              "title": self.title or self.target, "folder": self.folder, "reels": self.reels,
-             "error": self.error, "created": self.created, "finished": self.finished,
+             "error": self.error, "created": self.created, "finished": self.finished, "result": self.result,
              "last_line": self.log[-1] if self.log else ""}
         if self.session is not None:
             d["live"] = self.session.stats()
@@ -105,6 +106,9 @@ class JobManager:
     # -------------------------------------------------------------- commands
     def submit_link(self, url: str, options: dict[str, Any]) -> Job:
         return self._add(Job("link", url, options, title=url))
+
+    def submit_bench(self, options: dict[str, Any]) -> Job:
+        return self._add(Job("bench", options.get("video") or "test video", options, title="Benchmark"))
 
     def submit_file(self, path: Path, options: dict[str, Any]) -> Job:
         return self._add(Job("file", str(path), options, title=options.get("title") or path.stem))
@@ -190,6 +194,11 @@ class JobManager:
                 logs.current_job.reset(token)
 
     def _run(self, job: Job) -> None:
+        if job.kind == "bench":
+            from . import bench
+            job.result = {"id": bench.run(job.options.get("video"), job.options.get("model"))["id"]}
+            self._finish(job, Status.DONE)
+            return
         settings = self._settings(job.options)
         if job.kind == "file":
             reels = runner.run_file(Path(job.target), settings, job.options.get("title"),

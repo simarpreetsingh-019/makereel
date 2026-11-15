@@ -3,7 +3,9 @@
   makereel web                    the web app (http://localhost:8765)
   makereel run <link>             live stream, past stream, long video or Short (auto-detected)
   makereel local <file.mp4>       a video file you already have
-  makereel rerender <folder> <reel> [--transcript TEXT] [--hook TEXT]
+  makereel rerender <folder> <reel> [--transcript TEXT] [--hook TEXT] [--offset S] [--sync]
+  makereel export <folder> <reel> --format 4x5|1x1|16x9|9x16 [--fit blur|crop|pad]
+  makereel bench [--video LINK_OR_FILE] [--model base]   speed, CPU, RAM and disk on this device
   makereel daemon                 24/7 without the web UI: watch channels + inbox.txt
 """
 from __future__ import annotations
@@ -57,8 +59,31 @@ def cmd_local(a: argparse.Namespace) -> None:
 
 def cmd_rerender(a: argparse.Namespace) -> None:
     from .services import library
-    library.update_reel(a.folder, a.reel, hook=a.hook, transcript=a.transcript)
+    if a.sync:
+        library.autosync(a.folder, a.reel)
+    if a.hook or a.transcript or a.offset or not a.sync:
+        library.update_reel(a.folder, a.reel, hook=a.hook, transcript=a.transcript, offset=a.offset)
     log.info("re-rendered %s/%s", a.folder, a.reel)
+
+
+def cmd_export(a: argparse.Namespace) -> None:
+    from .services import library
+    reel = library.export_reel(a.folder, a.reel, a.format, a.fit)
+    log.info("exported %s/%s as %s", a.folder, a.reel, a.format)
+    log.debug("%s", reel["exports"])
+
+
+def cmd_bench(a: argparse.Namespace) -> None:
+    from .services import bench
+    result = bench.run(a.video, a.model)
+    print("\n" + bench.report_markdown(result))
+    diff = bench.compare(result)
+    if diff:
+        print(f"vs previous run (v{diff['against_version']}): time {diff['wall_pct']:+}% · "
+              f"CPU {diff['cpu_seconds_pct']:+}% · RAM {diff['ram_peak_pct']:+}%  (negative = better)")
+    url = bench.share_url(result)
+    print(f"\nShare it (optional, you review before posting): {url}" if url
+          else "\nTo share: copy the table above into an issue or PR on the project's repository.")
 
 
 def cmd_web(a: argparse.Namespace) -> None:
@@ -110,7 +135,21 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("reel", help="e.g. reel_01")
     p.add_argument("--transcript", help="the whole caption text, corrected")
     p.add_argument("--hook", help="new on-screen title")
+    p.add_argument("--offset", type=float, help="move captions earlier (-0.3) or later (0.3), in seconds")
+    p.add_argument("--sync", action="store_true", help="re-time captions from the reel's own audio")
     p.set_defaults(fn=cmd_rerender)
+
+    p = sub.add_parser("export", help="the same reel in another shape")
+    p.add_argument("folder")
+    p.add_argument("reel")
+    p.add_argument("--format", required=True, choices=["9x16", "4x5", "1x1", "16x9"])
+    p.add_argument("--fit", choices=["blur", "crop", "pad"])
+    p.set_defaults(fn=cmd_export)
+
+    p = sub.add_parser("bench", help="benchmark this device")
+    p.add_argument("--video", help="a link or file (default: a fixed 19-second test video)")
+    p.add_argument("--model", help="speech model to test (default: from settings)")
+    p.set_defaults(fn=cmd_bench)
 
     p = sub.add_parser("daemon", help="24/7 without the web UI")
     p.set_defaults(fn=cmd_daemon)

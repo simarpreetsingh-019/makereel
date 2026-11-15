@@ -30,7 +30,7 @@ def run_link(url: str, settings: Settings, section: str | None = None) -> LiveSe
                           max_height=settings["max_height"])
     try:
         folder = library.folder_for(dl.info.title, dl.info.id)
-        return pipeline.process(dl.video, dl.info.to_meta(), folder, settings.clip, chat=dl.chat)
+        return pipeline.process(dl.video, dl.info.to_meta(), folder, settings.clip, settings.brand, chat=dl.chat)
     finally:
         if not settings["keep_source"]:
             for f in work.glob(f"{dl.info.id}.*"):
@@ -39,7 +39,8 @@ def run_link(url: str, settings: Settings, section: str | None = None) -> LiveSe
 
 def live_session(info: sources.SourceInfo, settings: Settings) -> LiveSession:
     return LiveSession(info, library.folder_for(info.title, info.id), env().work_dir, settings.clip,
-                       settings["buffer_minutes"], settings["clips_per_hour"], settings["max_height"])
+                       settings.brand, settings["buffer_minutes"], settings["clips_per_hour"],
+                       settings["max_height"])
 
 
 def run_file(video: Path, settings: Settings, title: str | None = None, credit: str | None = None,
@@ -49,7 +50,7 @@ def run_file(video: Path, settings: Settings, title: str | None = None, credit: 
     meta = {"id": video.stem, "title": title, "channel": credit or "", "channel_url": credit_url,
             "url": credit_url or "", "tags": [], "offset": 0.0, "live_status": "not_live"}
     try:
-        return pipeline.process(video, meta, library.folder_for(title, video.stem), settings.clip)
+        return pipeline.process(video, meta, library.folder_for(title, video.stem), settings.clip, settings.brand)
     finally:
         if delete_after:
             video.unlink(missing_ok=True)

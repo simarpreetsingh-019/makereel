@@ -164,6 +164,13 @@ def _handler(api, password: str | None, origins: tuple[str, ...]):
                     query = parse_query(url.query)
                     return self._send_file(library.media_file(unquote(url.path[len("/media/"):])),
                                            "download" in query)
+                if url.path.startswith("/brand/"):
+                    from ..core import branding
+                    name = Path(unquote(url.path[len("/brand/"):])).name
+                    path = branding.brand_dir() / name
+                    if name not in branding.LOGO_NAMES or not path.is_file():
+                        raise NotFound("no logo")
+                    return self._send_file(path)
                 if self.command in ("GET", "HEAD"):
                     return self._static(url.path)
                 raise NotFound("not found")
@@ -178,7 +185,7 @@ def _handler(api, password: str | None, origins: tuple[str, ...]):
         def _api(self, url) -> None:
             handler, params = api.match(self.command, url.path)
             length = int(self.headers.get("Content-Length") or 0)
-            streaming = url.path.endswith("/jobs/upload")
+            streaming = url.path.endswith("/jobs/upload") or url.path.startswith("/api/v1/brand/")
             if not streaming and length > MAX_JSON_BODY:
                 raise MakereelError("request body too large")
             req = Request(self.command, url.path, parse_query(url.query), self.headers,

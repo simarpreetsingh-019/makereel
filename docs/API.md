@@ -57,14 +57,19 @@ Errors always look like this:
 | GET | `/folders/{folder}` | | `{folder, info, reels: [Reel]}` |
 | DELETE | `/folders/{folder}` | | 204 |
 | GET | `/folders/{folder}/reels/{name}` | | `Reel` plus `transcript` and `ass` |
-| PATCH | `/folders/{folder}/reels/{name}` | any of `{"transcript", "hook", "caption", "ass"}` | updated `Reel` (re-rendered) |
+| PATCH | `/folders/{folder}/reels/{name}` | any of `{"transcript", "words", "offset", "hook", "caption", "ass", "logo", "restyle"}` | updated `Reel` (re-rendered, exports too) |
+| POST | `/folders/{folder}/reels/{name}/sync` | | auto-sync: re-time captions from the reel's own audio, keeping corrected words |
+| POST | `/folders/{folder}/reels/{name}/export` | `{"format": "9x16"\|"4x5"\|"1x1"\|"16x9", "fit": "blur"\|"crop"\|"pad"}` | updated `Reel`, with `exports[format]` holding `video` and `download` |
 | DELETE | `/folders/{folder}/reels/{name}` | | 204 |
 
 URL-encode folder names (`Me%20at%20the%20zoo`). Reel names look like `reel_01`.
 
 PATCH rules:
-- `transcript` is the caption words as one paragraph. With the same word count, each word keeps its
-  exact timing. Otherwise the words are spread evenly over the same span.
+- `transcript` is the caption words as one paragraph. Words you didn't change keep their exact timing.
+  Edited, added or removed words are fitted between them (sequence alignment).
+- `words` gives exact timings from the timing editor: `[{"start": 1.06, "end": 1.6, "word": "ALRIGHT"}, ...]` (seconds on the reel's clock).
+- `offset` moves every caption earlier (negative) or later (positive), in seconds (at most ±10).
+- `logo` (bool) shows or hides the brand logo on this reel. `restyle: true` re-applies the brand kit's caption style.
 - `hook` changes the on-screen title, and the first line of the post text follows it.
 - `caption` is the post text (credits, hashtags).
 - `ass` replaces the whole caption file (styles, timing). It wins over `transcript` and `hook`.
@@ -75,6 +80,26 @@ curl -X PATCH localhost:8765/api/v1/folders/Me%20at%20the%20zoo/reels/reel_01 \
 ```
 
 Media files are served at `/media/{folder}/{file}` with HTTP range support. Add `?download=1` to download.
+
+## Brand kit
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/brand` | | `{logo, fonts, settings}` (settings are `brand` in CONFIGURATION.md) |
+| PUT | `/brand/logo` | raw PNG / WebP / JPG bytes (≤ 5 MB) | `{logo, fonts}` |
+| DELETE | `/brand/logo` | | `{logo: null, fonts}` |
+| PUT | `/brand/fonts/{file.ttf}` | raw font bytes (≤ 20 MB) | `{logo, fonts}` |
+| DELETE | `/brand/fonts/{file.ttf}` | | `{logo, fonts}` |
+
+Change brand settings with `PUT /settings {"brand": {...}}`. The logo is served at `/brand/logo.png`.
+
+## Benchmarks
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/bench` | | `{device, runs, share_enabled}` |
+| POST | `/bench` | `{"model"?, "video"?}` | `201 Job` (kind `bench`; its `result.id` is set when done) |
+| GET | `/bench/{id}` | | the result plus `compare` (vs the previous run), `report` (Markdown) and `share_url` |
 
 ## Settings and watcher
 

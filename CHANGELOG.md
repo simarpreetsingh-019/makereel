@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.0 (2026-11-15)
+
+### Added
+- **Caption sync.** Each reel's captions are timed from its own audio (a precise second transcription
+  pass). The editor has a Timing tab with a live preview, an auto-sync button, a shift slider, per-word
+  nudges, "set to now" and tap-to-sync.
+- **Smarter text edits.** Unchanged words keep their timing; changed, added or removed words are aligned around them.
+- **Export formats.** 9:16, 4:5, 1:1 and 16:9, each with a blurred fill, crop or black bars. Exports stay in step with later edits.
+- **Brand kit.** Logo (position, size, opacity), fonts, caption colours, position and size, a live preview,
+  per-reel logo switch and "Apply brand style". The "Made with makereel" post-text line is opt-out.
+- **Benchmarks.** `makereel bench` and the System tab measure time per stage, CPU time, CPU %, peak RAM,
+  disk and GPU (NVIDIA). They keep a history with comparisons, and a report can be shared by the user.
+- `makereel export`, plus `makereel rerender --sync / --offset`.
+- New settings: `MAKEREEL_DATA_DIR` and `MAKEREEL_REPO_URL`. Dependency: `psutil`.
+
+### Changed
+- Every reel keeps a master clip (`reel_NN.src.mp4`) in the original shape, used for exports.
+  Reels made before 0.3.0 can still be edited, but need re-making to export other shapes.
+
 ## 0.2.0 (2026-11-15)
 
 Restructure into a documented, layered project, plus web app improvements.

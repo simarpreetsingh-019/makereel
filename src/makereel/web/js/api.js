@@ -46,10 +46,26 @@ export const api = {
   reel: (folder, name) => request("GET", reelPath(folder, name)),
   editReel: (folder, name, changes) => request("PATCH", reelPath(folder, name), changes),
   deleteReel: (folder, name) => request("DELETE", reelPath(folder, name)),
+  syncReel: (folder, name) => request("POST", `${reelPath(folder, name)}/sync`),
+  exportReel: (folder, name, format, fit) => request("POST", `${reelPath(folder, name)}/export`, { format, fit }),
+  bench: () => request("GET", "/bench"),
+  benchResult: (id) => request("GET", `/bench/${id}`),
+  runBench: (body = {}) => request("POST", "/bench", body),
+  brand: () => request("GET", "/brand"),
+  deleteLogo: () => request("DELETE", "/brand/logo"),
+  deleteFont: (name) => request("DELETE", `/brand/fonts/${enc(name)}`),
   settings: () => request("GET", "/settings"),
   saveSettings: (body) => request("PUT", "/settings", body),
   watcher: () => request("GET", "/watcher"),
   setWatcher: (running) => request("PUT", "/watcher", { running }),
+
+  /** PUT a file as the raw body (logo, fonts). */
+  async putFile(path, file) {
+    const res = await fetch(`${API_BASE}/api/v1${path}`, { method: "PUT", body: file, credentials: "include" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(res.status, data);
+    return data;
+  },
 
   /** Raw-body upload with progress (no multipart). */
   upload(file, options, onProgress) {

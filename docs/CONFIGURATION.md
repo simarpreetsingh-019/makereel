@@ -19,6 +19,8 @@ variables win over `.env`.
 | `MAKEREEL_CONFIG` | `makereel.json` | settings file |
 | `MAKEREEL_OUTPUT_DIR` | `output` | reel library (one folder per video) |
 | `MAKEREEL_WORK_DIR` | `downloads` | temporary downloads, uploads and live buffers |
+| `MAKEREEL_DATA_DIR` | `data` | brand kit (logo, fonts) and benchmark history |
+| `MAKEREEL_REPO_URL` | none | your repository URL; enables "Share benchmark" (a pre-filled GitHub issue) |
 | `MAKEREEL_HOST` | `127.0.0.1` | `0.0.0.0` to reach it from other devices (requires a password) |
 | `MAKEREEL_PORT` / `PORT` | `8765` | `PORT` wins (hosting services set it) |
 | `MAKEREEL_WEB_PASSWORD` | none | HTTP Basic password; required when the host isn't local |
@@ -51,5 +53,22 @@ passes a one-frame test; otherwise it falls back to `libx264`.
 | `clip.layout` | `blur` | `blur` (whole frame over a blurred fill) or `crop` |
 | `clip.language` | auto | e.g. `en`, `hi` |
 | `clip.silence` | false | cut dead air with auto-editor (`pip install -e ".[silence]"`) |
+
+### Brand kit (`brand`)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `logo_enabled` | true | show the uploaded logo on reels (also switchable per reel) |
+| `logo_position` | `top-right` | `top-left`, `top-right`, `bottom-left` or `bottom-right` |
+| `logo_scale` | 0.16 | logo width as a share of the video width (0.03–0.6) |
+| `logo_opacity` | 0.9 | 0.05–1 |
+| `font` | `Arial Black` | any installed font, or one uploaded in the Brand tab (use its family name) |
+| `text_colour` / `highlight_colour` / `outline_colour` | `#FFFFFF` / `#FFDD00` / `#000000` | caption colours |
+| `caption_position` | `bottom` | `bottom` (lower third), `middle` or `top` |
+| `caption_size` | 1.0 | 0.5–2 × the default size |
+| `credit_footer` | true | end the post text with "✂️ Made with makereel". It's opt-out, and is never put on the video. |
+
+The brand applies to new reels. For existing reels, use Edit → *Apply brand style* (captions); the logo
+setting applies on any re-render.
 
 Invalid values are rejected with a message saying what's wrong, both from the API and at start-up.

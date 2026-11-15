@@ -1,19 +1,21 @@
 // Entry point: hash routing, polling, and wiring views to the store.
-//   #/create · #/library · #/library/<folder> · #/auto
+//   #/create · #/library · #/library/<folder> · #/auto · #/brand · #/system
 import { api } from "./api.js";
 import { store } from "./store.js";
 import { $, esc, showError } from "./ui.js";
 import * as auto from "./views/auto.js";
+import * as brand from "./views/brand.js";
 import * as create from "./views/create.js";
 import * as editor from "./views/editor.js";
 import * as library from "./views/library.js";
+import * as system from "./views/system.js";
 
 const POLL_MS = 2500;
 
 function parseRoute() {
   const [, view = "create", folder] = location.hash.split("/");
   if (view === "library" && folder) return { view: "folder", folder: decodeURIComponent(folder) };
-  return { view: ["create", "library", "auto"].includes(view) ? view : "create" };
+  return { view: ["create", "library", "auto", "brand", "system"].includes(view) ? view : "create" };
 }
 
 async function refreshJobs() {
@@ -29,6 +31,8 @@ async function refreshView() {
     if (route.view === "library") await library.load();
     if (route.view === "folder") await library.load(route.folder);
     if (route.view === "auto") await auto.load();
+    if (route.view === "brand") await brand.load();
+    if (route.view === "system") await system.load();
   } catch (err) {
     showError(err);
     if (route.view === "folder") location.hash = "#/library";
@@ -48,6 +52,7 @@ function render(state) {
   create.render(state);
   if (tab === "library") library.render(state);
   if (tab === "auto") auto.render(state);
+  if (tab === "system") system.render(state);
 }
 
 async function start() {
@@ -55,6 +60,8 @@ async function start() {
   library.mount();
   editor.mount();
   auto.mount();
+  brand.mount();
+  system.mount();
   store.subscribe(render);
 
   window.addEventListener("hashchange", () => { store.set({ route: parseRoute() }); refreshView(); });
@@ -67,7 +74,7 @@ async function start() {
   setInterval(() => {
     if (document.hidden) return;              // save power when the tab is in the background
     refreshJobs();
-    if (store.state.route.view !== "auto") refreshView();
+    if (["library", "folder"].includes(store.state.route.view)) refreshView();
   }, POLL_MS);
 }
 

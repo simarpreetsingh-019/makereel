@@ -53,6 +53,7 @@ class Env:
     config_file: Path
     output_dir: Path
     work_dir: Path
+    data_dir: Path
     host: str
     port: int
     password: str | None
@@ -70,6 +71,7 @@ class Env:
             config_file=Path(_env("MAKEREEL_CONFIG", "makereel.json")),
             output_dir=Path(_env("MAKEREEL_OUTPUT_DIR", "output")),
             work_dir=Path(_env("MAKEREEL_WORK_DIR", "downloads")),
+            data_dir=Path(_env("MAKEREEL_DATA_DIR", "data")),
             host=_env("MAKEREEL_HOST", "127.0.0.1"),
             port=_env_int("PORT", _env_int("MAKEREEL_PORT", 8765)),
             password=_env("MAKEREEL_WEB_PASSWORD"),
@@ -103,6 +105,20 @@ CLIP_DEFAULTS: dict[str, Any] = {
     "silence": False,        # trim dead air with auto-editor (talk content)
 }
 
+BRAND_DEFAULTS: dict[str, Any] = {
+    "logo_enabled": True,           # show the uploaded logo (if any) on reels
+    "logo_position": "top-right",   # top-left | top-right | bottom-left | bottom-right
+    "logo_scale": 0.16,             # logo width as a share of the video width
+    "logo_opacity": 0.9,
+    "font": "Arial Black",          # any installed font, or one uploaded in the Brand tab
+    "text_colour": "#FFFFFF",
+    "highlight_colour": "#FFDD00",
+    "outline_colour": "#000000",
+    "caption_position": "bottom",   # bottom | middle | top
+    "caption_size": 1.0,
+    "credit_footer": True,          # add "Made with makereel" to the post text (opt out here)
+}
+
 SETTINGS_DEFAULTS: dict[str, Any] = {
     "channels": [],          # "@handle", channel URLs, twitch.tv/x, kick.com/x
     "inbox": "inbox.txt",    # headless use: paste links here, one per line
@@ -114,6 +130,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "clips_per_hour": 6,     # per live stream
     "max_height": 720,       # source resolution to download
     "clip": CLIP_DEFAULTS,
+    "brand": BRAND_DEFAULTS,
 }
 
 INT_SETTINGS = ("poll_minutes", "max_parallel_live", "keep_days", "buffer_minutes",
@@ -132,6 +149,10 @@ class Settings:
     @property
     def clip(self) -> dict[str, Any]:
         return self.data["clip"]
+
+    @property
+    def brand(self) -> dict[str, Any]:
+        return self.data["brand"]
 
     def with_clip(self, **overrides: Any) -> Settings:
         """A copy with some clip options replaced (None and "" mean 'keep the default')."""
@@ -156,6 +177,28 @@ def validate_clip(clip: dict[str, Any]) -> None:
         raise ConfigError("clip lengths must satisfy 3 <= min_len <= max_len <= 180")
 
 
+def validate_brand(brand: dict[str, Any]) -> None:
+    import re
+    if brand.get("logo_position") not in ("top-left", "top-right", "bottom-left", "bottom-right"):
+        raise ConfigError("brand.logo_position must be top-left, top-right, bottom-left or bottom-right")
+    if brand.get("caption_position") not in ("bottom", "middle", "top"):
+        raise ConfigError("brand.caption_position must be bottom, middle or top")
+    for key in ("text_colour", "highlight_colour", "outline_colour"):
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", str(brand.get(key, ""))):
+            raise ConfigError(f"brand.{key} must be a colour like #FFDD00")
+    for key, lo, hi in (("logo_scale", 0.03, 0.6), ("logo_opacity", 0.05, 1.0), ("caption_size", 0.5, 2.0)):
+        try:
+            brand[key] = float(brand[key])
+        except (TypeError, ValueError) as e:
+            raise ConfigError(f"brand.{key} must be a number") from e
+        if not lo <= brand[key] <= hi:
+            raise ConfigError(f"brand.{key} must be between {lo} and {hi}")
+    if not str(brand.get("font", "")).strip() or any(c in str(brand["font"]) for c in ",{}\\"):
+        raise ConfigError("brand.font must be a plain font name")
+    brand["logo_enabled"] = bool(brand.get("logo_enabled"))
+    brand["credit_footer"] = bool(brand.get("credit_footer"))
+
+
 def load_settings(path: Path | None = None) -> Settings:
     path = path or env().config_file
     raw: dict[str, Any] = {}
@@ -165,9 +208,11 @@ def load_settings(path: Path | None = None) -> Settings:
         except json.JSONDecodeError as e:
             raise ConfigError(f"{path} is not valid JSON: {e}") from e
     data = copy.deepcopy(SETTINGS_DEFAULTS)
-    data.update({k: v for k, v in raw.items() if k in SETTINGS_DEFAULTS and k != "clip"})
+    data.update({k: v for k, v in raw.items() if k in SETTINGS_DEFAULTS and k not in ("clip", "brand")})
     data["clip"].update({k: v for k, v in (raw.get("clip") or {}).items() if k in CLIP_DEFAULTS})
+    data["brand"].update({k: v for k, v in (raw.get("brand") or {}).items() if k in BRAND_DEFAULTS})
     validate_clip(data["clip"])
+    validate_brand(data["brand"])
     return Settings(data)
 
 
@@ -197,5 +242,8 @@ def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings
         current["clip"].update({k: v for k, v in changes["clip"].items()
                                 if k in CLIP_DEFAULTS and v != ""})
         validate_clip(current["clip"])
+    if isinstance(changes.get("brand"), dict):
+        current["brand"].update({k: v for k, v in changes["brand"].items() if k in BRAND_DEFAULTS})
+        validate_brand(current["brand"])
     path.write_text(json.dumps(current, indent=2), encoding="utf-8")
     return Settings(current)

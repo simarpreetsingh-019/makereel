@@ -12,7 +12,7 @@ from .. import __version__
 from ..config import env, load_settings, save_settings
 from ..core import media, sources
 from ..errors import InvalidInput
-from ..services import library
+from ..services import bench, brand, library
 from ..services.jobs import JobManager
 from ..services.watcher import Watcher
 from .router import Request, Response, Router
@@ -20,6 +20,12 @@ from .router import Request, Response, Router
 MAX_UPLOAD_BYTES = 8 * 1024**3
 UPLOAD_OPTIONS = ("title", "credit", "credit_url", "profile", "max_clips", "min_len", "max_len",
                   "model", "language", "layout")
+
+
+def _read_all(req: Request, limit: int) -> bytes:
+    if not 0 < req.length <= limit:
+        raise InvalidInput(f"the file is empty or larger than {limit // 1024**2} MB")
+    return req.stream.read(req.length)
 
 
 def build(jobs: JobManager, watcher: Watcher) -> Router:
@@ -99,14 +105,70 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
     @api.patch("/folders/{folder}/reels/{name}")
     def edit_reel(req: Request):
         body = req.json()
+        offset = body.get("offset")
+        try:
+            offset = float(offset) if offset not in (None, "") else None
+        except (TypeError, ValueError) as e:
+            raise InvalidInput("offset must be a number of seconds") from e
         return library.update_reel(req.params["folder"], req.params["name"],
                                    hook=body.get("hook"), caption=body.get("caption"),
-                                   transcript=body.get("transcript"), ass=body.get("ass"))
+                                   transcript=body.get("transcript"), words=body.get("words"), offset=offset,
+                                   ass=body.get("ass"), logo=body.get("logo"), restyle=bool(body.get("restyle")))
+
+    @api.post("/folders/{folder}/reels/{name}/sync")
+    def sync_reel(req: Request):
+        return library.autosync(req.params["folder"], req.params["name"])
+
+    @api.post("/folders/{folder}/reels/{name}/export")
+    def export_reel(req: Request):
+        body = req.json()
+        return library.export_reel(req.params["folder"], req.params["name"], body.get("format", ""), body.get("fit"))
 
     @api.delete("/folders/{folder}/reels/{name}")
     def delete_reel(req: Request):
         library.delete_reel(req.params["folder"], req.params["name"])
         return Response(None, 204)
+
+    # ------------------------------------------------------------ benchmarks
+    @api.get("/bench")
+    def bench_history(req: Request):
+        runs = bench.history()
+        return {"device": bench.device_profile(), "runs": runs[:50],
+                "share_enabled": bool(bench.REPO_URL)}
+
+    @api.post("/bench")
+    def bench_start(req: Request):
+        body = req.json()
+        return Response(jobs.submit_bench({k: body.get(k) for k in ("video", "model")}).to_dict(), 201)
+
+    @api.get("/bench/{result_id}")
+    def bench_result(req: Request):
+        result = bench.get(req.params["result_id"])
+        return {**result, "compare": bench.compare(result), "report": bench.report_markdown(result),
+                "share_url": bench.share_url(result)}
+
+    # ------------------------------------------------------------ brand kit
+    @api.get("/brand")
+    def brand_get(req: Request):
+        return {**brand.info(), "settings": load_settings().brand}
+
+    @api.put("/brand/logo")
+    def brand_logo(req: Request):
+        return brand.save_logo(_read_all(req, brand.MAX_LOGO_BYTES))
+
+    @api.delete("/brand/logo")
+    def brand_logo_delete(req: Request):
+        brand.delete_logo()
+        return brand.info()
+
+    @api.put("/brand/fonts/{name}")
+    def brand_font(req: Request):
+        return brand.save_font(req.params["name"], _read_all(req, brand.MAX_FONT_BYTES))
+
+    @api.delete("/brand/fonts/{name}")
+    def brand_font_delete(req: Request):
+        brand.delete_font(req.params["name"])
+        return brand.info()
 
     # ------------------------------------------------------------ settings + watcher
     @api.get("/settings")

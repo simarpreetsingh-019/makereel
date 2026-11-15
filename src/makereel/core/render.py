@@ -1,59 +1,143 @@
-"""Render a reel in two cheap steps.
+"""Render reels in any shape, with captions and an optional logo.
 
-1. `<name>.raw.mp4`  the moment, reframed to 9:16, loudness-normalised, no captions.
-2. `<name>.mp4`      raw + `<name>.ass` burned in with libass.
+Files per reel (all in the video's folder):
+  reel_NN.src.mp4      the moment in its original shape, loudness-normalised, no captions.
+                       The master copy every format is made from (a few MB).
+  reel_NN.raw.mp4      the main 9:16 version without captions, so caption edits only re-burn.
+  reel_NN.mp4          the main reel: raw + captions (+ logo).
+  reel_NN.<fmt>.mp4    other exports (4x5, 1x1, 16x9...), made on demand from src.
 
-Editing captions only repeats step 2, so fixes take seconds.
+Editing captions only repeats the last step, so fixes take seconds.
 """
 from __future__ import annotations
 
 import logging
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
-from . import captions, media
+from . import media
 
 log = logging.getLogger(__name__)
 
-WIDTH, HEIGHT = 1080, 1920
+FORMATS: dict[str, tuple[int, int]] = {
+    "9x16": (1080, 1920),   # Reels, Shorts, TikTok, Stories
+    "4x5": (1080, 1350),    # Instagram feed (largest in-feed size)
+    "1x1": (1080, 1080),    # feed posts, LinkedIn, X
+    "16x9": (1920, 1080),   # YouTube, X, websites
+}
+FITS = ("blur", "crop", "pad")   # blurred fill · crop to fill · black bars
+LOGO_POSITIONS = ("top-left", "top-right", "bottom-left", "bottom-right")
+MAIN_FORMAT = "9x16"
 
 
-def _reframe(layout: str) -> str:
-    if layout == "crop":
-        return f"scale=-2:{HEIGHT},crop={WIDTH}:{HEIGHT},setsar=1"
-    # full frame (HUD, minimap, facecam all visible) over a blurred fill
-    return (f"split[a][b];[a]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,"
-            f"boxblur=10:2,eq=brightness=-0.08,scale={WIDTH}:{HEIGHT}[bg];"
-            f"[b]scale={WIDTH}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1")
+@dataclass(frozen=True)
+class Logo:
+    path: Path
+    position: str = "top-right"
+    scale: float = 0.16          # logo width as a share of the video width
+    opacity: float = 0.9
 
 
-def cut_raw(src: Path, start: float, end: float, raw: Path, layout: str = "blur") -> None:
-    media.run([media.binary("ffmpeg"), "-y", "-v", "error", "-ss", f"{start:.3f}", "-to", f"{end:.3f}",
-               "-i", str(src), "-filter_complex", f"[0:v]{_reframe(layout)},fps=30[v]",
-               "-map", "[v]", "-map", "0:a?", *media.encoder_args("raw"), "-pix_fmt", "yuv420p",
-               "-c:a", "aac", "-b:a", "160k", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
-               "-movflags", "+faststart", str(raw)])
+def _check_format(fmt: str, fit: str) -> tuple[int, int]:
+    if fmt not in FORMATS:
+        raise ValueError(f"format must be one of {', '.join(FORMATS)}")
+    if fit not in FITS:
+        raise ValueError(f"fit must be one of {', '.join(FITS)}")
+    return FORMATS[fmt]
 
 
-def burn(raw: Path, ass: Path, out: Path) -> None:
-    """Burn captions into `raw`. Writes to a temp file first so a failure never leaves a broken reel."""
-    media.require_libass()
+def reframe_filter(fmt: str, fit: str) -> str:
+    """Filter chain (input [0:v] → output [v]) that turns any shape into `fmt`."""
+    w, h = _check_format(fmt, fit)
+    cover = f"scale={w}:{h}:force_original_aspect_ratio=increase:force_divisible_by=2,crop={w}:{h}"
+    contain = f"scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2"
+    if fit == "crop":
+        return f"[0:v]{cover},setsar=1,fps=30[v]"
+    if fit == "pad":
+        return f"[0:v]{contain},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=30[v]"
+    sw, sh = w // 4, h // 4   # blur a small copy: same look, a fraction of the work
+    return (f"[0:v]split[a][b];[a]scale={sw}:{sh}:force_original_aspect_ratio=increase,crop={sw}:{sh},"
+            f"boxblur=10:2,eq=brightness=-0.08,scale={w}:{h}[bg];[b]{contain}[fg];"
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1,fps=30[v]")
+
+
+def _overlay_filters(label: str, ass: Path | None, fonts_dir: Path | None, logo: Logo | None,
+                     width: int, logo_input: int) -> tuple[str, str]:
+    """Append captions and logo after `label`; returns (filter text, final label)."""
+    parts, cur = [], label
+    if ass is not None:
+        fonts = f":fontsdir={fonts_dir.as_posix()}" if fonts_dir and fonts_dir.is_dir() else ""
+        parts.append(f"[{cur}]ass={ass.name}{fonts}[c]")
+        cur = "c"
+    if logo is not None:
+        m = round(width * 0.04)
+        x = str(m) if "left" in logo.position else f"W-w-{m}"
+        y = str(m) if "top" in logo.position else f"H-h-{m}"
+        parts.append(f"[{logo_input}:v]scale={round(width * logo.scale)}:-2,format=rgba,"
+                     f"colorchannelmixer=aa={logo.opacity:.2f}[lg];[{cur}][lg]overlay={x}:{y}[o]")
+        cur = "o"
+    return ";".join(parts), cur
+
+
+def _encode(inputs: list[Path], graph: str, out_label: str, out: Path, cwd: Path,
+            audio: str = "copy") -> None:
+    """Run one ffmpeg graph to a temp file, then swap it in (a failure never leaves a broken file)."""
     tmp = out.with_name(out.stem + ".tmp.mp4")
-    # run inside the folder so the filter argument is a plain file name (no escaping, works on Windows)
-    media.run([media.binary("ffmpeg"), "-y", "-v", "error", "-i", raw.name, "-vf", f"ass={ass.name}",
-               *media.encoder_args("final"), "-pix_fmt", "yuv420p", "-c:a", "copy",
-               "-movflags", "+faststart", tmp.name], cwd=out.parent)
+    cmd = [media.binary("ffmpeg"), "-y", "-v", "error"]
+    for i, path in enumerate(inputs):
+        if i > 0 and path.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
+            cmd += ["-loop", "1"]   # a still logo lasts the whole video
+        cmd += ["-i", str(path.resolve()) if path.parent != cwd else path.name]
+    cmd += ["-filter_complex", graph, "-map", f"[{out_label}]", "-map", "0:a?", "-shortest",
+            *media.encoder_args("final"), "-pix_fmt", "yuv420p"]
+    cmd += ["-c:a", "copy"] if audio == "copy" else ["-c:a", "aac", "-b:a", "160k"]
+    cmd += ["-movflags", "+faststart", tmp.name]
+    media.run(cmd, cwd=cwd)
     tmp.replace(out)
 
 
-def render_clip(src: Path, start: float, end: float, words: list[dict], out: Path,
-                layout: str = "blur", hook: str | None = None) -> dict:
-    raw, ass = out.with_suffix(".raw.mp4"), out.with_suffix(".ass")
-    ass.write_text(captions.build_ass(words, start, end, hook), encoding="utf-8")
-    cut_raw(src, start, end, raw, layout)
-    burn(raw, ass, out)
-    return {"file": out.name, "raw": raw.name, "captions": ass.name}
+def cut_source(src: Path, start: float, end: float, out: Path) -> None:
+    """The moment in its original shape, loudness-normalised (-14 LUFS): the master for every format."""
+    media.run([media.binary("ffmpeg"), "-y", "-v", "error", "-ss", f"{start:.3f}", "-to", f"{end:.3f}",
+               "-i", str(src), "-map", "0:v:0", "-map", "0:a?", "-vf", "fps=30,setsar=1",
+               *media.encoder_args("raw"), "-pix_fmt", "yuv420p",
+               "-c:a", "aac", "-b:a", "160k", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+               "-movflags", "+faststart", str(out)])
+
+
+def make_raw(source: Path, raw: Path, fmt: str = MAIN_FORMAT, fit: str = "blur") -> None:
+    """Reframe the master into `fmt` without captions (cached so caption edits are fast)."""
+    _encode([source], reframe_filter(fmt, fit), "v", raw, raw.parent)
+
+
+def burn(raw: Path, ass: Path, out: Path, logo: Logo | None = None, fonts_dir: Path | None = None) -> None:
+    """Captions (+ logo) on top of an already-reframed video."""
+    media.require_libass()
+    width = int(_probe_width(raw))
+    inputs = [raw] + ([logo.path] if logo else [])
+    graph, label = _overlay_filters("0:v", ass, fonts_dir, logo, width, 1)
+    _encode(inputs, graph, label, out, out.parent)
+
+
+def export(source: Path, ass: Path, out: Path, fmt: str, fit: str, logo: Logo | None = None,
+           fonts_dir: Path | None = None) -> None:
+    """One pass: master → any format, with captions and logo."""
+    media.require_libass()
+    w, _ = _check_format(fmt, fit)
+    inputs = [source] + ([logo.path] if logo else [])
+    graph, label = _overlay_filters("v", ass, fonts_dir, logo, w, 1)
+    _encode(inputs, reframe_filter(fmt, fit) + ";" + graph, label, out, out.parent)
+
+
+def _probe_width(path: Path) -> float:
+    out = media.run([media.binary("ffprobe"), "-v", "error", "-select_streams", "v:0",
+                     "-show_entries", "stream=width", "-of", "csv=p=0", str(path)], capture=True)
+    try:
+        return float(out.decode().strip().split()[0])
+    except (ValueError, IndexError):
+        return 1080.0
 
 
 def trim_silence(path: Path) -> None:
