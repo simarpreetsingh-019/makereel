@@ -52,3 +52,26 @@ export const timeAgo = (t) => {
 document.addEventListener("play", (e) => {
   document.querySelectorAll("video").forEach((v) => { if (v !== e.target && !v.paused) v.pause(); });
 }, true);
+
+/**
+ * In-page confirmation (resolves true/false). Used instead of window.confirm(), which some
+ * embedded browsers and webviews silently block, so the action would never happen.
+ */
+export function confirmDialog(message, { ok = "Delete", danger = true } = {}) {
+  return new Promise((resolve) => {
+    const d = document.createElement("dialog");
+    d.className = "confirm";
+    d.innerHTML = `<p>${esc(message)}</p><div class="row" style="justify-content:flex-end">
+      <button class="btn" value="no">Cancel</button>
+      <button class="btn ${danger ? "danger-solid" : "primary"}" value="yes">${esc(ok)}</button></div>`;
+    d.addEventListener("click", (e) => {
+      if (e.target === d) d.close("no");                       // click outside = cancel
+      const v = e.target.closest("button")?.value;
+      if (v) d.close(v);
+    });
+    d.addEventListener("close", () => { resolve(d.returnValue === "yes"); d.remove(); });
+    document.body.append(d);
+    d.showModal();
+    d.querySelector('[value="no"]').focus();                   // Enter won't delete by accident
+  });
+}

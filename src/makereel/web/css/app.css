@@ -184,3 +184,13 @@ table.grid tr.on td { background: var(--soft); }
 [hidden] { display: none !important; }
 /* keep tall videos from pushing the controls off small screens */
 .tm-stage, .editor > div > video#ed-video { max-width: min(100%, calc(62vh * 9 / 16)); margin: 0 auto; display: block; }
+
+/* in-page confirm */
+dialog.confirm { width: min(420px, 92vw); padding: 20px; }
+dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
+.btn.danger-solid { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.folder { position: relative; }
+.folder .folder-del { position: absolute; top: 8px; right: 8px; opacity: 0; transition: opacity .15s;
+                      background: #000a; color: #fff; border: 0; }
+.folder:hover .folder-del, .folder:focus-within .folder-del { opacity: 1; }
+@media (hover: none) { .folder .folder-del { opacity: 1; } }
