@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-11-16)
 
 ### Added
 - **Safe zones** (Brand → Keep clear of app buttons: All apps, TikTok, Reels, Shorts or Off). On 9:16 reels,
@@ -9,7 +9,9 @@
 - **Split screen layout** (`split`, in Look → Framing and the Layout option): two people side by side
   (podcasts, interviews) are stacked one above the other, each framed head and shoulders; a streamer's webcam
   over gameplay becomes webcam on top (40%) and the game below. Falls back to the blurred layout when it finds
-  neither. Webcam faces are small, so this looks at frames at 640 px instead of 320.
+  neither. Webcam faces are small, so this looks at frames at 640 px instead of 320. Both people must be on
+  screen together, so a podcast that cuts between single shots isn't split. Captions sit on the seam. In the
+  editor, choosing split (or follow the speaker) on a reel with nobody suitable says so and keeps the layout.
 - **Cards** (editor → Cards): text boxes over the video. A **quote** (pre-filled with the words at the playhead),
   a **note**, or an **outro** over the last seconds ("Follow for more"). Kept through caption edits, trims,
   splits, joins and exports.

@@ -174,7 +174,7 @@ def crop_expression(video: Path, start: float, length: float, out_w: int, out_h:
 # Two layouts stacked in a 9:16 frame:
 #   duo      two people side by side (podcast, interview): each gets half the height, top and bottom.
 #   facecam  a streamer's small webcam over gameplay: the webcam on top (40%), the game below (60%).
-MIN_DUO_SHARE = 0.4        # each person on screen in at least 40% of samples
+MIN_DUO_SHARE = 0.4        # both people on screen together in at least 40% of samples
 MIN_DUO_GAP = 0.22         # and at least this far apart (share of width)
 FACECAM_MAX_SIZE = 0.13    # a webcam overlay's face is small...
 FACECAM_SHARE = 0.4        # ...and nearly always there (in at least 40% of samples)...
@@ -201,9 +201,10 @@ def split_plan(samples: list[list[tuple[float, float, float]]]) -> dict | None:
             gap, cut = max(gaps)
             left = [f for f in faces if f[0] < cut]
             right = [f for f in faces if f[0] >= cut]
-            seen_l = sum(any(f[2] >= 0.04 and f[0] < cut for f in fs) for fs in samples) / n
-            seen_r = sum(any(f[2] >= 0.04 and f[0] >= cut for f in fs) for fs in samples) / n
-            if gap >= MIN_DUO_GAP and min(seen_l, seen_r) >= MIN_DUO_SHARE:
+            # both people in the same frames (not one camera cutting between two single shots)
+            together = sum(any(f[2] >= 0.04 and f[0] < cut for f in fs) and
+                           any(f[2] >= 0.04 and f[0] >= cut for f in fs) for fs in samples) / n
+            if gap >= MIN_DUO_GAP and together >= MIN_DUO_SHARE:
                 med = lambda group, i: float(np.median([f[i] for f in group]))  # noqa: E731
                 return {"kind": "duo", "people": [(med(g, 0), med(g, 1), med(g, 2)) for g in (left, right)]}
     # facecam: one small face that stays put

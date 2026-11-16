@@ -111,17 +111,19 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
                                                    and words else c.text)
     hook = caption_hook(hook_original, words, mode)
     script = language.script_of(" ".join(w["word"] for w in words) + " " + hook)
+    with stage("framing"):
+        plan = render.plan_fit(src, render.MAIN_FORMAT, clip["layout"], section)
     ass.write_text(captions.build_ass(words, 0.0, section[1], hook,
-                                      branding.style_for(render.MAIN_FORMAT, brand, None, script),
+                                      branding.style_for(render.MAIN_FORMAT, brand, None, script, plan[0]),
                                       branding.template_for(brand)), encoding="utf-8")
     with stage("render"):
-        render.make_raw(src, raw, render.MAIN_FORMAT, clip["layout"], section)
+        render.make_raw(src, raw, render.MAIN_FORMAT, plan[0], section, plan)
         render.burn(raw, ass, out, branding.logo_for(brand), branding.fonts_dir())
     if clip.get("silence"):
         render.trim_silence(out)
 
     post = {"file": out.name, "raw": raw.name, "source_clip": src.name, "captions": ass.name,
-            "folder": out_dir.name, "name": name, "format": render.MAIN_FORMAT, "fit": clip["layout"],
+            "folder": out_dir.name, "name": name, "format": render.MAIN_FORMAT, "fit": plan[0],
             "src_offset": section[0], "length": section[1],
             "logo": True, "exports": {}, "score": round(c.score, 2), "why": c.reasons, "hook": hook,
             "hook_original": hook_original, "language": clip.get("language"),

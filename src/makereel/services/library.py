@@ -152,8 +152,8 @@ def _summary(folder: str, name: str, post: dict, video: Path) -> dict:
 def _look(post: dict) -> dict:
     """The reel's effective caption look (its overrides on top of the brand kit), for the editor."""
     b = load_settings().brand
-    style = branding.style_for(render.MAIN_FORMAT, b, post.get("look"))
-    default_vertical = {"bottom": 0.29, "middle": 0.5, "top": 0.78}[b["caption_position"]]
+    style = branding.style_for(render.MAIN_FORMAT, b, post.get("look"), fit=post.get("fit"))
+    default_vertical = {"bottom": 0.29, "middle": 0.46, "top": 0.78}[style.position]
     return {"vertical": style.vertical if style.vertical is not None else default_vertical, "size": style.size,
             "box": style.box, "box_colour": style.box_colour, "box_opacity": style.box_opacity,
             "font": style.font, "text_colour": style.text_colour, "highlight_colour": style.highlight_colour,
@@ -203,13 +203,13 @@ def _require_section(d: Path, post: dict) -> tuple[float, float]:
 
 
 def _write_and_render(d: Path, meta_file: Path, post: dict, ass_text: str, brand: dict,
-                      reraw: bool = False) -> None:
+                      reraw: bool = False, plan: tuple | None = None) -> None:
     """Save captions + metadata, (re)make the clean 9:16 if needed, burn, and refresh exports."""
     ass_text = captions.set_cards(ass_text, post.get("cards"), post.get("length") or captions.length_of(ass_text))
     (d / post["captions"]).write_text(ass_text, encoding="utf-8")
     if reraw:
         render.make_raw(d / post["source_clip"], d / post["raw"], render.MAIN_FORMAT,
-                        post.get("fit") or "blur", _section(d, post))
+                        post.get("fit") or "blur", _section(d, post), plan)
     render.burn(d / post["raw"], d / post["captions"], d / post["file"],
                 branding.logo_for(brand, post.get("logo", True)), branding.fonts_dir())
     meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -232,7 +232,7 @@ def _language(d: Path, post: dict) -> str | None:
 
 def _style(fmt: str, brand: dict, post: dict, words: list[dict], hook: str | None) -> captions.Style:
     script = language.script_of(" ".join(w["word"] for w in words) + " " + (hook or ""))
-    return branding.style_for(fmt, brand, post.get("look"), script)
+    return branding.style_for(fmt, brand, post.get("look"), script, post.get("fit"))
 
 
 def _rebuild(post: dict, current: str, words: list[dict], hook: str | None, brand: dict, restyle: bool,
@@ -271,6 +271,7 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
     meta_file, post = _reel_paths(folder, name)
     d = meta_file.parent
     current = (d / post["captions"]).read_text(encoding="utf-8")
+    plan = None
     if cards is not None:
         try:
             post["cards"] = captions.clean_cards(cards, post.get("length") or captions.length_of(current))
@@ -296,6 +297,12 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
         if fit not in render.FITS:
             raise InvalidInput(f"fit must be one of {', '.join(render.FITS)}")
         _require_section(d, post)
+        plan = render.plan_fit(d / post["source_clip"], render.MAIN_FORMAT, fit, _section(d, post))
+        if plan[0] != fit:
+            raise InvalidInput({"split": "no two people or webcam found in this reel",
+                                "track": "no steady face found in this reel"}[fit],
+                               "The layout was left as it was.")
+        restyle = restyle or "split" in (fit, post.get("fit"))   # split-screen captions sit on the seam
         post["fit"], reraw = fit, True
 
     if ass is not None and ass.strip() and ass != current:
@@ -338,7 +345,7 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
     if logo is not None:
         post["logo"] = bool(logo)
 
-    _write_and_render(d, meta_file, post, text, brand, reraw)
+    _write_and_render(d, meta_file, post, text, brand, reraw, plan)
     return get_reel(folder, name)
 
 

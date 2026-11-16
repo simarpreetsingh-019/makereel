@@ -1,6 +1,6 @@
 [project]
 name = "makereel"
-version = "0.5.0"
+version = "0.6.0"
 description = "Turn any live stream or video into captioned 9:16 reels with full creator credits"
 readme = "README.md"
 requires-python = ">=3.10"

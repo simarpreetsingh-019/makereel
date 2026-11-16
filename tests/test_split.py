@@ -34,3 +34,8 @@ def test_split_filter_stacks_panels_and_falls_back():
     f = render.reframe_filter("9x16", "split", panels)
     assert "vstack=inputs=2" in f and f.endswith("[v]")
     assert "boxblur" in render.reframe_filter("9x16", "split", None)
+
+
+def test_camera_cutting_between_two_single_shots_is_not_a_duo():
+    samples = [[(0.25, 0.4, 0.15)] if i % 2 else [(0.75, 0.4, 0.15)] for i in range(20)]
+    assert framing.split_plan(samples) is None

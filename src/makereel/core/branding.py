@@ -27,11 +27,13 @@ def logo_file() -> Path | None:
     return next((brand_dir() / n for n in LOGO_NAMES if (brand_dir() / n).is_file()), None)
 
 
-def style_for(fmt: str, brand: dict, look: dict | None = None, script: str | None = None) -> Style:
+def style_for(fmt: str, brand: dict, look: dict | None = None, script: str | None = None,
+              fit: str | None = None) -> Style:
     """Caption style for a format: the brand kit, plus this reel's own look overrides (if any).
 
     `script` is the captions' script (language.script_of): non-Latin captions get a font that has
-    those letters, since most brand fonts don't.
+    those letters, since most brand fonts don't. Split-screen reels (`fit="split"`) put captions on the
+    seam between the two pictures unless the reel sets its own height, so they don't cover a face.
     """
     w, h = FORMATS[fmt]
     look = look or {}
@@ -39,7 +41,7 @@ def style_for(fmt: str, brand: dict, look: dict | None = None, script: str | Non
     font = language.font_for(script, brand["font"], fonts_dir()) if script else brand["font"]
     return Style(width=w, height=h, font=font, text_colour=brand["text_colour"],
                  highlight_colour=brand["highlight_colour"], outline_colour=brand["outline_colour"],
-                 position=brand["caption_position"],
+                 position="middle" if fit == "split" and h > w else brand["caption_position"],
                  size=look.get("size", brand["caption_size"]),
                  vertical=look.get("vertical"),
                  box=look.get("box", brand.get("caption_box", False)),

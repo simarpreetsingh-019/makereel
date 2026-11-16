@@ -157,10 +157,20 @@ def track_for(source: Path, fmt: str, fit: str, section: tuple[float, float] | N
     return framing.crop_expression(source, start, length, w, h)
 
 
-def make_raw(source: Path, raw: Path, fmt: str = MAIN_FORMAT, fit: str = "blur",
-             section: tuple[float, float] | None = None) -> None:
-    """Reframe the reel's part of the master into `fmt`, without captions (cached so caption edits are fast)."""
+def plan_fit(source: Path, fmt: str, fit: str, section: tuple[float, float] | None) -> tuple[str, object]:
+    """(the fit that will really be used, its crop data). Follow-the-speaker and split screen need someone
+    on screen; when nobody suitable is found they become "blur", so captions can be placed to match."""
     track = track_for(source, fmt, fit, section)
+    if fit in ("track", "split") and not track:
+        return "blur", None
+    return fit, track
+
+
+def make_raw(source: Path, raw: Path, fmt: str = MAIN_FORMAT, fit: str = "blur",
+             section: tuple[float, float] | None = None, plan: tuple[str, object] | None = None) -> None:
+    """Reframe the reel's part of the master into `fmt`, without captions (cached so caption edits are fast).
+    `plan` is plan_fit's answer, when the caller already has it."""
+    fit, track = plan or plan_fit(source, fmt, fit, section)
     _encode([source], reframe_filter(fmt, fit, track, media.output_fps(source)), "v", raw, raw.parent,
             section=section)
 
