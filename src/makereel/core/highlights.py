@@ -5,16 +5,50 @@ Stage 2  transcribe only the candidates -> add hype words / speech density -> ke
 """
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 
 import numpy as np
 
-HYPE_WORDS = {
-    "oh", "no", "what", "wait", "bro", "dude", "yo", "yes", "lets", "let's", "go", "insane",
-    "crazy", "dead", "died", "run", "help", "wow", "holy", "omg", "dang", "damn", "chat",
-    "clip", "unbelievable", "impossible", "finally", "gg", "noo", "nooo", "what's", "how",
+from . import language
+
+# Excited words, by language. Matched on whole words (lower-case, punctuation stripped);
+# HYPE_PHRASES are matched inside the text (languages without spaces, and multi-word phrases).
+HYPE_BY_LANGUAGE = {
+    "en": {"oh", "no", "what", "wait", "bro", "dude", "yo", "yes", "lets", "let's", "go", "insane",
+           "crazy", "dead", "died", "run", "help", "wow", "holy", "omg", "dang", "damn", "chat",
+           "clip", "unbelievable", "impossible", "finally", "gg", "noo", "nooo", "what's", "how"},
+    # Hindi / Urdu / Hinglish, in Devanagari and in English letters
+    "hi": {"अरे", "अबे", "क्या", "भाई", "यार", "पागल", "बाप", "चलो", "मारो", "भागो", "भाग", "नहीं", "कमाल",
+           "मस्त", "वाह", "ओए", "बचाओ", "गया", "गए", "रुको", "देखो", "सच", "भगवान", "ओह",
+           "arre", "arey", "abe", "kya", "bhai", "bhau", "yaar", "pagal", "baap", "chalo", "maaro", "maro",
+           "bhago", "bhaag", "nahi", "nahin", "kamaal", "kamal", "mast", "waah", "wah", "oye", "bachao",
+           "ruko", "dekho", "sach", "bhagwan", "gaya", "gaye", "bhenchod", "op", "jhakaas"},
+    # Punjabi, in Gurmukhi and in English letters
+    "pa": {"ਓਏ", "ਬੱਲੇ", "ਵਾਹ", "ਕੀ", "ਯਾਰ", "ਵੀਰੇ", "ਭਾਜੀ", "ਚੱਕ", "ਸ਼ਾਬਾਸ਼", "ਬੱਸ", "ਹਾਏ",
+           "balle", "oye", "veere", "veer", "paaji", "bhaji", "chak", "shabash", "shabaash", "haye"},
+    "es": {"qué", "vamos", "dios", "increíble", "madre", "wey", "güey", "corre", "ayuda", "mira", "brutal",
+           "joder", "hostia", "órale", "mierda", "loco", "locura", "imposible", "ostia", "noo"},
+    "pt": {"nossa", "caramba", "vai", "mano", "corre", "socorro", "incrível", "caraca", "deus", "mds",
+           "porra", "eita", "uau", "doido", "impossível"},
+    "fr": {"quoi", "incroyable", "allez", "putain", "waouh", "attends", "oh", "dingue", "mdr"},
+    "de": {"krass", "alter", "geil", "lauf", "hilfe", "wahnsinn", "digga", "boah", "nein"},
+    "ar": {"والله", "يلا", "ايش", "مستحيل", "الله", "واو"},
+    "ru": {"что", "блин", "капец", "давай", "офигеть", "нет", "беги", "жесть"},
+    "tr": {"abi", "yok", "hadi", "inanılmaz", "kanka", "lan", "koş"},
+    "id": {"anjay", "gila", "wkwk", "astaga", "ayo", "bang", "mantap", "anjir"},
 }
+HYPE_WORDS = set().union(*HYPE_BY_LANGUAGE.values())
+HYPE_PHRASES = ("やばい", "すごい", "まじ", "うそ", "なに", "我的天", "卧槽", "天哪", "牛逼",
+                "대박", "미쳤다", "헐", "no way", "let's go", "baap re", "बाप रे", "no manches", "meu deus")
+
+
+def hype_count(words: list[dict]) -> int:
+    """Excited words and exclamation marks in a list of timed words (any language)."""
+    toks = [language.norm_token(x["word"]) for x in words]
+    text = " ".join(x["word"].lower() for x in words)
+    return (sum(t in HYPE_WORDS for t in toks) + sum(x["word"].endswith(("!", "！")) for x in words)
+            + sum(text.count(p) for p in HYPE_PHRASES))
+
 
 PROFILES = {  # weights: loudness, chat, hype words, speech density
     "gameplay": dict(loud=1.0, chat=1.4, words=0.7, speech=0.2),
@@ -71,8 +105,7 @@ def rescore(c: Clip, words: list[dict], parts: dict, profile: str) -> Clip:
     """Stage 2: add hype-word and speech-density points from the transcript."""
     w = PROFILES[profile]
     inside = [x for x in words if c.start <= x["start"] < c.end]
-    toks = [re.sub(r"[^\w']", "", x["word"].lower()) for x in inside]
-    hype = sum(t in HYPE_WORDS for t in toks) + sum(x["word"].endswith("!") for x in inside)
+    hype = hype_count(inside)
     dur = max(1.0, c.end - c.start)
     c.score += w["words"] * min(3.0, hype / dur * 10) + w["speech"] * min(3.0, len(inside) / dur)
     p = int(c.peak)

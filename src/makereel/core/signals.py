@@ -14,7 +14,11 @@ log = logging.getLogger(__name__)
 
 SAMPLE_RATE = 8000  # Hz: plenty for loudness, tiny to stream
 CHAT_HYPE = ("lol", "lmao", "omg", "no way", "clip", "wtf", "😂", "🤣", "💀", "🔥", "pog",
-             "insane", "holy", "!!!", "kekw", "goat", "w ", "lets go", "let's go")
+             "insane", "holy", "!!!", "kekw", "goat", "w ", "lets go", "let's go", "😭", "😱", "🤯",
+             # other languages' chat: laughs and shouts
+             "haha", "jaja", "kkkk", "mdr", "xd", "wkwk", "ㅋㅋ", "www", "草", "哈哈",
+             "bhai", "op bolte", "kya baat", "arre", "balle", "oye", "waah", "😍",
+             "vamos", "golazo", "nossa", "krass", "يا", "ههه", "ахах", "жесть")
 
 
 def loudness(video: Path) -> np.ndarray:

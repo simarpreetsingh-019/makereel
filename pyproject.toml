@@ -1,6 +1,6 @@
 [project]
 name = "makereel"
-version = "0.4.1"
+version = "0.5.0"
 description = "Turn any live stream or video into captioned 9:16 reels with full creator credits"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -10,6 +10,7 @@ dependencies = [
   "scenedetect[opencv-headless]>=0.6.4",
   "numpy",
   "psutil>=5.9",
+  "anyascii>=0.3",   # English letters for non-Indian scripts (Indian ones use our own rules)
 ]
 
 [project.optional-dependencies]

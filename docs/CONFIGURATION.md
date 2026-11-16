@@ -51,7 +51,8 @@ passes a one-frame test; otherwise it falls back to `libx264`.
 | `clip.min_len` / `clip.max_len` | 15 / 45 | reel length in seconds |
 | `clip.model` | `base` | speech model: `tiny`, `base`, `small`, `medium` or `large-v3` |
 | `clip.layout` | `blur` | `blur` (whole frame over a blurred fill), `crop`, `pad` (black bars) or `track` (follow the speaker) |
-| `clip.language` | auto | e.g. `en`, `hi` |
+| `clip.language` | auto | e.g. `en`, `hi`, `pa`. Auto-detected once per video, so every reel of a video uses the same language and script |
+| `clip.model_other` | `small` | model used for non-English speech when `clip.model` is `tiny` or `base`: `small`, `medium`, `large-v3`, or `same` to never switch |
 | `clip.silence` | false | cut dead air with auto-editor (`pip install -e ".[silence]"`) |
 
 ### Brand kit (`brand`)
@@ -66,6 +67,7 @@ passes a one-frame test; otherwise it falls back to `libx264`.
 | `text_colour` / `highlight_colour` / `outline_colour` | `#FFFFFF` / `#FFDD00` / `#000000` | caption colours |
 | `caption_position` | `bottom` | `bottom` (lower third), `middle` or `top` |
 | `caption_size` | 1.0 | 0.5–2 × the default size |
+| `caption_script` | `original` | how captions are written: `original` (the spoken language's own script, e.g. Devanagari), `roman` (the same words in English letters: "kya baat hai"), or `english` (translated). Per reel in the editor's Look tab too |
 | `caption_template` | `classic` | default caption style: `classic`, `pop`, `boxed`, `glow`, `karaoke`, `single` or `minimal` |
 | `caption_box` | false | a background box behind captions (helps over busy video or video with its own subtitles) |
 | `box_colour` / `box_opacity` | `#000000` / 0.6 | background colour, and how solid it is (0 = invisible, 1 = solid) |

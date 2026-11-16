@@ -19,7 +19,7 @@ from .router import Request, Response, Router
 
 MAX_UPLOAD_BYTES = 8 * 1024**3
 UPLOAD_OPTIONS = ("title", "credit", "credit_url", "profile", "max_clips", "min_len", "max_len",
-                  "model", "language", "layout")
+                  "model", "model_other", "language", "layout")
 
 
 def _read_all(req: Request, limit: int) -> bytes:

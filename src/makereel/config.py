@@ -101,7 +101,8 @@ CLIP_DEFAULTS: dict[str, Any] = {
     "max_len": 45,
     "model": "base",         # whisper size: tiny | base | small | medium | large-v3
     "layout": "blur",        # blur | crop | pad | track (follow the speaker)
-    "language": None,        # None = auto-detect
+    "language": None,        # None = auto-detect (once per video, so every reel matches)
+    "model_other": "small",  # model for non-English speech when `model` is tiny/base ("same" = don't switch)
     "silence": False,        # trim dead air with auto-editor (talk content)
 }
 
@@ -120,6 +121,7 @@ BRAND_DEFAULTS: dict[str, Any] = {
     "caption_box": False,           # background box behind captions (helps over busy or captioned video)
     "box_colour": "#000000",
     "box_opacity": 0.6,
+    "caption_script": "original",   # original (own script) | roman (English letters) | english (translated)
     "credit_footer": True,          # add "Made with makereel" to the post text (opt out here)
 }
 
@@ -148,7 +150,8 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
 INT_SETTINGS = ("poll_minutes", "max_parallel_live", "keep_days", "buffer_minutes",
                 "clips_per_hour", "max_height")
 CLIP_CHOICES = {"profile": ("gameplay", "talk"), "layout": ("blur", "crop", "pad", "track"),
-                "model": ("tiny", "base", "small", "medium", "large-v3")}
+                "model": ("tiny", "base", "small", "medium", "large-v3"),
+                "model_other": ("same", "small", "medium", "large-v3")}
 
 
 @dataclass
@@ -179,6 +182,7 @@ class Settings:
 
 
 def validate_clip(clip: dict[str, Any]) -> None:
+    clip.setdefault("model_other", "small")
     for key, choices in CLIP_CHOICES.items():
         if clip.get(key) not in choices:
             raise ConfigError(f"clip.{key} must be one of {', '.join(choices)}, got {clip.get(key)!r}")
@@ -216,6 +220,9 @@ def validate_brand(brand: dict[str, Any]) -> None:
     brand["credit_footer"] = bool(brand.get("credit_footer"))
     brand["caption_box"] = bool(brand.get("caption_box"))
     from .core.captions import TEMPLATES
+    from .core.language import SCRIPT_MODES
+    if brand.setdefault("caption_script", "original") not in SCRIPT_MODES:
+        raise ConfigError(f"brand.caption_script must be one of {', '.join(SCRIPT_MODES)}")
     if brand.get("caption_template") not in TEMPLATES:
         raise ConfigError(f"brand.caption_template must be one of {', '.join(TEMPLATES)}")
 

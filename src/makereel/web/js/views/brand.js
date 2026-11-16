@@ -4,7 +4,7 @@ import { api, media } from "../api.js";
 import { $, busy, esc, toast } from "../ui.js";
 
 const FIELDS = ["logo_enabled", "logo_position", "logo_scale", "logo_opacity", "font", "text_colour",
-  "highlight_colour", "outline_colour", "caption_position", "caption_size", "caption_template", "caption_box", "box_colour",
+  "highlight_colour", "outline_colour", "caption_position", "caption_size", "caption_template", "caption_script", "caption_box", "box_colour",
   "box_opacity", "credit_footer"];
 const COMMON_FONTS = ["Arial Black", "Impact", "Montserrat", "Bebas Neue", "Anton", "Poppins", "Inter"];
 

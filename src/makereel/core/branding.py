@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..config import env
+from . import language
 from .captions import TEMPLATES, Style
 from .render import FORMATS, Logo
 
@@ -26,11 +27,16 @@ def logo_file() -> Path | None:
     return next((brand_dir() / n for n in LOGO_NAMES if (brand_dir() / n).is_file()), None)
 
 
-def style_for(fmt: str, brand: dict, look: dict | None = None) -> Style:
-    """Caption style for a format: the brand kit, plus this reel's own look overrides (if any)."""
+def style_for(fmt: str, brand: dict, look: dict | None = None, script: str | None = None) -> Style:
+    """Caption style for a format: the brand kit, plus this reel's own look overrides (if any).
+
+    `script` is the captions' script (language.script_of): non-Latin captions get a font that has
+    those letters, since most brand fonts don't.
+    """
     w, h = FORMATS[fmt]
     look = look or {}
-    return Style(width=w, height=h, font=brand["font"], text_colour=brand["text_colour"],
+    font = language.font_for(script, brand["font"], fonts_dir()) if script else brand["font"]
+    return Style(width=w, height=h, font=font, text_colour=brand["text_colour"],
                  highlight_colour=brand["highlight_colour"], outline_colour=brand["outline_colour"],
                  position=brand["caption_position"],
                  size=look.get("size", brand["caption_size"]),
@@ -38,6 +44,11 @@ def style_for(fmt: str, brand: dict, look: dict | None = None) -> Style:
                  box=look.get("box", brand.get("caption_box", False)),
                  box_colour=look.get("box_colour", brand.get("box_colour", "#000000")),
                  box_opacity=look.get("box_opacity", brand.get("box_opacity", 0.6)))
+
+
+def script_mode(brand: dict, look: dict | None = None) -> str:
+    """original | roman | english: how this reel's captions are written."""
+    return (look or {}).get("script") or brand.get("caption_script", "original")
 
 
 def template_for(brand: dict, look: dict | None = None) -> str:
@@ -73,6 +84,10 @@ def clean_look(look: dict) -> dict:
         if look["template"] not in TEMPLATES:
             raise ValueError(f"caption template must be one of {', '.join(TEMPLATES)}")
         out["template"] = look["template"]
+    if look.get("script") is not None:
+        if look["script"] not in language.SCRIPT_MODES:
+            raise ValueError(f"caption script must be one of {', '.join(language.SCRIPT_MODES)}")
+        out["script"] = look["script"]
     return out
 
 

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.0 (2026-11-16)
+
+### Added: other languages
+- **Language detected once per video** (from three moments together), and reused by every reel and every chunk
+  of a live stream, so mixed speech like Hinglish stays in one script. Set `clip.language` to force one.
+- **Bigger speech model outside English:** with `base` or `tiny`, non-English videos use `small` automatically
+  (`clip.model_other`: `small`, `medium`, `large-v3` or `same`).
+- **Caption letters** (Brand default, and per reel in Look): own script (हिंदी, ਪੰਜਾਬੀ), **English letters**
+  (Hinglish-style "kya baat hai", our own rules for all Indian scripts, `anyascii` for others), or
+  **Translate to English**. Own script → English letters keeps your edits; other switches listen to the reel again.
+- **Fonts per script:** captions in Devanagari, Gurmukhi, Bengali, Tamil, Arabic, Thai and more get a matching
+  Noto font (downloaded once, ~250 KB), or a system font offline. Chinese, Japanese and Korean use system fonts.
+- **Hype words in more languages:** Hindi/Hinglish, Punjabi, Spanish, Portuguese, French, German, Arabic,
+  Russian, Turkish, Indonesian, Japanese, Chinese, Korean; chat laughs like "jaja", "kkkk", "mdr", "ㅋㅋ".
+
+### Fixed
+- Word matching dropped Hindi vowel signs (so "की" and "का" looked the same), which hurt caption editing
+  and auto-sync in Indian languages.
+- Titles now split sentences on "।" and full-width punctuation.
+
 ## 0.4.1 (2026-11-16)
 
 ### Fixed

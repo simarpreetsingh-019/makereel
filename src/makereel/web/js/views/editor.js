@@ -16,7 +16,7 @@ const FORMATS = [
 ];
 
 let cur = null;   // { folder, name, onSaved, reel, words, offset, tapIndex, look }
-const LOOK_FIELDS = ["vertical", "size", "box", "box_colour", "box_opacity"];
+const LOOK_FIELDS = ["vertical", "size", "box", "box_colour", "box_opacity", "script"];
 
 // ------------------------------------------------------------------ open / fill
 export async function openEditor(folder, name, onSaved, tab = "text") {
@@ -148,7 +148,18 @@ function drawLook() {
   $("#lk-size-v").textContent = `${Math.round(look.size * 100)}%`;
   $("#lk-box_opacity-v").textContent = `${Math.round(look.box_opacity * 100)}%`;
   $("#lk-box-opts").style.opacity = look.box ? 1 : 0.45;
+  const lang = cur.reel.language;
+  $("#lk-lang").textContent = lang ? `(spoken: ${LANGS[lang] || lang})` : "";
+  const was = cur.reel.look.script, now = look.script;
+  $("#lk-script-hint").textContent = now === was ? ""
+    : now === "roman" && was === "original" ? "Your caption words are kept, just written in English letters."
+    : "Saving listens to the reel again (a few seconds). Word edits you made are replaced.";
 }
+
+const LANGS = { en: "English", hi: "Hindi", pa: "Punjabi", ur: "Urdu", bn: "Bengali", gu: "Gujarati", mr: "Marathi",
+  ta: "Tamil", te: "Telugu", kn: "Kannada", ml: "Malayalam", es: "Spanish", pt: "Portuguese", fr: "French",
+  de: "German", it: "Italian", ar: "Arabic", ru: "Russian", tr: "Turkish", id: "Indonesian", ja: "Japanese",
+  ko: "Korean", zh: "Chinese", th: "Thai", vi: "Vietnamese", nl: "Dutch", pl: "Polish" };
 
 function showTab(tab) {
   document.querySelectorAll("#editor [data-edtab]").forEach((b) => b.classList.toggle("on", b.dataset.edtab === tab));
@@ -408,7 +419,7 @@ export function mount() {
     if (fitChanged) body.fit = fit;
     $("#ed-msg").textContent = fit === "track" && fitChanged ? "Finding the speaker and re-rendering…" : "Rendering…";
     save(body, e.currentTarget, fit === "track" && fitChanged
-      ? "Saved. If no steady face was found, the blurred layout is used." : "Look saved and re-rendered.");
+      ? "Saved. If no steady face was found, the blurred layout is used." : look.script !== cur.reel.look.script ? "Captions rewritten and re-rendered." : "Look saved and re-rendered.");
   });
 
   // Export tab

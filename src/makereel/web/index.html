@@ -41,8 +41,9 @@
           <label class="field">Max reels<input name="max_clips" type="number" min="1" max="50" placeholder="8"></label>
           <label class="field">Min length (s)<input name="min_len" type="number" min="3" placeholder="15"></label>
           <label class="field">Max length (s)<input name="max_len" type="number" min="5" placeholder="45"></label>
-          <label class="field">Language<input name="language" placeholder="auto (en, hi…)"></label>
+          <label class="field">Language<input name="language" placeholder="auto-detect (or en, hi, pa…)"></label>
           <label class="field">Speech model<select name="model"><option value="">base (default)</option><option>tiny</option><option>small</option><option>medium</option></select></label>
+          <label class="field">Model if not English<select name="model_other"><option value="">small (default)</option><option value="medium">medium (best, slower)</option><option value="same">same as above</option></select></label>
           <label class="field">Only this part<input name="section" placeholder="1:00:00-2:30:00"></label>
         </div>
       </details>
@@ -142,6 +143,7 @@
               <option value="classic">Classic</option><option value="pop">Pop</option><option value="boxed">Boxed word</option>
               <option value="glow">Glow</option><option value="karaoke">Karaoke fill</option><option value="single">One word</option>
               <option value="minimal">Minimal</option></select></label>
+            <label class="field">Caption letters<select id="br-caption_script"><option value="original">Original script (हिंदी, ਪੰਜਾਬੀ…)</option><option value="roman">English letters (kya baat hai)</option><option value="english">Translate to English</option></select></label>
             <label class="field">Position<select id="br-caption_position"><option value="bottom">Lower third</option><option value="middle">Middle</option><option value="top">Top</option></select></label>
             <label class="field">Text colour<input type="color" id="br-text_colour"></label>
             <label class="field">Highlight colour<input type="color" id="br-highlight_colour"></label>
@@ -285,6 +287,9 @@
       <div class="field">Caption style
         <div class="chips" id="lk-templates"></div>
       </div>
+      <label class="field">Caption letters <span class="hint" id="lk-lang" style="margin:0"></span>
+        <select id="lk-script"><option value="original">Original script (हिंदी, ਪੰਜਾਬੀ…)</option><option value="roman">English letters (kya baat hai)</option><option value="english">Translate to English</option></select></label>
+      <p class="hint" id="lk-script-hint" style="margin:-6px 0 0"></p>
       <label class="field">Framing
         <select id="lk-fit">
           <option value="blur">Whole frame + blurred background</option>

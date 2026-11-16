@@ -23,7 +23,7 @@ from .errors import MakereelError
 
 log = logging.getLogger("makereel.cli")
 
-CLIP_FLAGS = ("profile", "max_clips", "min_len", "max_len", "model", "language", "layout")
+CLIP_FLAGS = ("profile", "max_clips", "min_len", "max_len", "model", "model_other", "language", "layout")
 
 
 def _clip_args(p: argparse.ArgumentParser) -> None:
@@ -33,7 +33,9 @@ def _clip_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--min-len", type=float)
     g.add_argument("--max-len", type=float)
     g.add_argument("--model", help="speech model: tiny, base, small, medium, large-v3")
-    g.add_argument("--language", help="e.g. en, hi (auto-detect if omitted)")
+    g.add_argument("--language", help="e.g. en, hi, pa (auto-detected once per video if omitted)")
+    g.add_argument("--model-other", dest="model_other", choices=("same", "small", "medium", "large-v3"),
+                   help="speech model for non-English videos when --model is tiny/base (default small)")
     g.add_argument("--layout", choices=["blur", "crop"])
     g.add_argument("--trim-silence", action="store_true", help="cut dead air (needs auto-editor)")
 

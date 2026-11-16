@@ -16,6 +16,8 @@ import difflib
 import re
 from dataclasses import dataclass, replace
 
+from .language import norm_token
+
 # --------------------------------------------------------------------------- templates
 # How the spoken word is shown inside its group. Every active tag starts with "\c&H..&" so
 # parse_words can find the active word; past words (karaoke) use "\1c", which it ignores.
@@ -214,7 +216,7 @@ def length_of(ass: str) -> float:
 
 # --------------------------------------------------------------------------- timing
 def _norm(word: str) -> str:
-    return re.sub(r"[^\w']", "", word.lower())
+    return norm_token(word)
 
 
 def align(text: str, timed: list[dict]) -> list[dict]:

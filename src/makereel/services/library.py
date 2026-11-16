@@ -21,8 +21,8 @@ import shutil
 from pathlib import Path
 
 from ..config import env, load_settings
-from ..core import branding, captions, render, transcribe
-from ..core.pipeline import FOLDER_FILE
+from ..core import branding, captions, language, render, transcribe
+from ..core.pipeline import FOLDER_FILE, caption_hook, folder_language
 from ..errors import Forbidden, InvalidInput, NotFound
 
 _UNSAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
@@ -158,7 +158,7 @@ def _look(post: dict) -> dict:
             "box": style.box, "box_colour": style.box_colour, "box_opacity": style.box_opacity,
             "font": style.font, "text_colour": style.text_colour, "highlight_colour": style.highlight_colour,
             "outline_colour": style.outline_colour, "template": branding.template_for(b, post.get("look")),
-            "custom": bool(post.get("look"))}
+            "script": branding.script_mode(b, post.get("look")), "custom": bool(post.get("look"))}
 
 
 def get_reel(folder: str, name: str) -> dict:
@@ -171,6 +171,7 @@ def get_reel(folder: str, name: str) -> dict:
     return {**_summary(folder, name, post, d / post["file"]),
             "transcript": " ".join(w["word"] for w in words), "words": words, "ass": ass_text,
             "templates": {k: v["label"] for k, v in captions.TEMPLATES.items()},
+            "language": _language(d, post), "script": language.script_of(" ".join(w["word"] for w in words)),
             "can_trim": bool(sec), "length": sec[1] if sec else captions.length_of(ass_text),
             "room_before": sec[0] if sec else 0.0,
             "room_after": max(0.0, src_len - sec[0] - sec[1]) if sec else 0.0}
@@ -215,9 +216,21 @@ def _write_and_render(d: Path, meta_file: Path, post: dict, ass_text: str, brand
             export_reel(d.name, meta_file.stem, fmt, item.get("fit") or post.get("fit") or "blur")
 
 
+def _language(d: Path, post: dict) -> str | None:
+    return post.get("language") or folder_language(d) or load_settings().clip.get("language")
+
+
+def _style(fmt: str, brand: dict, post: dict, words: list[dict], hook: str | None) -> captions.Style:
+    script = language.script_of(" ".join(w["word"] for w in words) + " " + (hook or ""))
+    return branding.style_for(fmt, brand, post.get("look"), script)
+
+
 def _rebuild(post: dict, current: str, words: list[dict], hook: str | None, brand: dict, restyle: bool,
              length: float | None = None) -> str:
-    style = branding.style_for(render.MAIN_FORMAT, brand, post.get("look")) if restyle else None
+    style = _style(render.MAIN_FORMAT, brand, post, words, hook)
+    if not restyle and f"Style: Caption,{style.font}," not in current:
+        restyle = True          # the words changed script (e.g. romanised): the font has to follow
+    style = style if restyle else None
     return captions.rebuild(current, words, hook, style, branding.template_for(brand, post.get("look")), length)
 
 
@@ -248,12 +261,19 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
     new_hook = hook.strip() if hook is not None and hook.strip() else post.get("hook")
     brand = load_settings().brand
     reraw = False
+    script_words = None
     if look is not None:
+        old_mode = branding.script_mode(brand, post.get("look"))
         try:
             post["look"] = {**(post.get("look") or {}), **branding.clean_look(look)}
         except (TypeError, ValueError) as e:
             raise InvalidInput(str(e)) from e
         restyle = True
+        mode = branding.script_mode(brand, post["look"])
+        if mode != old_mode:
+            script_words = _words_in_mode(d, post, captions.parse_words(current), old_mode, mode)
+            base_hook = post.get("hook_original") or new_hook or ""
+            new_hook = caption_hook(base_hook, script_words, mode) or new_hook
     if fit is not None and fit != post.get("fit"):
         if fit not in render.FITS:
             raise InvalidInput(f"fit must be one of {', '.join(render.FITS)}")
@@ -265,6 +285,8 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
     else:
         timed = captions.parse_words(current)
         changed = False
+        if script_words is not None:
+            timed, changed = script_words, True
         if words is not None:
             try:
                 timed = captions.clean_timings(words)
@@ -302,25 +324,44 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
     return get_reel(folder, name)
 
 
-def _fresh_words(d: Path, post: dict, section: tuple[float, float]) -> list[dict]:
-    """Precise word timings for a section of the master, on the reel's clock."""
+def _fresh_words(d: Path, post: dict, section: tuple[float, float] | None, mode: str | None = None) -> list[dict]:
+    """Precise word timings for the reel (its section of the master), on the reel's clock,
+    written the way `mode` asks (own script, English letters, or translated to English)."""
     clip = load_settings().clip
-    off, length = section
-    return [{**w, "start": round(w["start"] - off, 2), "end": round(w["end"] - off, 2)}
-            for w in transcribe.words_in(d / post["source_clip"], off, off + length, clip["model"],
-                                         clip["language"], precise=True)]
+    mode = mode or branding.script_mode(load_settings().brand, post.get("look"))
+    lang = _language(d, post)
+    model = transcribe.model_for(clip["model"], lang, clip.get("model_other", "small"))
+    task = "translate" if mode == "english" and lang not in (None, "en") else "transcribe"
+    if section is None:
+        words = transcribe.words_in_file(d / post["raw"], model, lang, task)
+    else:
+        off, length = section
+        words = [{**w, "start": round(w["start"] - off, 2), "end": round(w["end"] - off, 2)}
+                 for w in transcribe.words_in(d / post["source_clip"], off, off + length, model, lang,
+                                              precise=True, task=task)]
+    return language.romanize_words(words) if mode == "roman" else words
+
+
+def _words_in_mode(d: Path, post: dict, current: list[dict], old: str, new: str) -> list[dict]:
+    """The reel's captions rewritten for a new script mode.
+
+    Own script -> English letters converts the current words (your edits stay). Anything else
+    listens to the reel again (a few seconds), because the original words can't be recovered
+    from English letters or a translation.
+    """
+    if new == "roman" and old == "original":
+        return language.romanize_words(current)
+    fresh = _fresh_words(d, post, _section(d, post), new)
+    if not fresh:
+        raise InvalidInput("no speech found in this reel, so there's nothing to rewrite")
+    return fresh
 
 
 def autosync(folder: str, name: str) -> dict:
     """Re-time the captions from the reel's own audio, keeping the user's corrected words."""
     meta_file, post = _reel_paths(folder, name)
     d = meta_file.parent
-    sec = _section(d, post)
-    if sec:
-        fresh = _fresh_words(d, post, sec)
-    else:
-        clip = load_settings().clip
-        fresh = transcribe.words_in_file(d / post["raw"], clip["model"], clip["language"])
+    fresh = _fresh_words(d, post, _section(d, post))
     if not fresh:
         raise InvalidInput("no speech found in this reel, so there's nothing to sync to")
     current = captions.parse_words((d / post["captions"]).read_text(encoding="utf-8"))
@@ -452,7 +493,7 @@ def export_reel(folder: str, name: str, fmt: str, fit: str | None = None) -> dic
     main_ass = (d / post["captions"]).read_text(encoding="utf-8")
     words, hook = captions.parse_words(main_ass), captions.parse_hook(main_ass)
     ass = d / f"{name}.{fmt}.ass"
-    ass.write_text(captions.rebuild(main_ass, words, hook, branding.style_for(fmt, brand, post.get("look")),
+    ass.write_text(captions.rebuild(main_ass, words, hook, _style(fmt, brand, post, words, hook),
                                     branding.template_for(brand, post.get("look")), section[1]), encoding="utf-8")
     out = d / f"{name}.{fmt}.mp4"
     render.export(d / post["source_clip"], ass, out, fmt, fit, branding.logo_for(brand, post.get("logo", True)),

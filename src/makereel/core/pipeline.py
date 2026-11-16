@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 
 from ..errors import MediaError
-from . import branding, captions, highlights, judge, media, render, signals, transcribe
+from . import branding, captions, highlights, judge, language, media, render, signals, transcribe
 from .metrics import stage
 
 log = logging.getLogger(__name__)
@@ -34,6 +34,9 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand:
             ai: dict[str, Any] | None = None) -> list[dict]:
     """Make up to clip['max_clips'] reels from `video` into `out_dir`. Returns their metadata."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    known = folder_language(out_dir)          # a live stream's earlier chunks already detected it
+    if known and not clip.get("language"):
+        clip = {**clip, "language": known}
     write_folder_info(out_dir, meta)
     with stage("probe"):
         total = media.duration(video)
@@ -60,6 +63,9 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand:
             curve, parts = highlights.signal_curve(n, loud, counts, clip["profile"])
             cands = highlights.candidates(curve, k=clip["max_clips"] * 3)
 
+    clip = resolve_language(video, [(c.start, c.end) for c in cands], clip)
+    meta = {**meta, "language": clip["language"]}
+    write_folder_info(out_dir, meta)
     log.info("[2/3] transcribing %d candidate windows (whisper %s)", len(cands), clip["model"])
     for c in cands:
         with stage("transcribe"):
@@ -90,7 +96,7 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
         cuts = signals.scene_cuts(video, c.start, c.start + 3)
     if cuts:
         c.start = round(cuts[0], 2)
-    hook = c.ai.get("title") or make_hook(c.text)
+    mode = branding.script_mode(brand)
     name = next_reel_name(out_dir)
     src, raw, ass, out = (out_dir / f"{name}{ext}" for ext in (".src.mp4", ".raw.mp4", ".ass", ".mp4"))
 
@@ -99,8 +105,14 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
     with stage("render"):
         render.cut_source(video, s0, e0, src)
     with stage("sync"):
-        words = synced_words(src, section, c.words, c.start, clip)
-    ass.write_text(captions.build_ass(words, 0.0, section[1], hook, branding.style_for(render.MAIN_FORMAT, brand),
+        words = synced_words(src, section, c.words, c.start, clip, mode)
+    # the title comes from the precise words (the first, fast pass is rougher, more so outside English)
+    hook_original = c.ai.get("title") or make_hook(" ".join(w["word"] for w in words) if mode == "original"
+                                                   and words else c.text)
+    hook = caption_hook(hook_original, words, mode)
+    script = language.script_of(" ".join(w["word"] for w in words) + " " + hook)
+    ass.write_text(captions.build_ass(words, 0.0, section[1], hook,
+                                      branding.style_for(render.MAIN_FORMAT, brand, None, script),
                                       branding.template_for(brand)), encoding="utf-8")
     with stage("render"):
         render.make_raw(src, raw, render.MAIN_FORMAT, clip["layout"], section)
@@ -112,6 +124,7 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
             "folder": out_dir.name, "name": name, "format": render.MAIN_FORMAT, "fit": clip["layout"],
             "src_offset": section[0], "length": section[1],
             "logo": True, "exports": {}, "score": round(c.score, 2), "why": c.reasons, "hook": hook,
+            "hook_original": hook_original, "language": clip.get("language"),
             "ai": c.ai or None,
             "start": c.start, "end": c.end, **credits(meta, c.start, clip["profile"], hook, brand)}
     (out_dir / f"{name}.json").write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -119,8 +132,35 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
     return post
 
 
+def resolve_language(video: Path, windows: list[tuple[float, float]], clip: dict) -> dict:
+    """Detect the video's language once (unless set) and pick a model that handles it well."""
+    lang = clip.get("language")
+    if not lang:
+        try:
+            with stage("transcribe"):
+                lang, prob = transcribe.detect_language(video, windows, clip["model"])
+            if lang:
+                log.info("   language: %s (%.0f%% sure)", lang, prob * 100)
+        except MediaError as e:
+            log.warning("   language detection skipped: %s", e.message)
+    model = transcribe.model_for(clip["model"], lang, clip.get("model_other", "small"))
+    if model != clip["model"]:
+        log.info("   using the '%s' speech model for %s (more accurate than '%s' outside English)",
+                 model, lang, clip["model"])
+    return {**clip, "language": lang or None, "model": model}
+
+
+def caption_hook(hook: str, words: list[dict], mode: str) -> str:
+    """The on-screen title in the captions' script."""
+    if mode == "roman":
+        return language.romanize_text(hook)
+    if mode == "english" and language.script_of(hook) not in language.LATIN_LIKE:
+        return make_hook(" ".join(w["word"] for w in words))
+    return hook
+
+
 def synced_words(clip_file: Path, section: tuple[float, float], source_words: list[dict], clip_start: float,
-                 clip: dict) -> list[dict]:
+                 clip: dict, mode: str = "original") -> list[dict]:
     """Caption timings measured on the finished clip itself (auto-sync).
 
     The first transcription ran on the long source with fast settings; cutting and re-encoding can
@@ -128,17 +168,17 @@ def synced_words(clip_file: Path, section: tuple[float, float], source_words: li
     timings on exactly the audio viewers hear. Falls back to the source timings if it finds nothing.
     """
     off, length = section
+    translate = mode == "english" and clip.get("language") not in (None, "en")
     try:
         precise = [{**w, "start": round(w["start"] - off, 2), "end": round(w["end"] - off, 2)}
                    for w in transcribe.words_in(clip_file, off, off + length, clip["model"], clip["language"],
-                                                precise=True)]
+                                                precise=True, task="translate" if translate else "transcribe")]
     except MediaError as e:
         log.warning("   caption sync skipped: %s", e.message)
         precise = []
-    if precise:
-        return precise
-    return [{**w, "start": w["start"] - clip_start, "end": w["end"] - clip_start} for w in source_words
-            if w["start"] >= clip_start]
+    words = precise or [{**w, "start": w["start"] - clip_start, "end": w["end"] - clip_start}
+                        for w in source_words if w["start"] >= clip_start]
+    return language.romanize_words(words) if mode == "roman" else words
 
 
 def _apply_judge(cands: list[highlights.Clip], ai: dict, profile: str) -> None:
@@ -164,8 +204,15 @@ def next_reel_name(out_dir: Path) -> str:
     return f"reel_{max(taken, default=0) + 1:02d}"
 
 
+def folder_language(out_dir: Path) -> str | None:
+    try:
+        return json.loads((out_dir / FOLDER_FILE).read_text(encoding="utf-8")).get("language")
+    except (OSError, ValueError):
+        return None
+
+
 def write_folder_info(out_dir: Path, meta: dict) -> None:
-    keys = ("id", "title", "channel", "channel_url", "url", "live_status", "duration")
+    keys = ("id", "title", "channel", "channel_url", "url", "live_status", "duration", "language")
     info = {k: meta.get(k) for k in keys}
     (out_dir / FOLDER_FILE).write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -195,11 +242,10 @@ def credits(meta: dict, start: float, profile: str, hook: str, brand: dict | Non
 
 def make_hook(text: str, max_words: int = 7) -> str:
     """Pick the punchiest sentence of the transcript as the on-screen title."""
-    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if len(s.split()) >= 2]
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?।？！。])\s*", text) if len(s.split()) >= 2]
 
     def punch(s: str) -> int:
-        toks = [re.sub(r"[^\w']", "", t.lower()) for t in s.split()]
-        return s.count("!") * 2 + ("?" in s) + sum(t in highlights.HYPE_WORDS for t in toks)
+        return s.count("!") * 2 + ("?" in s) + highlights.hype_count([{"word": t} for t in s.split()])
 
     best = max(sentences, key=punch, default=text)
     words = best.split()[:max_words]
