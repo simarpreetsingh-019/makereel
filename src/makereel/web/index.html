@@ -207,6 +207,7 @@
       <button data-edtab="text" class="on">Text</button>
       <button data-edtab="timing">Timing</button>
       <button data-edtab="look">Look</button>
+      <button data-edtab="cards">Cards</button>
       <button data-edtab="cut">Cut</button>
       <button data-edtab="export">Export</button>
     </div>
@@ -326,6 +327,24 @@
         <button class="btn" id="lk-reset" type="button">Undo changes</button>
       </div>
       <p class="hint" style="margin:0">Applies to this reel and all its export formats. Set the default for new reels in the Brand tab.</p>
+    </div>
+  </div>
+
+  <div class="editor" data-edpanel="cards" hidden>
+    <div>
+      <video id="cd-video" controls playsinline></video>
+      <p class="hint" style="text-align:center"><span id="cd-time">0.0 s</span></p>
+    </div>
+    <div class="stack">
+      <p class="hint" style="margin:0">Text boxes over the video: a line worth repeating, a note, or a "follow for more" at the end.
+        Pause the video where a card should appear.</p>
+      <div class="row">
+        <button class="btn small" id="cd-add-quote" type="button">+ Quote at playhead</button>
+        <button class="btn small" id="cd-add-note" type="button">+ Note at playhead</button>
+        <button class="btn small" id="cd-add-outro" type="button">+ Outro (last seconds)</button>
+      </div>
+      <div id="cd-list" class="stack"></div>
+      <div class="row"><button class="btn primary" id="cd-save" type="button">Save cards &amp; re-render</button></div>
     </div>
   </div>
 

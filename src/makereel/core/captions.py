@@ -320,3 +320,98 @@ def rebuild(ass: str, words: list[dict], hook: str | None, style: Style | None =
     body = build_ass(words, 0.0, length + 0.5, hook, style or DEFAULT_STYLE, template)
     head = style.header() if style else header_of(ass)
     return head + body[body.index("Format: Layer"):].split("\n", 1)[1]
+
+
+# --------------------------------------------------------------------------- cards (overlays)
+# Text cards shown over the video for a while: a pull quote, a "follow for more" outro, a note.
+# Stored on the reel ({"kind", "text", "start", "end", "position"}) and written into the caption
+# file as "Card" events every time it is saved, so caption edits never lose them.
+CARD_KINDS = ("quote", "note", "outro")
+CARD_POSITIONS = {"top": 8, "middle": 5, "bottom": 2}
+MAX_CARDS = 12
+_RES = re.compile(r"PlayRes([XY]):\s*(\d+)")
+
+
+def clean_cards(cards: list, length: float) -> list[dict]:
+    """Validate cards from the editor. Raises ValueError with a readable message."""
+    if not isinstance(cards, list) or len(cards) > MAX_CARDS:
+        raise ValueError(f"at most {MAX_CARDS} cards per reel")
+    out = []
+    for c in cards:
+        kind = c.get("kind", "note")
+        text = " ".join(str(c.get("text", "")).split())
+        if kind not in CARD_KINDS:
+            raise ValueError(f"card kind must be one of {', '.join(CARD_KINDS)}")
+        if not text or len(text) > 200:
+            raise ValueError("card text must be 1 to 200 characters")
+        pos = c.get("position") or ("middle" if kind == "outro" else "top")
+        if pos not in CARD_POSITIONS:
+            raise ValueError("card position must be top, middle or bottom")
+        if kind == "outro":
+            secs = float(c.get("secs", 3))
+            if not 1 <= secs <= 10:
+                raise ValueError("an outro card lasts 1 to 10 seconds")
+            out.append({"kind": kind, "text": text, "position": pos, "secs": round(secs, 2)})
+            continue
+        start, end = float(c.get("start", 0)), float(c.get("end", 0))
+        if not 0 <= start < end or end - start < 0.5:
+            raise ValueError("a card must show for at least half a second")
+        out.append({"kind": kind, "text": text, "position": pos,
+                    "start": round(start, 2), "end": round(min(end, length), 2) if length else round(end, 2)})
+    return out
+
+
+def shift_cards(cards: list[dict], seconds: float, length: float) -> list[dict]:
+    """Move timed cards by `seconds` (after a trim or split); drop those now outside the reel."""
+    out = []
+    for c in cards:
+        if c["kind"] == "outro":
+            out.append(c)
+            continue
+        s, e = c["start"] + seconds, min(c["end"] + seconds, length)
+        if e - max(s, 0) >= 0.5:
+            out.append({**c, "start": round(max(s, 0), 2), "end": round(e, 2)})
+    return out
+
+
+def _card_style(ass: str, font: str) -> str:
+    res = dict(_RES.findall(ass))
+    w, h = int(res.get("X", 1080)), int(res.get("Y", 1920))
+    size = round(min(w, h) * 0.052)
+    side = round(w * 0.09)
+    # BorderStyle 3: an opaque box in OutlineColour behind dark text; Outline = padding around the text
+    return (f"Style: Card,{font},{size},&H00141414,&H00141414,&H00FFFFFF,&H64000000,-1,0,0,0,100,100,0,0,"
+            f"3,{round(size * 0.45)},{round(size * 0.12)},5,{side},{round(w * 0.15)},{round(h * 0.2)},1\n")
+
+
+def set_cards(ass: str, cards: list[dict] | None, length: float) -> str:
+    """Rewrite the caption file's Card events (and its Card style) from the reel's cards."""
+    lines = [l for l in ass.splitlines(keepends=True)
+             if not (l.startswith("Dialogue:") and ",Card,," in l) and not l.startswith("Style: Card,")]
+    text = "".join(lines)
+    if not cards:
+        return text
+    font = next((l.split(",")[1] for l in lines if l.startswith("Style: Caption,")), DEFAULT_STYLE.font)
+    i = text.find("\n[Events]")
+    i = i + 1 if i >= 0 else len(text)
+    head = text[:i].rstrip("\n") + "\n" + _card_style(text, font) + "\n"
+    text = head + text[i:]
+    res = dict(_RES.findall(text))
+    h = int(res.get("Y", 1920))
+    margin = {"top": round(h * 0.16), "middle": 0, "bottom": round(h * 0.3)}
+    events = []
+    for c in cards:
+        if c["kind"] == "outro":
+            start, end = max(0.0, length - c["secs"]), length
+        else:
+            start, end = c["start"], min(c["end"], length or c["end"])
+        if end <= start:
+            continue
+        body = re.sub(r"[{}\\]", "", c["text"])
+        if c["kind"] == "quote":
+            body = f"“{body}”"
+        tags = f"{{\\an{CARD_POSITIONS[c['position']]}\\fad(180,180)}}"
+        events.append(f"Dialogue: 2,{_ts(start)},{_ts(end)},Card,,0,0,{margin[c['position']]},,{tags}{body}\n")
+    if not text.endswith("\n"):
+        text += "\n"
+    return text + "".join(events)

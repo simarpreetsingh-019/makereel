@@ -2,6 +2,7 @@
 //   Text    on-screen title, captions as a paragraph, post text, logo on/off
 //   Timing  live caption preview over the clean video, shift slider, auto-sync, tap-to-sync, per-word nudges
 //   Look    caption style template, framing (incl. follow-the-speaker), height, size, background box
+//   Cards   text overlays: quotes, notes, an outro over the last seconds
 //   Cut     trim / extend the edges, split in two
 //   Export  the same reel as 9:16, 4:5, 1:1 or 16:9 (blur / crop / bars)
 import { api, media } from "../api.js";
@@ -51,6 +52,9 @@ function fill(reel) {
   cur.look = { ...reel.look };
   fillLook();
   fillCut(reel);
+  $("#cd-video").src = media(reel.video);
+  cur.cards = (reel.cards || []).map((c) => ({ ...c }));
+  drawCards();
   drawWordList();
   drawExports();
 }
@@ -171,7 +175,49 @@ const LANGS = { en: "English", hi: "Hindi", pa: "Punjabi", ur: "Urdu", bn: "Beng
 function showTab(tab) {
   document.querySelectorAll("#editor [data-edtab]").forEach((b) => b.classList.toggle("on", b.dataset.edtab === tab));
   document.querySelectorAll("#editor [data-edpanel]").forEach((p) => (p.hidden = p.dataset.edpanel !== tab));
-  ["#ed-video", "#tm-video", "#lk-video", "#cut-video"].forEach((v) => $(v).pause());
+  ["#ed-video", "#tm-video", "#lk-video", "#cut-video", "#cd-video"].forEach((v) => $(v).pause());
+}
+
+// ------------------------------------------------------------------ cards (text overlays)
+function wordsNear(t, secs = 2.5) {
+  return cur.words.filter((w) => w.start >= t - 0.3 && w.start < t + secs).map((w) => w.word).join(" ");
+}
+
+function addCard(kind) {
+  const t = Math.round($("#cd-video").currentTime * 10) / 10;
+  const len = cur.reel.length || $("#cd-video").duration || 30;
+  if (kind === "outro") {
+    if (cur.cards.some((c) => c.kind === "outro")) return toast("This reel already has an outro card");
+    cur.cards.push({ kind, text: "Follow for more", position: "middle", secs: 3 });
+  } else {
+    const start = Math.min(t, Math.max(0, len - 1));
+    cur.cards.push({ kind, text: kind === "quote" ? wordsNear(t) || "Your quote" : "", position: "top",
+                     start, end: Math.min(len, start + 3) });
+  }
+  drawCards();
+}
+
+function drawCards() {
+  const pos = (c) => ["top", "middle", "bottom"].map((p) => `<option ${c.position === p ? "selected" : ""}>${p}</option>`).join("");
+  $("#cd-list").innerHTML = cur.cards.length ? cur.cards.map((c, i) => `
+    <div class="card-row" data-i="${i}">
+      <span class="kind">${esc(c.kind)}</span>
+      <button class="link" data-act="del" type="button">remove</button>
+      <textarea data-k="text" maxlength="200" placeholder="Card text">${esc(c.text)}</textarea>
+      <div class="row" style="grid-column:1/-1">
+        ${c.kind === "outro"
+          ? `<label>last <input type="number" data-k="secs" min="1" max="10" step="0.5" value="${c.secs}"> s</label>`
+          : `<label>from <input type="number" data-k="start" min="0" step="0.1" value="${c.start}"></label>
+             <button class="btn tiny" data-act="start" type="button">at playhead</button>
+             <label>to <input type="number" data-k="end" min="0" step="0.1" value="${c.end}"></label>
+             <button class="btn tiny" data-act="end" type="button">at playhead</button>`}
+        <label>at <select data-k="position">${pos(c)}</select></label>
+      </div>
+    </div>`).join("") : `<p class="hint" style="margin:0">No cards on this reel yet.</p>`;
+}
+
+function readCards() {
+  return cur.cards.map((c) => ({ ...c, text: c.text.trim() }));
 }
 
 // ------------------------------------------------------------------ saving
@@ -294,7 +340,7 @@ export function mount() {
   const dialog = $("#editor");
   $("#ed-close").addEventListener("click", () => dialog.close());
   dialog.addEventListener("close", () => {
-    ["#ed-video", "#tm-video", "#lk-video", "#cut-video"].forEach((v) => $(v).pause());
+    ["#ed-video", "#tm-video", "#lk-video", "#cut-video", "#cd-video"].forEach((v) => $(v).pause());
     if (cur) stopTapSync();
   });
   document.querySelectorAll("#editor [data-edtab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.edtab)));
@@ -428,6 +474,30 @@ export function mount() {
     save(body, e.currentTarget, fit === "split" && fitChanged
       ? "Saved. If no two people or webcam were found, the blurred layout is used."
       : fit === "track" && fitChanged ? "Saved. If no steady face was found, the blurred layout is used." : look.script !== cur.reel.look.script ? "Captions rewritten and re-rendered." : "Look saved and re-rendered.");
+  });
+
+  // Cards tab
+  $("#cd-video").addEventListener("timeupdate", () => { $("#cd-time").textContent = `${$("#cd-video").currentTime.toFixed(1)} s`; });
+  $("#cd-add-quote").addEventListener("click", () => addCard("quote"));
+  $("#cd-add-note").addEventListener("click", () => addCard("note"));
+  $("#cd-add-outro").addEventListener("click", () => addCard("outro"));
+  $("#cd-list").addEventListener("input", (e) => {
+    const row = e.target.closest("[data-i]"), k = e.target.dataset.k;
+    if (!row || !k) return;
+    const c = cur.cards[row.dataset.i];
+    c[k] = e.target.type === "number" ? Number(e.target.value) : e.target.value;
+  });
+  $("#cd-list").addEventListener("click", (e) => {
+    const row = e.target.closest("[data-i]"), act = e.target.dataset.act;
+    if (!row || !act) return;
+    const i = Number(row.dataset.i);
+    if (act === "del") cur.cards.splice(i, 1);
+    else cur.cards[i][act] = Math.round($("#cd-video").currentTime * 10) / 10;
+    drawCards();
+  });
+  $("#cd-save").addEventListener("click", (e) => {
+    if (cur.cards.some((c) => !c.text.trim())) return toast("Give every card some text, or remove it");
+    save({ cards: readCards() }, e.currentTarget, "Cards saved and re-rendered.");
   });
 
   // Export tab

@@ -171,7 +171,7 @@ def get_reel(folder: str, name: str) -> dict:
     return {**_summary(folder, name, post, d / post["file"]),
             "transcript": " ".join(w["word"] for w in words), "words": words, "ass": ass_text,
             "templates": {k: v["label"] for k, v in captions.TEMPLATES.items()},
-            "safe_zone": _safe_zone(),
+            "safe_zone": _safe_zone(), "cards": post.get("cards") or [],
             "language": _language(d, post), "script": language.script_of(" ".join(w["word"] for w in words)),
             "can_trim": bool(sec), "length": sec[1] if sec else captions.length_of(ass_text),
             "room_before": sec[0] if sec else 0.0,
@@ -205,6 +205,7 @@ def _require_section(d: Path, post: dict) -> tuple[float, float]:
 def _write_and_render(d: Path, meta_file: Path, post: dict, ass_text: str, brand: dict,
                       reraw: bool = False) -> None:
     """Save captions + metadata, (re)make the clean 9:16 if needed, burn, and refresh exports."""
+    ass_text = captions.set_cards(ass_text, post.get("cards"), post.get("length") or captions.length_of(ass_text))
     (d / post["captions"]).write_text(ass_text, encoding="utf-8")
     if reraw:
         render.make_raw(d / post["source_clip"], d / post["raw"], render.MAIN_FORMAT,
@@ -247,7 +248,7 @@ def _rebuild(post: dict, current: str, words: list[dict], hook: str | None, bran
 def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str | None = None,
                 transcript: str | None = None, words: list[dict] | None = None, offset: float | None = None,
                 ass: str | None = None, logo: bool | None = None, restyle: bool = False,
-                look: dict | None = None, fit: str | None = None) -> dict:
+                look: dict | None = None, fit: str | None = None, cards: list | None = None) -> dict:
     """Apply edits and re-render the reel (and any exports).
 
     - `transcript`: the caption words as a paragraph. Unchanged words keep their timing; edited,
@@ -264,10 +265,17 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
        "template": "pop"}. Keys left out keep their current value.
     - `fit`: how the 9:16 picture is framed: blur, crop, pad, track (follow the speaker)
       or split (two people, or webcam over gameplay).
+    - `cards`: text overlays, replacing the current ones: [{"kind": "quote" | "note", "text", "start", "end",
+      "position": "top" | "middle" | "bottom"}] or {"kind": "outro", "text", "secs"} (the last seconds).
     """
     meta_file, post = _reel_paths(folder, name)
     d = meta_file.parent
     current = (d / post["captions"]).read_text(encoding="utf-8")
+    if cards is not None:
+        try:
+            post["cards"] = captions.clean_cards(cards, post.get("length") or captions.length_of(current))
+        except (TypeError, ValueError) as e:
+            raise InvalidInput(str(e)) from e
     new_hook = hook.strip() if hook is not None and hook.strip() else post.get("hook")
     brand = load_settings().brand
     reraw = False
@@ -405,6 +413,7 @@ def trim_reel(folder: str, name: str, start: float = 0.0, end: float = 0.0) -> d
     words = sorted(kept + fresh, key=lambda w: w["start"])
 
     post["src_offset"], post["length"] = round(new_off, 3), new_len
+    post["cards"] = captions.shift_cards(post.get("cards") or [], -shift, new_len)
     post["start"] = round(post.get("start", 0) + shift, 2)
     post["end"] = round(post["start"] + new_len, 2)
     brand = load_settings().brand
@@ -428,7 +437,8 @@ def split_reel(folder: str, name: str, at: float) -> dict:
     new = next_reel_name(d)
     second = {**post, "name": new, "file": f"{new}.mp4", "raw": f"{new}.raw.mp4", "captions": f"{new}.ass",
               "source_clip": f"{new}.src.mp4", "exports": {}, "src_offset": round(off + at, 3),
-              "length": round(length - at, 3), "start": round(post.get("start", 0) + at, 2)}
+              "length": round(length - at, 3), "start": round(post.get("start", 0) + at, 2),
+              "cards": captions.shift_cards(post.get("cards") or [], -at, round(length - at, 3))}
     shutil.copyfile(d / post["source_clip"], d / second["source_clip"])   # each reel owns its master
     later = [{**w, "start": round(w["start"] - at, 2), "end": round(w["end"] - at, 2)} for w in words
              if w["start"] >= at]
@@ -438,6 +448,7 @@ def split_reel(folder: str, name: str, at: float) -> dict:
                       brand, reraw=True)
 
     post["length"], post["end"] = round(at, 3), round(post.get("start", 0) + at, 2)
+    post["cards"] = [c for c in captions.shift_cards(post.get("cards") or [], 0, at) if c["kind"] != "outro"]
     earlier = [w for w in words if w["start"] < at]
     _write_and_render(d, meta_file, post, _rebuild(post, current, earlier, post.get("hook"), brand, False, at),
                       brand, reraw=True)
@@ -474,15 +485,17 @@ def merge_reels(folder: str, names: list[str]) -> dict:
     media.run(cmd + ["-filter_complex", graph, "-map", "[v]", "-map", "[a]", *media.encoder_args("raw"),
                      "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(src)])
 
-    words, t = [], 0.0
-    for pd, post, (_, length) in parts:
+    words, cards, t = [], [], 0.0
+    for i, (pd, post, (_, length)) in enumerate(parts):
+        cards += [c for c in captions.shift_cards(post.get("cards") or [], t, t + length)
+                  if c["kind"] != "outro" or i == len(parts) - 1]
         ass_text = (pd / post["captions"]).read_text(encoding="utf-8")
         words += [{**x, "start": round(x["start"] + t, 2), "end": round(x["end"] + t, 2)}
                   for x in captions.parse_words(ass_text)]
         t += length
     merged = {**first, "name": new, "file": f"{new}.mp4", "raw": f"{new}.raw.mp4", "captions": f"{new}.ass",
               "source_clip": src.name, "exports": {}, "src_offset": 0.0, "length": round(t, 3),
-              "end": round(first.get("start", 0) + t, 2), "merged_from": names}
+              "end": round(first.get("start", 0) + t, 2), "merged_from": names, "cards": cards}
     brand = load_settings().brand
     current = (d / first["captions"]).read_text(encoding="utf-8")
     (d / f"{new}.json").write_text("{}", encoding="utf-8")
@@ -503,8 +516,9 @@ def export_reel(folder: str, name: str, fmt: str, fit: str | None = None) -> dic
     main_ass = (d / post["captions"]).read_text(encoding="utf-8")
     words, hook = captions.parse_words(main_ass), captions.parse_hook(main_ass)
     ass = d / f"{name}.{fmt}.ass"
-    ass.write_text(captions.rebuild(main_ass, words, hook, _style(fmt, brand, post, words, hook),
-                                    branding.template_for(brand, post.get("look")), section[1]), encoding="utf-8")
+    text = captions.rebuild(main_ass, words, hook, _style(fmt, brand, post, words, hook),
+                            branding.template_for(brand, post.get("look")), section[1])
+    ass.write_text(captions.set_cards(text, post.get("cards"), section[1]), encoding="utf-8")
     out = d / f"{name}.{fmt}.mp4"
     render.export(d / post["source_clip"], ass, out, fmt, fit, branding.logo_for(brand, post.get("logo", True), fmt),
                   branding.fonts_dir(), section)

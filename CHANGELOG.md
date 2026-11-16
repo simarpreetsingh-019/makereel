@@ -10,6 +10,9 @@
   (podcasts, interviews) are stacked one above the other, each framed head and shoulders; a streamer's webcam
   over gameplay becomes webcam on top (40%) and the game below. Falls back to the blurred layout when it finds
   neither. Webcam faces are small, so this looks at frames at 640 px instead of 320.
+- **Cards** (editor → Cards): text boxes over the video. A **quote** (pre-filled with the words at the playhead),
+  a **note**, or an **outro** over the last seconds ("Follow for more"). Kept through caption edits, trims,
+  splits, joins and exports.
 
 ## 0.5.0 (2026-11-16)
 

@@ -239,3 +239,10 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .safe-guide em { position: absolute; right: 4px; font: 600 10px/1.4 system-ui; color: #fff; background: #ff3b5ccc;
                  padding: 1px 5px; border-radius: 4px 4px 0 0; font-style: normal; }
 .tm-stage .safe-guide { border-radius: 10px; overflow: hidden; }
+
+/* cards (text overlays) */
+.card-row { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.card-row textarea { grid-column: 1 / -1; min-height: 44px; }
+.card-row .row { gap: 6px; flex-wrap: wrap; align-items: center; }
+.card-row input[type=number] { width: 70px; }
+.card-row .kind { font-weight: 600; font-size: 13px; text-transform: capitalize; }
