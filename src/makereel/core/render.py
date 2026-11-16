@@ -73,6 +73,16 @@ def reframe_filter(fmt: str, fit: str, track=None, fps: int = 30) -> str:
     if fit == "track":
         if track is None:
             fit = "blur"
+        elif getattr(track, "zoom", None):
+            # a whole-frame shot: scale and move the picture per frame over a blurred copy, so the
+            # camera zooms out to show everyone and back in to the speaker
+            scale, centre, sw_, sh_ = track.zoom
+            bw, bh = w // 4, h // 4
+            return (f"[0:v]split[a][b];[a]scale={bw}:{bh}:force_original_aspect_ratio=increase,crop={bw}:{bh},"
+                    f"boxblur=10:2,eq=brightness=-0.08,scale={w}:{h},setsar=1[bg];"
+                    f"[b]scale=w='trunc({sw_}*({scale})/2)*2':h='trunc({sh_}*({scale})/2)*2':eval=frame[fg];"
+                    f"[bg][fg]overlay=x='{w / 2}-({centre})*w/{sw_}':y='(H-h)/2':eval=frame,"
+                    f"setsar=1,fps={fps}[v]")
         else:
             expr, cw, ch = track
             return f"[0:v]crop=w={cw}:h={ch}:x='{expr}':y=0,scale={w}:{h},setsar=1,fps={fps}[v]"

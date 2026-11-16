@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Show everyone** shots in the Camera tab: pick a shot and the reel zooms out smoothly to the whole frame
+  (both people over a blurred fill), then zooms back in to the speaker at the next cut.
 - **Auto layout** (new default): split screen for two people or a webcam over gameplay, follow the speaker for one
   steady face, otherwise blur. The Layout choice now sits above both the link box and the upload box.
 - **Follow the speaker follows who is talking**: mouth movement decides who is on screen (it used to lock on the

@@ -290,6 +290,7 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
     - `cards`: text overlays, replacing the current ones: [{"kind": "quote" | "note", "text", "start", "end",
       "position": "top" | "middle" | "bottom"}] or {"kind": "outro", "text", "secs"} (the last seconds).
     - `camera`: follow-the-speaker shots, replacing the found ones: [{"start": seconds, "x": 0..1 centre}],
+      plus "wide": true on a shot that shows the whole frame (everyone at once),
       or "auto" to find them again from who is talking.
     """
     meta_file, post = _reel_paths(folder, name)

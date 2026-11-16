@@ -72,7 +72,7 @@ function camLen() {
 // The distinct spots the camera points at, left to right: "people" for labels, colours and switching.
 function camPeople() {
   const spots = [];
-  cur.shots.forEach((s) => { if (!spots.some((x) => Math.abs(x - s.x) < SAME_SPOT)) spots.push(s.x); });
+  cur.shots.forEach((s) => { if (!s.wide && !spots.some((x) => Math.abs(x - s.x) < SAME_SPOT)) spots.push(s.x); });
   return spots.sort((a, b) => a - b);
 }
 
@@ -112,7 +112,7 @@ function drawCamera() {
   const len = camLen(), t = camTime();
   const bar = cur.shots.map((s, i) => {
     const end = i + 1 < cur.shots.length ? cur.shots[i + 1].start : len;
-    const p = personOf(s.x);
+    const p = s.wide ? { name: "Everyone", colour: "#9aa3ad" } : personOf(s.x);
     return `<div class="cam-shot${i === cur.shotSel ? " sel" : ""}" data-shot="${i}"
       style="left:${(s.start / len) * 100}%;width:${((end - s.start) / len) * 100}%;background:${p.colour}">${p.name}</div>`;
   }).join("") + cur.shots.slice(1).map((s, i) =>
@@ -120,15 +120,18 @@ function drawCamera() {
     + `<div class="cam-head" style="left:${(Math.min(t, len) / len) * 100}%"></div>`;
   $("#cm-bar").innerHTML = bar;
   const sel = cur.shots[cur.shotSel];
-  $("#cm-sel").textContent = sel ? `Selected: shot ${cur.shotSel + 1} of ${cur.shots.length}, on ${personOf(sel.x).name.toLowerCase()} from ${sel.start.toFixed(1)} s` : "";
+  $("#cm-sel").textContent = sel ? `Selected: shot ${cur.shotSel + 1} of ${cur.shots.length}, on ${sel.wide ? "the whole frame" : personOf(sel.x).name.toLowerCase()} from ${sel.start.toFixed(1)} s` : "";
   $("#cm-del").disabled = cur.shotSel === 0;
-  $("#cm-swap").disabled = camPeople().length < 2;
+  $("#cm-swap").disabled = camPeople().length < 2 && !sel?.wide;
+  $("#cm-wide").textContent = sel?.wide ? "Back to one person" : "Show everyone";
   moveCamBox();
 }
 
 function moveCamBox() {
   const share = cur.reel.crop_share || 0.35;
-  const x = cur.shots[shotAt(camTime())]?.x ?? 0.5;
+  const shot = cur.shots[shotAt(camTime())];
+  if (shot?.wide) { Object.assign($("#cm-box").style, { left: "0%", width: "100%" }); return; }
+  const x = shot?.x ?? 0.5;
   const left = Math.min(Math.max(x - share / 2, 0), 1 - share);
   Object.assign($("#cm-box").style, { left: `${left * 100}%`, width: `${share * 100}%` });
 }
@@ -180,14 +183,16 @@ function mountCamera() {
   // click a person in the wide video: the selected shot now points at them
   $("#cm-hit").addEventListener("click", (e) => {
     const box = e.currentTarget.getBoundingClientRect();
-    cur.shots[cur.shotSel].x = Math.round(((e.clientX - box.left) / box.width) * 1000) / 1000;
+    const s = cur.shots[cur.shotSel];
+    s.x = Math.round(((e.clientX - box.left) / box.width) * 1000) / 1000;
+    delete s.wide;
     drawCamera();
   });
 
   $("#cm-cut").addEventListener("click", () => {
     const t = Math.round(camTime() * 10) / 10, i = shotAt(t);
     if (t - cur.shots[i].start < 0.3 || (cur.shots[i + 1] && cur.shots[i + 1].start - t < 0.3)) return toast("Too close to another cut");
-    const other = camPeople().find((p) => Math.abs(p - cur.shots[i].x) >= SAME_SPOT) ?? cur.shots[i].x;
+    const other = camPeople().find((p) => cur.shots[i].wide || Math.abs(p - cur.shots[i].x) >= SAME_SPOT) ?? cur.shots[i].x;
     cur.shots.splice(i + 1, 0, { start: t, x: other });
     cur.shotSel = i + 1;
     drawCamera();
@@ -195,7 +200,13 @@ function mountCamera() {
   $("#cm-swap").addEventListener("click", () => {
     const people = camPeople(), s = cur.shots[cur.shotSel];
     const i = people.findIndex((p) => Math.abs(p - s.x) < SAME_SPOT);
-    s.x = people[(i + 1) % people.length];
+    if (s.wide) delete s.wide; else s.x = people[(i + 1) % people.length] ?? s.x;
+    drawCamera();
+  });
+  // whole-frame shot: the reel zooms out to show everyone, then back in at the next cut
+  $("#cm-wide").addEventListener("click", () => {
+    const s = cur.shots[cur.shotSel];
+    if (s.wide) delete s.wide; else s.wide = true;
     drawCamera();
   });
   $("#cm-del").addEventListener("click", () => {
@@ -206,7 +217,8 @@ function mountCamera() {
   });
   $("#cm-save").addEventListener("click", (e) => {
     // neighbouring shots on the same person are one shot
-    const shots = cur.shots.filter((s, i) => i === 0 || Math.abs(s.x - cur.shots[i - 1].x) >= SAME_SPOT);
+    const same = (a, b) => (a.wide && b.wide) || (!a.wide && !b.wide && Math.abs(a.x - b.x) < SAME_SPOT);
+    const shots = cur.shots.filter((s, i) => i === 0 || !same(s, cur.shots[i - 1]));
     save({ camera: shots }, e.currentTarget, "Camera saved and re-rendered.");
   });
   $("#cm-auto").addEventListener("click", (e) => {

@@ -299,7 +299,10 @@ def clean_shots(shots, length: float | None = None) -> list[dict] | None:
             continue
         if length is not None and t >= length:
             continue
-        out.append({"start": round(max(t, 0.0), 2), "x": round(min(max(x, 0.0), 1.0), 3)})
+        shot = {"start": round(max(t, 0.0), 2), "x": round(min(max(x, 0.0), 1.0), 3)}
+        if isinstance(s, dict) and s.get("wide"):
+            shot["wide"] = True                         # show the whole frame (everyone at once)
+        out.append(shot)
     out.sort(key=lambda s: s["start"])
     if not out:
         return None
@@ -311,9 +314,9 @@ def shift_shots(shots: list[dict] | None, seconds: float, length: float) -> list
     """Shots for a reel whose start moved by `seconds` (trim/split): keep the one in view at the new start."""
     if not shots:
         return None
-    moved = [{"start": s["start"] - seconds, "x": s["x"]} for s in shots]
+    moved = [{**s, "start": s["start"] - seconds} for s in shots]
     current = [s for s in moved if s["start"] <= 0]
-    kept = ([{"start": 0.0, "x": current[-1]["x"]}] if current else []) + [s for s in moved if s["start"] > 0]
+    kept = ([{**current[-1], "start": 0.0}] if current else []) + [s for s in moved if s["start"] > 0]
     return clean_shots(kept, length)
 
 
@@ -327,8 +330,50 @@ def detect_shots(video: Path, start: float, length: float) -> list[dict] | None:
 
 
 class Crop(tuple):
-    """(x expression, crop width, crop height), plus the shots it was built from."""
+    """(x expression, crop width, crop height), plus the shots it was built from.
+
+    When a shot shows the whole frame, `zoom` is set instead: (scale expression, centre-x expression,
+    source width, source height) for an animated zoom over a blurred background.
+    """
     shots: list[dict]
+    zoom: tuple | None = None
+
+
+ZOOM_TIME = 0.7            # seconds a zoom out to the whole frame (or back in) takes
+
+
+def _piecewise(keys: list[tuple[float, float, float, bool]], fmt) -> str:
+    """ffmpeg expression of t through keys (start, end time, value, eased); holds between them."""
+    expr = fmt(keys[-1][2])
+    for (_, _t0, v0, _), (t1s, t1, v1, eased) in reversed(list(zip(keys[:-1], keys[1:], strict=True))):
+        # hold v0 until t1s, then move to v1 by t1
+        if v0 == v1 or t1 <= t1s:
+            move = fmt(v1)
+        else:
+            p = f"((t-{t1s:.3f})/{t1 - t1s:.3f})"
+            ease = f"({p}*{p}*(3-2*{p}))" if eased else p
+            move = f"({fmt(v0)}+({fmt(v1 - v0)})*{ease})"
+        expr = f"if(lt(t\\,{t1s:.3f})\\,{fmt(v0)}\\,if(lt(t\\,{t1:.3f})\\,{move}\\,{expr}))"
+    return expr
+
+
+def _zoom_from_shots(shots: list[dict], w: int, h: int, out_w: int, out_h: int, crop_w: int) -> tuple:
+    tight, wide = out_h / h, min(out_w / w, out_h / h)
+
+    def state(shot):
+        if shot.get("wide"):
+            return wide, w / 2
+        left = min(max(shot["x"] * w - crop_w / 2, 0), w - crop_w)
+        return tight, left + crop_w / 2
+
+    keys = [(0.0, 0.0, *state(shots[0]))]
+    for prev, shot in zip(shots[:-1], shots[1:], strict=True):
+        zooming = bool(prev.get("wide")) != bool(shot.get("wide"))
+        dur = ZOOM_TIME if zooming else CUT_GLIDE
+        keys.append((shot["start"], shot["start"] + dur, *state(shot), zooming))
+    scale = _piecewise([(k[0], k[1], k[2], k[4] if len(k) > 4 else False) for k in keys], lambda v: f"{v:.5f}")
+    centre = _piecewise([(k[0], k[1], k[3], k[4] if len(k) > 4 else False) for k in keys], lambda v: f"{v:.1f}")
+    return scale, centre, w, h
 
 
 def crop_from_shots(video: Path, shots: list[dict] | None, out_w: int, out_h: int) -> Crop | None:
@@ -357,6 +402,8 @@ def crop_from_shots(video: Path, shots: list[dict] | None, out_w: int, out_h: in
         expr = f"if(lt(t\\,{t1:.2f})\\,{seg}\\,{expr})"
     crop = Crop((expr, crop_w, h))
     crop.shots = shots
+    if any(s.get("wide") for s in shots):
+        crop.zoom = _zoom_from_shots(shots, w, h, out_w, out_h, crop_w)
     return crop
 
 
