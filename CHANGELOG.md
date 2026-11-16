@@ -6,6 +6,10 @@
 - **Safe zones** (Brand → Keep clear of app buttons: All apps, TikTok, Reels, Shorts or Off). On 9:16 reels,
   captions stay above the account name and description, clear of the like/share column, and the title and logo
   stay below the top tabs. The Look editor and Brand preview shade the covered areas. Default: All apps.
+- **Split screen layout** (`split`, in Look → Framing and the Layout option): two people side by side
+  (podcasts, interviews) are stacked one above the other, each framed head and shoulders; a streamer's webcam
+  over gameplay becomes webcam on top (40%) and the game below. Falls back to the blurred layout when it finds
+  neither. Webcam faces are small, so this looks at frames at 640 px instead of 320.
 
 ## 0.5.0 (2026-11-16)
 

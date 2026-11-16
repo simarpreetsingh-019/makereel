@@ -424,9 +424,10 @@ export function mount() {
     const body = {};
     if (changed) body.look = look;
     if (fitChanged) body.fit = fit;
-    $("#ed-msg").textContent = fit === "track" && fitChanged ? "Finding the speaker and re-rendering…" : "Rendering…";
-    save(body, e.currentTarget, fit === "track" && fitChanged
-      ? "Saved. If no steady face was found, the blurred layout is used." : look.script !== cur.reel.look.script ? "Captions rewritten and re-rendered." : "Look saved and re-rendered.");
+    $("#ed-msg").textContent = ["track", "split"].includes(fit) && fitChanged ? "Finding the speaker and re-rendering…" : "Rendering…";
+    save(body, e.currentTarget, fit === "split" && fitChanged
+      ? "Saved. If no two people or webcam were found, the blurred layout is used."
+      : fit === "track" && fitChanged ? "Saved. If no steady face was found, the blurred layout is used." : look.script !== cur.reel.look.script ? "Captions rewritten and re-rendered." : "Look saved and re-rendered.");
   });
 
   // Export tab

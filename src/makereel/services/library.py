@@ -262,7 +262,8 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
     - `look`: caption placement, background and template, e.g. to avoid subtitles already in the video:
       {"vertical": 0.4, "size": 0.9, "box": true, "box_colour": "#000000", "box_opacity": 0.6,
        "template": "pop"}. Keys left out keep their current value.
-    - `fit`: how the 9:16 picture is framed: blur, crop, pad or track (follow the speaker).
+    - `fit`: how the 9:16 picture is framed: blur, crop, pad, track (follow the speaker)
+      or split (two people, or webcam over gameplay).
     """
     meta_file, post = _reel_paths(folder, name)
     d = meta_file.parent

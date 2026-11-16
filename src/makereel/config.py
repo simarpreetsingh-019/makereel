@@ -100,7 +100,7 @@ CLIP_DEFAULTS: dict[str, Any] = {
     "min_len": 15,
     "max_len": 45,
     "model": "base",         # whisper size: tiny | base | small | medium | large-v3
-    "layout": "blur",        # blur | crop | pad | track (follow the speaker)
+    "layout": "blur",        # blur | crop | pad | track (follow the speaker) | split (two people, or webcam + game)
     "language": None,        # None = auto-detect (once per video, so every reel matches)
     "model_other": "small",  # model for non-English speech when `model` is tiny/base ("same" = don't switch)
     "silence": False,        # trim dead air with auto-editor (talk content)
@@ -150,7 +150,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
 
 INT_SETTINGS = ("poll_minutes", "max_parallel_live", "keep_days", "buffer_minutes",
                 "clips_per_hour", "max_height")
-CLIP_CHOICES = {"profile": ("gameplay", "talk"), "layout": ("blur", "crop", "pad", "track"),
+CLIP_CHOICES = {"profile": ("gameplay", "talk"), "layout": ("blur", "crop", "pad", "track", "split"),
                 "model": ("tiny", "base", "small", "medium", "large-v3"),
                 "model_other": ("same", "small", "medium", "large-v3")}
 

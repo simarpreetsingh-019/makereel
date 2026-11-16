@@ -28,7 +28,8 @@ FORMATS: dict[str, tuple[int, int]] = {
     "1x1": (1080, 1080),    # feed posts, LinkedIn, X
     "16x9": (1920, 1080),   # YouTube, X, websites
 }
-FITS = ("blur", "crop", "pad", "track")   # blurred fill · crop to fill · black bars · follow the speaker
+FITS = ("blur", "crop", "pad", "track", "split")
+# blurred fill · crop to fill · black bars · follow the speaker · split screen (two people, or webcam + game)
 LOGO_POSITIONS = ("top-left", "top-right", "bottom-left", "bottom-right")
 MAIN_FORMAT = "9x16"
 
@@ -51,12 +52,24 @@ def _check_format(fmt: str, fit: str) -> tuple[int, int]:
     return FORMATS[fmt]
 
 
-def reframe_filter(fmt: str, fit: str, track: tuple[str, int, int] | None = None) -> str:
+def reframe_filter(fmt: str, fit: str, track=None) -> str:
     """Filter chain (input [0:v] → output [v]) that turns any shape into `fmt`.
 
-    fit="track" needs `track` from framing.crop_expression; without it, it falls back to blur.
+    fit="track" needs `track` from framing.crop_expression; fit="split" needs the panels from
+    framing.split_layout. Without them they fall back to blur.
     """
     w, h = _check_format(fmt, fit)
+    if fit == "split":
+        if not track:
+            fit = "blur"
+        else:
+            n = len(track)
+            parts = [f"[0:v]split={n}" + "".join(f"[s{i}]" for i in range(n))]
+            for i, ((x, y, cw, ch), ph) in enumerate(track):
+                parts.append(f"[s{i}]crop={cw}:{ch}:{x}:{y},scale={w}:{ph}:force_original_aspect_ratio=increase,"
+                             f"crop={w}:{ph},setsar=1[p{i}]")
+            parts.append("".join(f"[p{i}]" for i in range(n)) + f"vstack=inputs={n},fps=30[v]")
+            return ";".join(parts)
     if fit == "track":
         if track is None:
             fit = "blur"
@@ -128,12 +141,14 @@ def cut_source(src: Path, start: float, end: float, out: Path) -> None:
 
 
 def track_for(source: Path, fmt: str, fit: str, section: tuple[float, float] | None):
-    """Speaker-tracking crop for fit='track' (None otherwise, or when nobody is on screen)."""
-    if fit != "track":
+    """Speaker-tracking crop for fit='track', split panels for fit='split' (None when nobody is found)."""
+    if fit not in ("track", "split"):
         return None
     from . import framing
     start, length = section or (0.0, media.duration(source))
     w, h = FORMATS[fmt]
+    if fit == "split":
+        return framing.split_layout(source, start, length, w, h) if h > w else None
     return framing.crop_expression(source, start, length, w, h)
 
 
