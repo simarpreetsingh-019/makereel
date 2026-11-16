@@ -230,6 +230,11 @@
         <textarea id="ed-transcript" class="transcript" rows="6" spellcheck="true"></textarea>
         <span class="hint" style="margin:0">Fix any word right here. Words you don't touch keep their exact timing; edited, added or removed words are fitted around them.</span>
       </label>
+      <div class="row">
+        <label class="btn small">Import subtitles or transcript<input type="file" id="ed-import" accept=".srt,.vtt,.txt,text/plain" hidden></label>
+        <button class="btn small" id="ed-srt" type="button">Download .srt</button>
+        <span class="hint" style="margin:0">SRT/VTT of this reel or of the whole video, or plain text.</span>
+      </div>
       <label class="field">Post text (credits included)<textarea id="ed-caption" rows="7"></textarea></label>
       <label class="switch" style="font-weight:400"><input type="checkbox" id="ed-logo"> Show my logo on this reel</label>
       <details><summary>Advanced: caption file (.ass): fonts, colours, position, timing</summary>

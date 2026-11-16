@@ -47,6 +47,7 @@ export const api = {
   editReel: (folder, name, changes) => request("PATCH", reelPath(folder, name), changes),
   deleteReel: (folder, name) => request("DELETE", reelPath(folder, name)),
   syncReel: (folder, name) => request("POST", `${reelPath(folder, name)}/sync`),
+  importCaptions: (folder, name, text) => request("POST", `${reelPath(folder, name)}/import`, { text }),
   trimReel: (folder, name, start, end) => request("POST", `${reelPath(folder, name)}/trim`, { start, end }),
   splitReel: (folder, name, at) => request("POST", `${reelPath(folder, name)}/split`, { at }),
   mergeReels: (folder, reels) => request("POST", `/folders/${enc(folder)}/merge`, { reels }),

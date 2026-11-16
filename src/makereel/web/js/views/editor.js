@@ -178,6 +178,26 @@ function showTab(tab) {
   ["#ed-video", "#tm-video", "#lk-video", "#cut-video", "#cd-video"].forEach((v) => $(v).pause());
 }
 
+// ------------------------------------------------------------------ subtitles out (mirrors core/subtitles.to_srt)
+function toSrt(words, perLine = 7, maxGap = 0.8) {
+  const ts = (t) => {
+    let ms = Math.round(Math.max(0, t) * 1000);
+    const h = Math.floor(ms / 3600000); ms %= 3600000;
+    const m = Math.floor(ms / 60000); ms %= 60000;
+    const s = Math.floor(ms / 1000); ms %= 1000;
+    const p = (n, k = 2) => String(n).padStart(k, "0");
+    return `${p(h)}:${p(m)}:${p(s)},${p(ms, 3)}`;
+  };
+  const lines = [];
+  let line = [];
+  for (const w of words) {
+    if (line.length && (line.length >= perLine || w.start - line[line.length - 1].end > maxGap)) { lines.push(line); line = []; }
+    line.push(w);
+  }
+  if (line.length) lines.push(line);
+  return lines.map((l, i) => `${i + 1}\n${ts(l[0].start)} --> ${ts(l[l.length - 1].end)}\n${l.map((w) => w.word).join(" ")}\n`).join("\n");
+}
+
 // ------------------------------------------------------------------ cards (text overlays)
 function wordsNear(t, secs = 2.5) {
   return cur.words.filter((w) => w.start >= t - 0.3 && w.start < t + secs).map((w) => w.word).join(" ");
@@ -474,6 +494,30 @@ export function mount() {
     save(body, e.currentTarget, fit === "split" && fitChanged
       ? "Saved. If no two people or webcam were found, the blurred layout is used."
       : fit === "track" && fitChanged ? "Saved. If no steady face was found, the blurred layout is used." : look.script !== cur.reel.look.script ? "Captions rewritten and re-rendered." : "Look saved and re-rendered.");
+  });
+
+  // Text tab: subtitles in and out
+  $("#ed-import").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 5e6) return toast("Subtitle files must be under 5 MB");
+    const text = await file.text();
+    if (!await confirmDialog(`Replace this reel's captions with ${file.name}?`, { ok: "Replace", danger: false })) return;
+    $("#ed-msg").textContent = "Importing and re-rendering…";
+    await busy(null, async () => {
+      try {
+        fill(await api.importCaptions(cur.folder, cur.name, text));
+        $("#ed-msg").textContent = `Captions from ${file.name}.`;
+        cur.onSaved?.();
+      } catch (err) { $("#ed-msg").textContent = ""; throw err; }
+    });
+  });
+  $("#ed-srt").addEventListener("click", () => {
+    const url = URL.createObjectURL(new Blob([toSrt(cur.words)], { type: "application/x-subrip" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: `${cur.name}.srt` });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
 
   // Cards tab

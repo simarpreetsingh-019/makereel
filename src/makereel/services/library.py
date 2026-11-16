@@ -342,6 +342,26 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
     return get_reel(folder, name)
 
 
+def import_captions(folder: str, name: str, text: str) -> dict:
+    """Replace the reel's captions with a subtitle file (SRT/VTT, of the reel or the whole video) or a
+    plain transcript (fitted to the current timing, like editing the words)."""
+    from ..core import subtitles
+    if not text or not text.strip():
+        raise InvalidInput("the file is empty")
+    if len(text) > 5_000_000:
+        raise InvalidInput("subtitle files must be under 5 MB")
+    meta_file, post = _reel_paths(folder, name)
+    cues = subtitles.parse_cues(text)
+    if not cues:
+        return update_reel(folder, name, transcript=text)
+    length = post.get("length") or captions.length_of((meta_file.parent / post["captions"]).read_text("utf-8"))
+    words = subtitles.on_reel_clock(subtitles.cues_to_words(cues), float(post.get("start") or 0), length)
+    if not words:
+        raise InvalidInput("none of the subtitles fall inside this reel",
+                           "Use subtitles of this reel, or of the whole video it was cut from.")
+    return update_reel(folder, name, words=words)
+
+
 def _fresh_words(d: Path, post: dict, section: tuple[float, float] | None, mode: str | None = None) -> list[dict]:
     """Precise word timings for the reel (its section of the master), on the reel's clock,
     written the way `mode` asks (own script, English letters, or translated to English)."""

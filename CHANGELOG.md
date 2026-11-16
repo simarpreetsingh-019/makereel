@@ -13,6 +13,9 @@
 - **Cards** (editor → Cards): text boxes over the video. A **quote** (pre-filled with the words at the playhead),
   a **note**, or an **outro** over the last seconds ("Follow for more"). Kept through caption edits, trims,
   splits, joins and exports.
+- **Import subtitles** (editor → Text): an SRT or WebVTT of the reel, or of the whole video it came from
+  (moved to the reel's clock automatically; YouTube's repeating auto-captions are cleaned up), or a plain
+  transcript (fitted to the current timing). **Download .srt** gives the reel's captions as a subtitle file.
 
 ## 0.5.0 (2026-11-16)
 

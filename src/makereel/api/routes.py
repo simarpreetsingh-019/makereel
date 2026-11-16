@@ -116,6 +116,10 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
                                    ass=body.get("ass"), logo=body.get("logo"), restyle=bool(body.get("restyle")),
                                    look=body.get("look"), fit=body.get("fit"), cards=body.get("cards"))
 
+    @api.post("/folders/{folder}/reels/{name}/import")
+    def import_captions(req: Request):
+        return library.import_captions(req.params["folder"], req.params["name"], str(req.json().get("text") or ""))
+
     @api.post("/folders/{folder}/reels/{name}/sync")
     def sync_reel(req: Request):
         return library.autosync(req.params["folder"], req.params["name"])
