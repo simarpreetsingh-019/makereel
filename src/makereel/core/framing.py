@@ -62,11 +62,12 @@ def _dimensions(video: Path) -> tuple[int, int]:
     return int(w), int(h)
 
 
-def _samples(video: Path, start: float, length: float, w: int, h: int, sw: int = SAMPLE_WIDTH):
+def _samples(video: Path, start: float, length: float, w: int, h: int, sw: int = SAMPLE_WIDTH,
+             fps: float = SAMPLE_FPS):
     """Yield (time, BGR frame) at SAMPLE_FPS, downscaled to `sw` wide."""
     sh = int(round(h * sw / w / 2) * 2)
     proc = subprocess.Popen([media.binary("ffmpeg"), "-v", "error", "-ss", f"{start:.3f}", "-t", f"{length:.3f}",
-                             "-i", str(video), "-vf", f"fps={SAMPLE_FPS},scale={sw}:{sh}", "-f", "rawvideo",
+                             "-i", str(video), "-vf", f"fps={fps},scale={sw}:{sh}", "-f", "rawvideo",
                              "-pix_fmt", "bgr24", "-"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     size = sw * sh * 3
     i = 0
@@ -75,7 +76,7 @@ def _samples(video: Path, start: float, length: float, w: int, h: int, sw: int =
         buf = proc.stdout.read(size)
         if len(buf) < size:
             break
-        yield i / SAMPLE_FPS, np.frombuffer(buf, np.uint8).reshape(sh, sw, 3)
+        yield i / fps, np.frombuffer(buf, np.uint8).reshape(sh, sw, 3)
         i += 1
     proc.wait()
 
@@ -100,7 +101,8 @@ def _faces(video: Path, start: float, length: float, w: int, h: int,
 
 def follow(samples: list[list[tuple[float, float, float]]]) -> list[float | None]:
     """Horizontal centre of one tracked person per sample: big faces win, but the face near the one
-    we were following is preferred, so the camera doesn't jump to someone in the background."""
+    we were following is preferred, so the camera doesn't jump to someone in the background.
+    Used when nobody's mouth can be read; follow_speaker() is preferred."""
     out: list[float | None] = []
     prev: float | None = None
     for faces in samples:
@@ -114,11 +116,137 @@ def follow(samples: list[list[tuple[float, float, float]]]) -> list[float | None
     return out
 
 
-def _face_centres(video: Path, start: float, length: float, w: int, h: int) -> list[float | None]:
-    return follow(_faces(video, start, length, w, h))
+# ----------------------------------------------------------------------- who is talking
+# Each face's mouth is cut out of every sample and compared with the same mouth one sample earlier:
+# a talking mouth keeps changing, a listening one barely does. People are told apart by where they sit
+# (podcast guests rarely swap seats). The camera moves to someone only after they have clearly talked
+# more than the person on screen for a while, so a laugh or a "yeah" doesn't yank it across the room.
+TRACK_FPS = 6              # mouths move fast: sample more often than for framing alone
+TRACK_SAMPLE_WIDTH = 640   # and closer, so a mouth in a wide two-shot is more than a few pixels
+SAME_PERSON = 0.12         # a face within this share of the width of a seat is that seat's person
+TALK_WINDOW = 1.5          # seconds of mouth movement averaged to judge who is talking
+SWITCH_RATIO = 1.4         # the other person must move their mouth this much more than the one shown...
+SWITCH_HOLD = 0.8          # ...for this long before the camera moves
+MIN_SHOT = 2.0             # and never cut away within this many seconds of the last move
+LOST_GRACE = 1.0           # a face the detector misses for less than this many seconds is still there
+CUT_DIFF = 40.0            # whole-frame change this big is an edit (camera cut), not a mouth
 
 
-def camera_path(centres: list[float | None]) -> list[tuple[float, float]] | None:
+def _mouth_patch(gray, f, sw: int, sh: int):
+    """Grey 32x16 cut-out around the mouth from YuNet's two mouth-corner landmarks, or None."""
+    import cv2
+    rx, ry, lx, ly = float(f[10]), float(f[11]), float(f[12]), float(f[13])
+    fw, fh = float(f[2]), float(f[3])
+    cx, cy = (rx + lx) / 2, (ry + ly) / 2
+    half_w = max(abs(lx - rx) * 0.8, fw * 0.22)
+    x0, x1 = int(cx - half_w), int(cx + half_w)
+    y0, y1 = int(cy - fh * 0.18), int(cy + fh * 0.2)
+    if x0 < 0 or y0 < 0 or x1 > sw or y1 > sh or x1 - x0 < 4 or y1 - y0 < 4:
+        return None
+    patch = cv2.resize(gray[y0:y1, x0:x1], (32, 16), interpolation=cv2.INTER_AREA).astype(np.float32)
+    return patch - patch.mean()                         # ignore lighting changes
+
+
+def _speaking_samples(video: Path, start: float, length: float, w: int, h: int):
+    """Per sample: [(centre x, size, mouth movement or None)] and whether the shot changed (a cut)."""
+    import cv2
+    model = model_path()
+    if model is None:
+        return []
+    sw = min(TRACK_SAMPLE_WIDTH, w)
+    sh = int(round(h * sw / w / 2) * 2)
+    det = cv2.FaceDetectorYN.create(str(model), "", (sw, sh), 0.6, 0.3, 50)
+    out, prev_gray, prev_mouths = [], None, []
+    for _, frame in _samples(video, start, length, w, h, sw, TRACK_FPS):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        small = cv2.resize(gray, (64, 36)).astype(np.float32)
+        cut = prev_gray is not None and float(np.abs(small - prev_gray).mean()) > CUT_DIFF
+        prev_gray = small
+        _, faces = det.detect(frame)
+        row, mouths = [], []
+        for f in faces if faces is not None else []:
+            cx, size = float(f[0] + f[2] / 2) / sw, float(f[2]) / sw
+            patch = _mouth_patch(gray, f, sw, sh)
+            move = None
+            if patch is not None and not cut:
+                near = [m for x, m in prev_mouths if abs(x - cx) < SAME_PERSON / 2]
+                if near:
+                    move = float(np.abs(patch - near[0]).mean())
+            row.append((cx, size, move))
+            if patch is not None:
+                mouths.append((cx, patch))
+        prev_mouths = mouths
+        out.append((row, cut))
+    return out
+
+
+def follow_speaker(samples, fps: float = TRACK_FPS) -> list[float | None] | None:
+    """Centre x of whoever is talking, per sample. None when mouths can't be read (fall back to follow())."""
+    seats: list[float] = []                             # where each person sits (share of width)
+
+    def seat_of(cx: float) -> int:
+        for i, x in enumerate(seats):
+            if abs(x - cx) < SAME_PERSON:
+                seats[i] = x * 0.9 + cx * 0.1
+                return i
+        seats.append(cx)
+        return len(seats) - 1
+
+    rows = []
+    for faces, cut in samples:
+        rows.append(({seat_of(cx): (cx, size, move) for cx, size, move in faces}, cut))
+    if not any(move is not None for faces, _ in rows for _, _, move in faces.values()):
+        return None
+
+    win = max(1, round(TALK_WINDOW * fps))
+    hold, min_shot, grace = round(SWITCH_HOLD * fps), round(MIN_SHOT * fps), round(LOST_GRACE * fps)
+    history: dict[int, list[float]] = {}
+    last_x: dict[int, float] = {}
+    last_seen: dict[int, int] = {}
+    shown, since_move, ahead = None, 10 ** 6, 0
+    out: list[float | None] = []
+    for i, (faces, cut) in enumerate(rows):
+        for seat, (cx, _, _) in faces.items():
+            last_x[seat], last_seen[seat] = cx, i
+        present = {seat for seat in last_seen if i - last_seen[seat] <= grace}
+        for seat in present:
+            move = faces.get(seat, (0, 0, None))[2]
+            history.setdefault(seat, []).append(move if move is not None else 0.0)
+            del history[seat][:-win]
+        talk = {seat: float(np.mean(history[seat])) for seat in present}
+        since_move += 1
+        if cut:
+            since_move = min_shot                       # a new shot: free to reframe right away
+            present = set(faces)
+        if shown not in present:                        # nobody yet, or the person shown has left the shot
+            if faces:
+                shown = max(faces, key=lambda s: (_talk_ahead(rows, i, s, win), faces[s][1]))
+                since_move, ahead = 0, 0
+        elif len(present) > 1:
+            rival = max((s for s in present if s != shown), key=lambda s: talk[s])
+            ahead = ahead + 1 if talk[rival] > max(talk[shown] * SWITCH_RATIO, 0.5) else 0
+            if ahead >= hold and since_move >= min_shot:
+                shown, since_move, ahead = rival, 0, 0
+        out.append(last_x[shown] if shown in present else None)
+    return out
+
+
+def _talk_ahead(rows, i: int, seat: int, win: int) -> float:
+    """Average mouth movement of `seat` over the next `win` samples: when the camera must pick someone
+    without any history (start of the reel, after a cut), whoever is about to talk is the better guess."""
+    moves = [f[seat][2] for f, _ in rows[i:i + win] if seat in f and f[seat][2] is not None]
+    return float(np.mean(moves)) if moves else 0.0
+
+
+def _face_centres(video: Path, start: float, length: float, w: int, h: int) -> tuple[list[float | None], float]:
+    """(centre per sample, samples per second): the talking person if mouths can be read, else the biggest face."""
+    centres = follow_speaker(_speaking_samples(video, start, length, w, h))
+    if centres is not None:
+        return centres, TRACK_FPS
+    return follow(_faces(video, start, length, w, h)), SAMPLE_FPS
+
+
+def camera_path(centres: list[float | None], fps: float = SAMPLE_FPS) -> list[tuple[float, float]] | None:
     """Keyframes (time, centre 0..1) for a calm virtual camera, or None if there's no one to follow."""
     seen = [c for c in centres if c is not None]
     if not centres or len(seen) / len(centres) < MIN_FACE_SHARE:
@@ -128,19 +256,19 @@ def camera_path(centres: list[float | None]) -> list[tuple[float, float]] | None
     for c in centres:
         last = c if c is not None else last
         filled.append(last)
-    k = 5
+    k = max(3, round(fps * 5 / 3)) | 1                 # ~1.7 s of median smoothing
     padded = np.pad(np.array(filled), k // 2, mode="edge")
     smooth = [float(np.median(padded[i:i + k])) for i in range(len(filled))]
 
     keys = [(0.0, smooth[0])]
     cam = smooth[0]
     for i, target in enumerate(smooth):
-        t = i / SAMPLE_FPS
+        t = i / fps
         if abs(target - cam) > DEAD_ZONE and t >= keys[-1][0] + GLIDE_SECONDS:
             keys.append((t, cam))                       # hold until now...
             cam = target
             keys.append((t + GLIDE_SECONDS, cam))       # ...then glide to the speaker
-    keys.append((len(smooth) / SAMPLE_FPS + 1, cam))
+    keys.append((len(smooth) / fps + 1, cam))
     return keys
 
 
@@ -153,7 +281,7 @@ def crop_expression(video: Path, start: float, length: float, out_w: int, out_h:
     crop_w = int(h * out_w / out_h) // 2 * 2
     if crop_w >= w:                                     # target is as wide as the source: nothing to track
         return None
-    keys = camera_path(_face_centres(video, start, length, w, h))
+    keys = camera_path(*_face_centres(video, start, length, w, h))
     if keys is None:
         log.info("   no steady face found; using the blurred layout")
         return None
