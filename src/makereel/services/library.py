@@ -171,6 +171,7 @@ def get_reel(folder: str, name: str) -> dict:
     return {**_summary(folder, name, post, d / post["file"]),
             "transcript": " ".join(w["word"] for w in words), "words": words, "ass": ass_text,
             "templates": {k: v["label"] for k, v in captions.TEMPLATES.items()},
+            "safe_zone": _safe_zone(),
             "language": _language(d, post), "script": language.script_of(" ".join(w["word"] for w in words)),
             "can_trim": bool(sec), "length": sec[1] if sec else captions.length_of(ass_text),
             "room_before": sec[0] if sec else 0.0,
@@ -214,6 +215,14 @@ def _write_and_render(d: Path, meta_file: Path, post: dict, ass_text: str, brand
     for fmt, item in list((post.get("exports") or {}).items()):   # keep exports in step with edits
         if (d / item["file"]).exists():
             export_reel(d.name, meta_file.stem, fmt, item.get("fit") or post.get("fit") or "blur")
+
+
+def _safe_zone() -> dict | None:
+    """The app overlay area to keep clear on the 9:16 reel (shares of the frame), for the editor guide."""
+    from ..core import safezone
+    name = load_settings().brand.get("safe_zone", "all")
+    zone = safezone.zone_for(name, *render.FORMATS[render.MAIN_FORMAT])
+    return {"name": name, "label": safezone.LABELS[name], **zone.__dict__} if zone else None
 
 
 def _language(d: Path, post: dict) -> str | None:
@@ -496,7 +505,7 @@ def export_reel(folder: str, name: str, fmt: str, fit: str | None = None) -> dic
     ass.write_text(captions.rebuild(main_ass, words, hook, _style(fmt, brand, post, words, hook),
                                     branding.template_for(brand, post.get("look")), section[1]), encoding="utf-8")
     out = d / f"{name}.{fmt}.mp4"
-    render.export(d / post["source_clip"], ass, out, fmt, fit, branding.logo_for(brand, post.get("logo", True)),
+    render.export(d / post["source_clip"], ass, out, fmt, fit, branding.logo_for(brand, post.get("logo", True), fmt),
                   branding.fonts_dir(), section)
     post.setdefault("exports", {})[fmt] = {"file": out.name, "fit": fit, "captions": ass.name}
     meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")

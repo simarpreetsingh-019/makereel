@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..config import env
-from . import language
+from . import language, safezone
 from .captions import TEMPLATES, Style
 from .render import FORMATS, Logo
 
@@ -35,6 +35,7 @@ def style_for(fmt: str, brand: dict, look: dict | None = None, script: str | Non
     """
     w, h = FORMATS[fmt]
     look = look or {}
+    zone = safezone.zone_for(brand.get("safe_zone", "all"), w, h)
     font = language.font_for(script, brand["font"], fonts_dir()) if script else brand["font"]
     return Style(width=w, height=h, font=font, text_colour=brand["text_colour"],
                  highlight_colour=brand["highlight_colour"], outline_colour=brand["outline_colour"],
@@ -43,7 +44,8 @@ def style_for(fmt: str, brand: dict, look: dict | None = None, script: str | Non
                  vertical=look.get("vertical"),
                  box=look.get("box", brand.get("caption_box", False)),
                  box_colour=look.get("box_colour", brand.get("box_colour", "#000000")),
-                 box_opacity=look.get("box_opacity", brand.get("box_opacity", 0.6)))
+                 box_opacity=look.get("box_opacity", brand.get("box_opacity", 0.6)),
+                 safe=(zone.top, zone.bottom, zone.left, zone.right) if zone else None)
 
 
 def script_mode(brand: dict, look: dict | None = None) -> str:
@@ -91,8 +93,11 @@ def clean_look(look: dict) -> dict:
     return out
 
 
-def logo_for(brand: dict, enabled_on_reel: bool = True) -> Logo | None:
+def logo_for(brand: dict, enabled_on_reel: bool = True, fmt: str = "9x16") -> Logo | None:
     path = logo_file()
     if not (path and brand["logo_enabled"] and enabled_on_reel):
         return None
-    return Logo(path.resolve(), brand["logo_position"], brand["logo_scale"], brand["logo_opacity"])
+    w, h = FORMATS[fmt]
+    zone = safezone.zone_for(brand.get("safe_zone", "all"), w, h)
+    return Logo(path.resolve(), brand["logo_position"], brand["logo_scale"], brand["logo_opacity"],
+                clear_top=zone.top if zone else 0.0, clear_bottom=zone.bottom if zone else 0.0)

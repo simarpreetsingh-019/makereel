@@ -75,3 +75,23 @@ export function confirmDialog(message, { ok = "Delete", danger = true } = {}) {
     d.querySelector('[value="no"]').focus();                   // Enter won't delete by accident
   });
 }
+
+/** Shade the parts of a 9:16 stage that TikTok/Reels/Shorts cover with their own buttons and text.
+ *  `zone` = {top, bottom, left, right} as shares of the frame, or null to remove the guide. */
+export function drawSafeZone(stage, zone, label = "") {
+  let g = stage.querySelector(".safe-guide");
+  if (!zone) { g?.remove(); return; }
+  if (!g) {
+    g = document.createElement("div");
+    g.className = "safe-guide";
+    g.innerHTML = '<i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><em></em>';
+    stage.appendChild(g);
+  }
+  const pc = (v) => `${(v * 100).toFixed(1)}%`;
+  Object.assign(g.querySelector(".t").style, { height: pc(zone.top) });
+  Object.assign(g.querySelector(".b").style, { height: pc(zone.bottom) });
+  Object.assign(g.querySelector(".l").style, { width: pc(zone.left), top: pc(zone.top), bottom: pc(zone.bottom) });
+  Object.assign(g.querySelector(".r").style, { width: pc(zone.right), top: pc(zone.top), bottom: pc(zone.bottom) });
+  g.querySelector("em").textContent = label ? `${label} buttons & text` : "";
+  g.querySelector("em").style.bottom = pc(zone.bottom);
+}

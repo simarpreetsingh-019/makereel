@@ -230,3 +230,12 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 [data-tpl="single"] b { transform: scale(1.6); }
 [data-tpl="minimal"] { text-transform: none; }
 [data-tpl="minimal"] b { transform: none; }
+
+/* safe zones: areas the apps cover (editor + brand preview) */
+.safe-guide { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.safe-guide i { position: absolute; background: repeating-linear-gradient(135deg, #ff3b5c55 0 6px, #ff3b5c22 6px 12px); }
+.safe-guide .t { top: 0; left: 0; right: 0; } .safe-guide .b { bottom: 0; left: 0; right: 0; }
+.safe-guide .l { left: 0; } .safe-guide .r { right: 0; }
+.safe-guide em { position: absolute; right: 4px; font: 600 10px/1.4 system-ui; color: #fff; background: #ff3b5ccc;
+                 padding: 1px 5px; border-radius: 4px 4px 0 0; font-style: normal; }
+.tm-stage .safe-guide { border-radius: 10px; overflow: hidden; }

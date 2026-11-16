@@ -122,6 +122,7 @@ BRAND_DEFAULTS: dict[str, Any] = {
     "box_colour": "#000000",
     "box_opacity": 0.6,
     "caption_script": "original",   # original (own script) | roman (English letters) | english (translated)
+    "safe_zone": "all",             # keep captions/logo clear of app buttons: all | tiktok | reels | shorts | off
     "credit_footer": True,          # add "Made with makereel" to the post text (opt out here)
 }
 
@@ -223,6 +224,9 @@ def validate_brand(brand: dict[str, Any]) -> None:
     from .core.language import SCRIPT_MODES
     if brand.setdefault("caption_script", "original") not in SCRIPT_MODES:
         raise ConfigError(f"brand.caption_script must be one of {', '.join(SCRIPT_MODES)}")
+    from .core.safezone import CHOICES as SAFE_CHOICES
+    if brand.setdefault("safe_zone", "all") not in SAFE_CHOICES:
+        raise ConfigError(f"brand.safe_zone must be one of {', '.join(SAFE_CHOICES)}")
     if brand.get("caption_template") not in TEMPLATES:
         raise ConfigError(f"brand.caption_template must be one of {', '.join(TEMPLATES)}")
 

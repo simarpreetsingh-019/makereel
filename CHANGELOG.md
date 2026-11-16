@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Safe zones** (Brand → Keep clear of app buttons: All apps, TikTok, Reels, Shorts or Off). On 9:16 reels,
+  captions stay above the account name and description, clear of the like/share column, and the title and logo
+  stay below the top tabs. The Look editor and Brand preview shade the covered areas. Default: All apps.
+
 ## 0.5.0 (2026-11-16)
 
 ### Added: other languages

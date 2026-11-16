@@ -68,6 +68,13 @@ class Style:
     box: bool = False              # background box behind the captions
     box_colour: str = "#000000"
     box_opacity: float = 0.6       # 0 = invisible, 1 = solid
+    safe: tuple[float, float, float, float] | None = None  # app overlays to avoid: top, bottom, left, right
+
+    def clear_bottom(self, margin_v: int, align: int) -> int:
+        """Lift bottom-anchored captions above the app's bottom overlay (account name, description)."""
+        if self.safe is None or align != 2:
+            return margin_v
+        return max(margin_v, round(self.height * self.safe[1]))
 
     def header(self) -> str:
         short = min(self.width, self.height)          # scale text by the short side
@@ -81,6 +88,14 @@ class Style:
                 self.position] if self.height > self.width else round(self.height * 0.08)
         hook_margin = round(self.height * 0.115) if self.height > self.width else round(self.height * 0.06)
         side = round(self.width * 0.055)
+        side_l = side_r = side
+        margin_v = self.clear_bottom(margin_v, align)
+        if self.safe is not None:      # keep clear of the like/share column and the top tabs
+            top, _, left, right = self.safe
+            side_l, side_r = max(side, round(self.width * left)), max(side, round(self.width * right))
+            hook_margin = max(hook_margin, round(self.height * top) + 10)
+            if align == 8:
+                margin_v = max(margin_v, round(self.height * top) + 10)
         text, outline = ass_colour(self.text_colour), ass_colour(self.outline_colour)
         if self.box:   # BorderStyle 4 (libass): translucent box in BackColour, outline kept; Shadow = padding
             border, back, shadow = 4, ass_colour(self.box_colour, round((1 - self.box_opacity) * 255)), round(cap * 0.2)
@@ -97,9 +112,9 @@ class Style:
             "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
             "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
             f"Style: Caption,{self.font},{cap},{text},{text},{outline},{back},-1,0,0,0,100,100,0,0,{border},"
-            f"{max(2, round(cap * 0.08))},{shadow},{align},{side},{side},{margin_v},1\n"
+            f"{max(2, round(cap * 0.08))},{shadow},{align},{side_l},{side_r},{margin_v},1\n"
             f"Style: Hook,{self.font},{hook},&H00FFFFFF,&H00FFFFFF,&H00000000,&H50000000,-1,0,0,0,100,100,0,0,"
-            f"3,{round(hook * 0.29)},0,8,{side + 20},{side + 20},{hook_margin},1\n\n"
+            f"3,{round(hook * 0.29)},0,8,{side_l + 20},{side_r + 20},{hook_margin},1\n\n"
             "[Events]\n"
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
         )

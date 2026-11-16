@@ -1,10 +1,10 @@
 // "Brand" tab: logo, caption font and colours, credit line. Applies to new reels; existing reels
 // pick it up via Edit → "Apply brand style" (captions) or any re-render (logo).
 import { api, media } from "../api.js";
-import { $, busy, esc, toast } from "../ui.js";
+import { $, busy, drawSafeZone, esc, toast } from "../ui.js";
 
 const FIELDS = ["logo_enabled", "logo_position", "logo_scale", "logo_opacity", "font", "text_colour",
-  "highlight_colour", "outline_colour", "caption_position", "caption_size", "caption_template", "caption_script", "caption_box", "box_colour",
+  "highlight_colour", "outline_colour", "caption_position", "caption_size", "caption_template", "caption_script", "safe_zone", "caption_box", "box_colour",
   "box_opacity", "credit_footer"];
 const COMMON_FONTS = ["Arial Black", "Impact", "Montserrat", "Bebas Neue", "Anton", "Poppins", "Inter"];
 
@@ -51,7 +51,11 @@ function preview() {
   cap.style.color = v.text_colour;
   cap.style.fontSize = `${18 * v.caption_size}px`;
   cap.style.webkitTextStroke = `1px ${v.outline_colour}`;
+  const zone = v.safe_zone !== "off" ? state.safe_zones?.[v.safe_zone] : null;
   cap.style.top = { top: "22%", middle: "47%", bottom: "68%" }[v.caption_position];
+  cap.style.left = `${Math.max(5, (zone?.left || 0) * 100)}%`;
+  cap.style.right = `${Math.max(5, (zone?.right || 0) * 100)}%`;
+  drawSafeZone(phone, zone, zone?.label);
   cap.querySelector("b").style.color = v.highlight_colour;
   cap.style.background = v.caption_box ? hexToRgba(v.box_colour, v.box_opacity) : "transparent";
   cap.style.padding = v.caption_box ? "4px 6px" : "0";
@@ -62,7 +66,8 @@ function preview() {
   logo.style.width = `${v.logo_scale * 100}%`;
   logo.style.opacity = v.logo_opacity;
   const [vert, horiz] = v.logo_position.split("-");
-  Object.assign(logo.style, { top: vert === "top" ? "4%" : "", bottom: vert === "bottom" ? "4%" : "",
+  const clearTop = `${Math.max(4, (zone?.top || 0) * 100)}%`, clearBottom = `${Math.max(4, (zone?.bottom || 0) * 100)}%`;
+  Object.assign(logo.style, { top: vert === "top" ? clearTop : "", bottom: vert === "bottom" ? clearBottom : "",
                                left: horiz === "left" ? "4%" : "", right: horiz === "right" ? "4%" : "" });
   $("#br-prev-footer").hidden = !v.credit_footer;
   $("#br-logo_scale-v").textContent = `${Math.round(v.logo_scale * 100)}%`;

@@ -39,6 +39,8 @@ class Logo:
     position: str = "top-right"
     scale: float = 0.16          # logo width as a share of the video width
     opacity: float = 0.9
+    clear_top: float = 0.0       # share of the height to stay below (app tabs / search bar)
+    clear_bottom: float = 0.0    # share of the height to stay above (account name, description)
 
 
 def _check_format(fmt: str, fit: str) -> tuple[int, int]:
@@ -84,7 +86,8 @@ def _overlay_filters(label: str, ass: Path | None, fonts_dir: Path | None, logo:
     if logo is not None:
         m = round(width * 0.04)
         x = str(m) if "left" in logo.position else f"W-w-{m}"
-        y = str(m) if "top" in logo.position else f"H-h-{m}"
+        y = (f"max({m}\\,H*{logo.clear_top:.3f})" if "top" in logo.position
+             else f"H-h-max({m}\\,H*{logo.clear_bottom:.3f})")
         parts.append(f"[{logo_input}:v]scale={round(width * logo.scale)}:-2,format=rgba,"
                      f"colorchannelmixer=aa={logo.opacity:.2f}[lg];[{cur}][lg]overlay={x}:{y}[o]")
         cur = "o"

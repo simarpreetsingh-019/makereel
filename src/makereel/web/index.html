@@ -144,6 +144,7 @@
               <option value="glow">Glow</option><option value="karaoke">Karaoke fill</option><option value="single">One word</option>
               <option value="minimal">Minimal</option></select></label>
             <label class="field">Caption letters<select id="br-caption_script"><option value="original">Original script (हिंदी, ਪੰਜਾਬੀ…)</option><option value="roman">English letters (kya baat hai)</option><option value="english">Translate to English</option></select></label>
+            <label class="field">Keep clear of app buttons<select id="br-safe_zone"><option value="all">All apps (safest)</option><option value="tiktok">TikTok</option><option value="reels">Instagram Reels</option><option value="shorts">YouTube Shorts</option><option value="off">Off</option></select></label>
             <label class="field">Position<select id="br-caption_position"><option value="bottom">Lower third</option><option value="middle">Middle</option><option value="top">Top</option></select></label>
             <label class="field">Text colour<input type="color" id="br-text_colour"></label>
             <label class="field">Highlight colour<input type="color" id="br-highlight_colour"></label>
@@ -311,7 +312,9 @@
         <button class="btn tiny" data-preset="0.5">Middle</button>
         <button class="btn tiny" data-preset="0.78">Top</button>
       </div>
+      <p class="hint" id="lk-safe-hint" style="margin:4px 0 0"></p>
       <label class="field">Size <span id="lk-size-v"></span><input type="range" id="lk-size" min="0.5" max="1.8" step="0.05"></label>
+      <label class="switch" style="font-weight:400"><input type="checkbox" id="lk-safe-show" checked> Show where the apps put their buttons</label>
       <label class="switch" style="font-weight:400"><input type="checkbox" id="lk-box"> Background behind captions</label>
       <div class="opts" style="grid-template-columns:1fr 1fr;margin:0" id="lk-box-opts">
         <label class="field">Background colour<input type="color" id="lk-box_colour"></label>

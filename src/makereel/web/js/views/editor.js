@@ -5,7 +5,7 @@
 //   Cut     trim / extend the edges, split in two
 //   Export  the same reel as 9:16, 4:5, 1:1 or 16:9 (blur / crop / bars)
 import { api, media } from "../api.js";
-import { $, busy, confirmDialog, copyText, esc, toast } from "../ui.js";
+import { $, busy, confirmDialog, copyText, drawSafeZone, esc, toast } from "../ui.js";
 import { hexToRgba } from "./brand.js";
 
 const FORMATS = [
@@ -143,7 +143,14 @@ function drawLook() {
   look.template = cur.look.template;
   const sample = cur.words.length ? cur.words : ["captions", "look", "like", "this"].map((word) => ({ word }));
   cap.innerHTML = `<span>${captionHTML(sample, 1, look.template)}</span>`;
-  styleCaption(cap, look, $("#lk-stage"));
+  const zone = cur.reel.safe_zone;
+  const lifted = zone && look.vertical < zone.bottom;
+  styleCaption(cap, lifted ? { ...look, vertical: zone.bottom } : look, $("#lk-stage"));
+  if (zone) { cap.style.left = `${Math.max(5.5, zone.left * 100)}%`; cap.style.right = `${Math.max(5.5, zone.right * 100)}%`; }
+  drawSafeZone($("#lk-stage"), $("#lk-safe-show").checked ? zone : null, zone?.label);
+  $("#lk-safe-show").closest("label").hidden = !zone;
+  $("#lk-safe-hint").textContent = lifted
+    ? `Lifted to ${Math.round(zone.bottom * 100)}% so ${zone.label} doesn't cover it. Turn this off in Brand → Keep clear of app buttons.` : "";
   $("#lk-vertical-v").textContent = `${Math.round(look.vertical * 100)}%`;
   $("#lk-size-v").textContent = `${Math.round(look.size * 100)}%`;
   $("#lk-box_opacity-v").textContent = `${Math.round(look.box_opacity * 100)}%`;

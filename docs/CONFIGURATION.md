@@ -68,6 +68,7 @@ passes a one-frame test; otherwise it falls back to `libx264`.
 | `caption_position` | `bottom` | `bottom` (lower third), `middle` or `top` |
 | `caption_size` | 1.0 | 0.5–2 × the default size |
 | `caption_script` | `original` | how captions are written: `original` (the spoken language's own script, e.g. Devanagari), `roman` (the same words in English letters: "kya baat hai"), or `english` (translated). Per reel in the editor's Look tab too |
+| `safe_zone` | `all` | keep captions, title and logo clear of the apps' own buttons and text on 9:16 reels: `all` (strictest of the three), `tiktok`, `reels`, `shorts`, or `off` |
 | `caption_template` | `classic` | default caption style: `classic`, `pop`, `boxed`, `glow`, `karaoke`, `single` or `minimal` |
 | `caption_box` | false | a background box behind captions (helps over busy video or video with its own subtitles) |
 | `box_colour` / `box_opacity` | `#000000` / 0.6 | background colour, and how solid it is (0 = invisible, 1 = solid) |

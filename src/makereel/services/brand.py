@@ -47,7 +47,11 @@ def delete_font(name: str) -> None:
 
 
 def info() -> dict:
+    from ..core import safezone
     logo = branding.logo_file()
-    return {"logo": f"/brand/{logo.name}?v={int(logo.stat().st_mtime)}" if logo else None,
+    zones = {k: {"label": safezone.LABELS[k], **(vars(z) if (z := safezone.ZONES.get(k)) else {})}
+             for k in safezone.CHOICES}
+    return {"safe_zones": zones,
+            "logo": f"/brand/{logo.name}?v={int(logo.stat().st_mtime)}" if logo else None,
             "fonts": sorted(p.name for p in branding.fonts_dir().iterdir()
                             if p.suffix.lower() in FONT_SUFFIXES)}
