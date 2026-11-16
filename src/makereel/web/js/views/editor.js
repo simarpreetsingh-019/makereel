@@ -490,7 +490,7 @@ export function mount() {
     const body = {};
     if (changed) body.look = look;
     if (fitChanged) body.fit = fit;
-    $("#ed-msg").textContent = ["track", "split"].includes(fit) && fitChanged ? "Finding the speaker and re-rendering…" : "Rendering…";
+    $("#ed-msg").textContent = ["track", "split", "auto"].includes(fit) && fitChanged ? "Finding the speaker and re-rendering…" : "Rendering…";
     save(body, e.currentTarget, look.script !== cur.reel.look.script ? "Captions rewritten and re-rendered." : "Look saved and re-rendered.");
   });
 

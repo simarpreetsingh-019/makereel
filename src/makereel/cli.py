@@ -37,7 +37,7 @@ def _clip_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--fps", type=int, choices=(30, 60), help="60 keeps smooth motion from 60 fps sources")
     g.add_argument("--model-other", dest="model_other", choices=("same", "small", "medium", "large-v3"),
                    help="speech model for non-English videos when --model is tiny/base (default small)")
-    g.add_argument("--layout", choices=["blur", "crop", "pad", "track", "split"])
+    g.add_argument("--layout", choices=["auto", "blur", "crop", "pad", "track", "split"])
     g.add_argument("--trim-silence", action="store_true", help="cut dead air (needs auto-editor)")
 
 

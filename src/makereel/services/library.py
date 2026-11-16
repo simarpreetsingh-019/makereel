@@ -294,14 +294,17 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
             base_hook = post.get("hook_original") or new_hook or ""
             new_hook = caption_hook(base_hook, script_words, mode) or new_hook
     if fit is not None and fit != post.get("fit"):
-        if fit not in render.FITS:
-            raise InvalidInput(f"fit must be one of {', '.join(render.FITS)}")
+        if fit not in render.FITS + ("auto",):
+            raise InvalidInput(f"fit must be auto or one of {', '.join(render.FITS)}")
         _require_section(d, post)
         plan = render.plan_fit(d / post["source_clip"], render.MAIN_FORMAT, fit, _section(d, post))
-        if plan[0] != fit:
+        if fit == "auto":
+            fit = plan[0]
+        elif plan[0] != fit:
             raise InvalidInput({"split": "no two people or webcam found in this reel",
                                 "track": "no steady face found in this reel"}[fit],
                                "The layout was left as it was.")
+    if fit is not None and fit != post.get("fit"):
         restyle = restyle or "split" in (fit, post.get("fit"))   # split-screen captions sit on the seam
         post["fit"], reraw = fit, True
 

@@ -3,7 +3,7 @@ import { api } from "../api.js";
 import { store } from "../store.js";
 import { $, busy, esc, showError, timeAgo, toast } from "../ui.js";
 
-const OPTION_FIELDS = "#create-options [name]";
+const OPTION_FIELDS = "#create-layout [name], #create-options [name]";
 
 function readOptions() {
   const out = {};

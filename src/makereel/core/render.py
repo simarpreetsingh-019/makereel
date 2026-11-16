@@ -160,10 +160,22 @@ def track_for(source: Path, fmt: str, fit: str, section: tuple[float, float] | N
 def plan_fit(source: Path, fmt: str, fit: str, section: tuple[float, float] | None) -> tuple[str, object]:
     """(the fit that will really be used, its crop data). Follow-the-speaker and split screen need someone
     on screen; when nobody suitable is found they become "blur", so captions can be placed to match."""
+    if fit == "auto":
+        return auto_fit(source, fmt, section)
     track = track_for(source, fmt, fit, section)
     if fit in ("track", "split") and not track:
         return "blur", None
     return fit, track
+
+
+def auto_fit(source: Path, fmt: str, section: tuple[float, float] | None) -> tuple[str, object]:
+    """Pick the layout from what is on screen: two people together, or a webcam over gameplay -> split screen;
+    one steady face -> follow the speaker; anything else -> the whole frame over a blurred copy."""
+    for fit in ("split", "track"):
+        track = track_for(source, fmt, fit, section)
+        if track:
+            return fit, track
+    return "blur", None
 
 
 def make_raw(source: Path, raw: Path, fmt: str = MAIN_FORMAT, fit: str = "blur",
