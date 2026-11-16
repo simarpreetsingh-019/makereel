@@ -55,8 +55,164 @@ function fill(reel) {
   $("#cd-video").src = media(reel.video);
   cur.cards = (reel.cards || []).map((c) => ({ ...c }));
   drawCards();
+  fillCamera();
   drawWordList();
   drawExports();
+}
+
+// ------------------------------------------------------------------ camera (follow-the-speaker shots)
+// Shots are [{start, x}]: from `start` seconds the camera centres on `x` (share of the wide video's width).
+const PEOPLE_COLOURS = ["#7cc4ff", "#ffb35c", "#9be38f", "#e8a0ff", "#ffd95c"];
+const SAME_SPOT = 0.12;
+
+function camLen() {
+  return cur.reel.length || $("#cm-video").duration || 30;
+}
+
+// The distinct spots the camera points at, left to right: "people" for labels, colours and switching.
+function camPeople() {
+  const spots = [];
+  cur.shots.forEach((s) => { if (!spots.some((x) => Math.abs(x - s.x) < SAME_SPOT)) spots.push(s.x); });
+  return spots.sort((a, b) => a - b);
+}
+
+function personOf(x) {
+  const people = camPeople();
+  const i = people.findIndex((p) => Math.abs(p - x) < SAME_SPOT);
+  const name = people.length === 2 ? ["Left", "Right"][i] : people.length === 3 ? ["Left", "Middle", "Right"][i] : `Person ${i + 1}`;
+  return { i, name: people.length === 1 ? "Speaker" : name, colour: PEOPLE_COLOURS[i % PEOPLE_COLOURS.length] };
+}
+
+function shotAt(t) {
+  let i = 0;
+  cur.shots.forEach((s, j) => { if (s.start <= t) i = j; });
+  return i;
+}
+
+function camTime() {
+  return Math.max(0, $("#cm-video").currentTime - (cur.reel.src_offset || 0));
+}
+
+function fillCamera() {
+  const r = cur.reel, on = r.fit === "track" && !!r.source;
+  $("#cm-off").hidden = on;
+  $("#cm-on").hidden = !on;
+  $("#cm-stage").hidden = !on;
+  cur.shots = (r.shots || []).map((s) => ({ ...s }));
+  cur.shotSel = 0;
+  if (!on) return;
+  const v = $("#cm-video");
+  v.src = media(r.source);
+  v.onloadedmetadata = () => { v.currentTime = r.src_offset || 0; drawCamera(); };
+  drawCamera();
+}
+
+function drawCamera() {
+  if (!cur.shots?.length) { $("#cm-bar").innerHTML = ""; return; }
+  const len = camLen(), t = camTime();
+  const bar = cur.shots.map((s, i) => {
+    const end = i + 1 < cur.shots.length ? cur.shots[i + 1].start : len;
+    const p = personOf(s.x);
+    return `<div class="cam-shot${i === cur.shotSel ? " sel" : ""}" data-shot="${i}"
+      style="left:${(s.start / len) * 100}%;width:${((end - s.start) / len) * 100}%;background:${p.colour}">${p.name}</div>`;
+  }).join("") + cur.shots.slice(1).map((s, i) =>
+    `<div class="cam-cut" data-cut="${i + 1}" style="left:${(s.start / len) * 100}%"></div>`).join("")
+    + `<div class="cam-head" style="left:${(Math.min(t, len) / len) * 100}%"></div>`;
+  $("#cm-bar").innerHTML = bar;
+  const sel = cur.shots[cur.shotSel];
+  $("#cm-sel").textContent = sel ? `Selected: shot ${cur.shotSel + 1} of ${cur.shots.length}, on ${personOf(sel.x).name.toLowerCase()} from ${sel.start.toFixed(1)} s` : "";
+  $("#cm-del").disabled = cur.shotSel === 0;
+  $("#cm-swap").disabled = camPeople().length < 2;
+  moveCamBox();
+}
+
+function moveCamBox() {
+  const share = cur.reel.crop_share || 0.35;
+  const x = cur.shots[shotAt(camTime())]?.x ?? 0.5;
+  const left = Math.min(Math.max(x - share / 2, 0), 1 - share);
+  Object.assign($("#cm-box").style, { left: `${left * 100}%`, width: `${share * 100}%` });
+}
+
+function camTick() {
+  const v = $("#cm-video"), end = (cur.reel.src_offset || 0) + camLen();
+  if (v.currentTime >= end) { v.pause(); v.currentTime = cur.reel.src_offset || 0; $("#cm-play").textContent = "Play"; }
+  $("#cm-time").textContent = `${camTime().toFixed(1)} s`;
+  const head = $("#cm-bar .cam-head");
+  if (head) head.style.left = `${(Math.min(camTime(), camLen()) / camLen()) * 100}%`;
+  moveCamBox();
+}
+
+function camSeek(t) {
+  $("#cm-video").currentTime = (cur.reel.src_offset || 0) + Math.min(Math.max(t, 0), camLen() - 0.05);
+  camTick();
+}
+
+function mountCamera() {
+  const v = $("#cm-video");
+  v.addEventListener("timeupdate", camTick);
+  v.addEventListener("seeked", camTick);
+  $("#cm-play").addEventListener("click", () => {
+    if (v.paused) { v.play(); $("#cm-play").textContent = "Pause"; } else { v.pause(); $("#cm-play").textContent = "Play"; }
+  });
+  $("#cm-sound").addEventListener("change", (e) => { v.muted = !e.target.checked; });
+  const smooth = () => { if (!v.paused) { camTick(); requestAnimationFrame(smooth); } };
+  v.addEventListener("play", smooth);
+
+  // timeline: click a block to select it (and jump there), drag a cut line to move it
+  const bar = $("#cm-bar");
+  let drag = null;
+  const timeAt = (e) => ((e.clientX - bar.getBoundingClientRect().left) / bar.clientWidth) * camLen();
+  bar.addEventListener("pointerdown", (e) => {
+    const cut = e.target.closest("[data-cut]");
+    if (cut) { drag = Number(cut.dataset.cut); bar.setPointerCapture(e.pointerId); return; }
+    const shot = e.target.closest("[data-shot]");
+    if (shot) { cur.shotSel = Number(shot.dataset.shot); camSeek(timeAt(e)); drawCamera(); }
+  });
+  bar.addEventListener("pointermove", (e) => {
+    if (drag === null) return;
+    const prev = cur.shots[drag - 1].start, next = cur.shots[drag + 1]?.start ?? camLen();
+    cur.shots[drag].start = Math.round(Math.min(Math.max(timeAt(e), prev + 0.3), next - 0.3) * 10) / 10;
+    camSeek(cur.shots[drag].start);
+    drawCamera();
+  });
+  bar.addEventListener("pointerup", () => { drag = null; });
+
+  // click a person in the wide video: the selected shot now points at them
+  $("#cm-hit").addEventListener("click", (e) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    cur.shots[cur.shotSel].x = Math.round(((e.clientX - box.left) / box.width) * 1000) / 1000;
+    drawCamera();
+  });
+
+  $("#cm-cut").addEventListener("click", () => {
+    const t = Math.round(camTime() * 10) / 10, i = shotAt(t);
+    if (t - cur.shots[i].start < 0.3 || (cur.shots[i + 1] && cur.shots[i + 1].start - t < 0.3)) return toast("Too close to another cut");
+    const other = camPeople().find((p) => Math.abs(p - cur.shots[i].x) >= SAME_SPOT) ?? cur.shots[i].x;
+    cur.shots.splice(i + 1, 0, { start: t, x: other });
+    cur.shotSel = i + 1;
+    drawCamera();
+  });
+  $("#cm-swap").addEventListener("click", () => {
+    const people = camPeople(), s = cur.shots[cur.shotSel];
+    const i = people.findIndex((p) => Math.abs(p - s.x) < SAME_SPOT);
+    s.x = people[(i + 1) % people.length];
+    drawCamera();
+  });
+  $("#cm-del").addEventListener("click", () => {
+    if (cur.shotSel === 0) return;
+    cur.shots.splice(cur.shotSel, 1);
+    cur.shotSel -= 1;
+    drawCamera();
+  });
+  $("#cm-save").addEventListener("click", (e) => {
+    // neighbouring shots on the same person are one shot
+    const shots = cur.shots.filter((s, i) => i === 0 || Math.abs(s.x - cur.shots[i - 1].x) >= SAME_SPOT);
+    save({ camera: shots }, e.currentTarget, "Camera saved and re-rendered.");
+  });
+  $("#cm-auto").addEventListener("click", (e) => {
+    $("#ed-msg").textContent = "Finding who is talking and re-rendering…";
+    save({ camera: "auto" }, e.currentTarget, "Camera moves found again and re-rendered.");
+  });
 }
 
 // ------------------------------------------------------------------ cut (trim / split)
@@ -175,7 +331,7 @@ const LANGS = { en: "English", hi: "Hindi", pa: "Punjabi", ur: "Urdu", bn: "Beng
 function showTab(tab) {
   document.querySelectorAll("#editor [data-edtab]").forEach((b) => b.classList.toggle("on", b.dataset.edtab === tab));
   document.querySelectorAll("#editor [data-edpanel]").forEach((p) => (p.hidden = p.dataset.edpanel !== tab));
-  ["#ed-video", "#tm-video", "#lk-video", "#cut-video", "#cd-video"].forEach((v) => $(v).pause());
+  ["#ed-video", "#tm-video", "#lk-video", "#cut-video", "#cd-video", "#cm-video"].forEach((v) => $(v).pause());
 }
 
 // ------------------------------------------------------------------ subtitles out (mirrors core/subtitles.to_srt)
@@ -360,7 +516,7 @@ export function mount() {
   const dialog = $("#editor");
   $("#ed-close").addEventListener("click", () => dialog.close());
   dialog.addEventListener("close", () => {
-    ["#ed-video", "#tm-video", "#lk-video", "#cut-video", "#cd-video"].forEach((v) => $(v).pause());
+    ["#ed-video", "#tm-video", "#lk-video", "#cut-video", "#cd-video", "#cm-video"].forEach((v) => $(v).pause());
     if (cur) stopTapSync();
   });
   document.querySelectorAll("#editor [data-edtab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.edtab)));
@@ -517,6 +673,8 @@ export function mount() {
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
+
+  mountCamera();
 
   // Cards tab
   $("#cd-video").addEventListener("timeupdate", () => { $("#cd-time").textContent = `${$("#cd-video").currentTime.toFixed(1)} s`; });

@@ -124,10 +124,10 @@ def follow(samples: list[list[tuple[float, float, float]]]) -> list[float | None
 TRACK_FPS = 6              # mouths move fast: sample more often than for framing alone
 TRACK_SAMPLE_WIDTH = 640   # and closer, so a mouth in a wide two-shot is more than a few pixels
 SAME_PERSON = 0.12         # a face within this share of the width of a seat is that seat's person
-TALK_WINDOW = 1.5          # seconds of mouth movement averaged to judge who is talking
+TALK_WINDOW = 1.0          # seconds of mouth movement averaged to judge who is talking
 SWITCH_RATIO = 1.4         # the other person must move their mouth this much more than the one shown...
-SWITCH_HOLD = 0.8          # ...for this long before the camera moves
-MIN_SHOT = 2.0             # and never cut away within this many seconds of the last move
+SWITCH_HOLD = 0.5          # ...for this long; the cut is then moved back to when they started
+MIN_SHOT = 1.5             # and never cut away within this many seconds of the last move
 LOST_GRACE = 1.0           # a face the detector misses for less than this many seconds is still there
 CUT_DIFF = 40.0            # whole-frame change this big is an edit (camera cut), not a mouth
 
@@ -226,7 +226,11 @@ def follow_speaker(samples, fps: float = TRACK_FPS) -> list[float | None] | None
             rival = max((s for s in present if s != shown), key=lambda s: talk[s])
             ahead = ahead + 1 if talk[rival] > max(talk[shown] * SWITCH_RATIO, 0.5) else 0
             if ahead >= hold and since_move >= min_shot:
-                shown, since_move, ahead = rival, 0, 0
+                # the video is already recorded, so the cut can go back to when the rival started talking
+                back = max(0, min(ahead + win // 2, since_move - min_shot, len(out)))
+                for j in range(len(out) - back, len(out)):
+                    out[j] = last_x[rival]
+                shown, since_move, ahead = rival, back, 0
         out.append(last_x[shown] if shown in present else None)
     return out
 
@@ -238,42 +242,99 @@ def _talk_ahead(rows, i: int, seat: int, win: int) -> float:
     return float(np.mean(moves)) if moves else 0.0
 
 
-def _face_centres(video: Path, start: float, length: float, w: int, h: int) -> tuple[list[float | None], float]:
-    """(centre per sample, samples per second): the talking person if mouths can be read, else the biggest face."""
+def _face_centres(video: Path, start: float, length: float, w: int, h: int) -> tuple[list[float | None], float, bool]:
+    """(centre per sample, samples per second, from mouths?): the talking person if mouths can be read,
+    else the biggest face."""
     centres = follow_speaker(_speaking_samples(video, start, length, w, h))
     if centres is not None:
-        return centres, TRACK_FPS
-    return follow(_faces(video, start, length, w, h)), SAMPLE_FPS
+        return centres, TRACK_FPS, True
+    return follow(_faces(video, start, length, w, h)), SAMPLE_FPS, False
 
 
-def camera_path(centres: list[float | None], fps: float = SAMPLE_FPS) -> list[tuple[float, float]] | None:
-    """Keyframes (time, centre 0..1) for a calm virtual camera, or None if there's no one to follow."""
+# A "shot" is a stretch where the camera holds on one spot: {"start": seconds, "x": centre, share of width}.
+# Shots are what the editor shows and lets people change; the camera move is built from them.
+CUT_GLIDE = 0.2            # seconds a move between shots takes (a quick pan that reads as a cut)
+MIN_SHOT_LEN = 0.5         # shorter shots are merged into the one before
+
+
+def shots_from_centres(centres: list[float | None], fps: float, smooth: bool = True) -> list[dict] | None:
+    """Group per-sample centres into shots, or None if there's no one to follow."""
     seen = [c for c in centres if c is not None]
     if not centres or len(seen) / len(centres) < MIN_FACE_SHARE:
         return None
-    # fill gaps with the nearest known value, then median-smooth out detector noise
     filled, last = [], seen[0]
     for c in centres:
         last = c if c is not None else last
         filled.append(last)
-    k = max(3, round(fps * 5 / 3)) | 1                 # ~1.7 s of median smoothing
-    padded = np.pad(np.array(filled), k // 2, mode="edge")
-    smooth = [float(np.median(padded[i:i + k])) for i in range(len(filled))]
+    if smooth:                                          # biggest-face tracking is noisy: median it first
+        k = max(3, round(fps * 5 / 3)) | 1
+        padded = np.pad(np.array(filled), k // 2, mode="edge")
+        filled = [float(np.median(padded[i:i + k])) for i in range(len(filled))]
+    groups: list[list] = [[0, [filled[0]]]]
+    for i, c in enumerate(filled[1:], 1):
+        if abs(c - float(np.median(groups[-1][1]))) > DEAD_ZONE:
+            groups.append([i, [c]])
+        else:
+            groups[-1][1].append(c)
+    same = DEAD_ZONE if smooth else SAME_PERSON         # talking-head mode: one shot per person, not per lean
+    shots: list[dict] = []
+    for i, cs in groups:
+        x = round(float(np.median(cs)), 3)
+        if shots and (len(cs) / fps < MIN_SHOT_LEN or abs(x - shots[-1]["x"]) <= same):
+            continue                                    # too short to be a shot, or the same spot again
+        shots.append({"start": round(i / fps, 2), "x": x})
+    shots[0]["start"] = 0.0
+    return shots
 
-    keys = [(0.0, smooth[0])]
-    cam = smooth[0]
-    for i, target in enumerate(smooth):
-        t = i / fps
-        if abs(target - cam) > DEAD_ZONE and t >= keys[-1][0] + GLIDE_SECONDS:
-            keys.append((t, cam))                       # hold until now...
-            cam = target
-            keys.append((t + GLIDE_SECONDS, cam))       # ...then glide to the speaker
-    keys.append((len(smooth) / fps + 1, cam))
-    return keys
+
+def clean_shots(shots, length: float | None = None) -> list[dict] | None:
+    """Validate shots from the editor: sorted, inside the reel, x within the frame. None if unusable."""
+    if not isinstance(shots, list):
+        return None
+    out = []
+    for s in shots:
+        try:
+            t, x = float(s["start"]), float(s["x"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if length is not None and t >= length:
+            continue
+        out.append({"start": round(max(t, 0.0), 2), "x": round(min(max(x, 0.0), 1.0), 3)})
+    out.sort(key=lambda s: s["start"])
+    if not out:
+        return None
+    out[0]["start"] = 0.0
+    return [s for i, s in enumerate(out) if i == 0 or s["start"] > out[i - 1]["start"]]
 
 
-def crop_expression(video: Path, start: float, length: float, out_w: int, out_h: int) -> tuple[str, int, int] | None:
-    """(x expression, crop width, crop height) following the speaker, or None to fall back to blur."""
+def shift_shots(shots: list[dict] | None, seconds: float, length: float) -> list[dict] | None:
+    """Shots for a reel whose start moved by `seconds` (trim/split): keep the one in view at the new start."""
+    if not shots:
+        return None
+    moved = [{"start": s["start"] - seconds, "x": s["x"]} for s in shots]
+    current = [s for s in moved if s["start"] <= 0]
+    kept = ([{"start": 0.0, "x": current[-1]["x"]}] if current else []) + [s for s in moved if s["start"] > 0]
+    return clean_shots(kept, length)
+
+
+def detect_shots(video: Path, start: float, length: float) -> list[dict] | None:
+    try:
+        w, h = _dimensions(video)
+    except Exception:  # noqa: BLE001
+        return None
+    centres, fps, from_mouths = _face_centres(video, start, length, w, h)
+    return shots_from_centres(centres, fps, smooth=not from_mouths)
+
+
+class Crop(tuple):
+    """(x expression, crop width, crop height), plus the shots it was built from."""
+    shots: list[dict]
+
+
+def crop_from_shots(video: Path, shots: list[dict] | None, out_w: int, out_h: int) -> Crop | None:
+    """The follow-the-speaker crop for these shots, or None (fall back to blur)."""
+    if not shots:
+        return None
     try:
         w, h = _dimensions(video)
     except Exception:  # noqa: BLE001
@@ -281,21 +342,31 @@ def crop_expression(video: Path, start: float, length: float, out_w: int, out_h:
     crop_w = int(h * out_w / out_h) // 2 * 2
     if crop_w >= w:                                     # target is as wide as the source: nothing to track
         return None
-    keys = camera_path(*_face_centres(video, start, length, w, h))
-    if keys is None:
-        log.info("   no steady face found; using the blurred layout")
-        return None
 
     def x_at(c: float) -> int:
         return int(min(max(c * w - crop_w / 2, 0), w - crop_w))
 
-    # piecewise-linear x(t), built from the end backwards: if(lt(t,t1), seg1, if(lt(t,t2), seg2, ... last))
+    # piecewise x(t): hold each shot, then a quick glide into the next one
+    keys = [(0.0, shots[0]["x"])]
+    for shot in shots[1:]:
+        keys += [(shot["start"], keys[-1][1]), (shot["start"] + CUT_GLIDE, shot["x"])]
     expr = str(x_at(keys[-1][1]))
     for (t0, c0), (t1, c1) in reversed(list(zip(keys[:-1], keys[1:], strict=True))):
         x0, x1 = x_at(c0), x_at(c1)
         seg = str(x0) if x0 == x1 or t1 <= t0 else f"{x0}+({x1 - x0})*(t-{t0:.2f})/{t1 - t0:.2f}"
         expr = f"if(lt(t\\,{t1:.2f})\\,{seg}\\,{expr})"
-    return expr, crop_w, h
+    crop = Crop((expr, crop_w, h))
+    crop.shots = shots
+    return crop
+
+
+def crop_expression(video: Path, start: float, length: float, out_w: int, out_h: int,
+                    shots: list[dict] | None = None) -> Crop | None:
+    """Follow-the-speaker crop: from the given shots, or found from who is talking. None -> blur."""
+    shots = shots or detect_shots(video, start, length)
+    if not shots:
+        log.info("   no steady face found; using the blurred layout")
+    return crop_from_shots(video, shots, out_w, out_h)
 
 
 # --------------------------------------------------------------------------- split screen

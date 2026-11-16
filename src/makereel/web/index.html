@@ -211,6 +211,7 @@
       <button data-edtab="timing">Timing</button>
       <button data-edtab="look">Look</button>
       <button data-edtab="cards">Cards</button>
+      <button data-edtab="camera">Camera</button>
       <button data-edtab="cut">Cut</button>
       <button data-edtab="export">Export</button>
     </div>
@@ -354,6 +355,39 @@
       </div>
       <div id="cd-list" class="stack"></div>
       <div class="row"><button class="btn primary" id="cd-save" type="button">Save cards &amp; re-render</button></div>
+    </div>
+  </div>
+
+  <div class="editor" data-edpanel="camera" hidden>
+    <div>
+      <div class="cam-stage" id="cm-stage">
+        <video id="cm-video" playsinline muted></video>
+        <div class="cam-box" id="cm-box"></div>
+        <div class="cam-hit" id="cm-hit" title="Click a person to point the selected shot at them"></div>
+      </div>
+      <div class="row" style="justify-content:center;gap:8px;margin-top:8px">
+        <button class="btn small" id="cm-play" type="button">Play</button>
+        <span class="hint" style="margin:0"><span id="cm-time">0.0 s</span></span>
+        <label class="hint" style="margin:0"><input type="checkbox" id="cm-sound"> sound</label>
+      </div>
+    </div>
+    <div class="stack">
+      <p class="hint" id="cm-off" style="margin:0" hidden>Camera moves can be edited for the <b>Follow the speaker</b> framing. Choose it under Look first.</p>
+      <div id="cm-on" class="stack">
+        <p class="hint" style="margin:0">The box shows what the reel shows. Each coloured block below is one shot:
+          drag the line between two blocks to move a cut, click a block to pick it, then click a person in the video to point that shot at them.</p>
+        <div class="cam-bar" id="cm-bar"></div>
+        <div class="row" style="gap:6px;flex-wrap:wrap">
+          <button class="btn small" id="cm-cut" type="button">+ Cut at playhead</button>
+          <button class="btn small" id="cm-swap" type="button">Switch person</button>
+          <button class="btn small" id="cm-del" type="button">Remove this cut</button>
+        </div>
+        <p class="hint" id="cm-sel" style="margin:0"></p>
+        <div class="row" style="gap:6px">
+          <button class="btn primary" id="cm-save" type="button">Save camera &amp; re-render</button>
+          <button class="btn" id="cm-auto" type="button">Find again automatically</button>
+        </div>
+      </div>
     </div>
   </div>
 

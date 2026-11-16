@@ -114,7 +114,8 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
                                    hook=body.get("hook"), caption=body.get("caption"),
                                    transcript=body.get("transcript"), words=body.get("words"), offset=offset,
                                    ass=body.get("ass"), logo=body.get("logo"), restyle=bool(body.get("restyle")),
-                                   look=body.get("look"), fit=body.get("fit"), cards=body.get("cards"))
+                                   look=body.get("look"), fit=body.get("fit"), cards=body.get("cards"),
+                                   camera=body.get("camera"))
 
     @api.post("/folders/{folder}/reels/{name}/import")
     def import_captions(req: Request):

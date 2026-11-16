@@ -60,13 +60,19 @@ def test_blend_reorders_by_ai():
     assert blended[1] > blended[0]
 
 
-def test_camera_holds_then_glides():
+def test_shots_hold_then_move():
     centres = [0.5] * 12 + [0.8] * 12          # speaker moves right after 4 s
-    keys = framing.camera_path(centres)
-    xs = [c for _, c in keys]
-    assert xs[0] == 0.5 and xs[-1] == 0.8 and len(keys) <= 5   # one deliberate move, not jitter
+    shots = framing.shots_from_centres(centres, 3)
+    assert [s["x"] for s in shots] == [0.5, 0.8] and shots[0]["start"] == 0.0
 
 
-def test_camera_ignores_small_wobble_and_needs_faces():
-    assert len(framing.camera_path([0.5, 0.52, 0.49, 0.51] * 6)) == 2
-    assert framing.camera_path([None] * 10 + [0.5]) is None
+def test_shots_ignore_small_wobble_and_need_faces():
+    assert len(framing.shots_from_centres([0.5, 0.52, 0.49, 0.51] * 6, 3)) == 1
+    assert framing.shots_from_centres([None] * 10 + [0.5], 3) is None
+
+
+def test_clean_and_shift_shots():
+    shots = framing.clean_shots([{"start": 5, "x": 0.8}, {"start": 1, "x": 1.4}, {"start": "x"}], 10)
+    assert shots == [{"start": 0.0, "x": 1.0}, {"start": 5.0, "x": 0.8}]
+    assert framing.shift_shots(shots, 3, 7) == [{"start": 0.0, "x": 1.0}, {"start": 2.0, "x": 0.8}]
+    assert framing.shift_shots(shots, 6, 4) == [{"start": 0.0, "x": 0.8}]

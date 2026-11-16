@@ -145,7 +145,8 @@ def cut_source(src: Path, start: float, end: float, out: Path, fps: int = 30) ->
                "-movflags", "+faststart", str(out)])
 
 
-def track_for(source: Path, fmt: str, fit: str, section: tuple[float, float] | None):
+def track_for(source: Path, fmt: str, fit: str, section: tuple[float, float] | None,
+              shots: list[dict] | None = None):
     """Speaker-tracking crop for fit='track', split panels for fit='split' (None when nobody is found)."""
     if fit not in ("track", "split"):
         return None
@@ -154,15 +155,16 @@ def track_for(source: Path, fmt: str, fit: str, section: tuple[float, float] | N
     w, h = FORMATS[fmt]
     if fit == "split":
         return framing.split_layout(source, start, length, w, h) if h > w else None
-    return framing.crop_expression(source, start, length, w, h)
+    return framing.crop_expression(source, start, length, w, h, shots)
 
 
-def plan_fit(source: Path, fmt: str, fit: str, section: tuple[float, float] | None) -> tuple[str, object]:
+def plan_fit(source: Path, fmt: str, fit: str, section: tuple[float, float] | None,
+             shots: list[dict] | None = None) -> tuple[str, object]:
     """(the fit that will really be used, its crop data). Follow-the-speaker and split screen need someone
     on screen; when nobody suitable is found they become "blur", so captions can be placed to match."""
     if fit == "auto":
         return auto_fit(source, fmt, section)
-    track = track_for(source, fmt, fit, section)
+    track = track_for(source, fmt, fit, section, shots)
     if fit in ("track", "split") and not track:
         return "blur", None
     return fit, track
@@ -197,13 +199,14 @@ def burn(raw: Path, ass: Path, out: Path, logo: Logo | None = None, fonts_dir: P
 
 
 def export(source: Path, ass: Path, out: Path, fmt: str, fit: str, logo: Logo | None = None,
-           fonts_dir: Path | None = None, section: tuple[float, float] | None = None) -> None:
+           fonts_dir: Path | None = None, section: tuple[float, float] | None = None,
+           shots: list[dict] | None = None) -> None:
     """One pass: the reel's part of the master → any format, with captions and logo."""
     media.require_libass()
     w, _ = _check_format(fmt, fit)
     inputs = [source] + ([logo.path] if logo else [])
     graph, label = _overlay_filters("v", ass, fonts_dir, logo, w, 1)
-    track = track_for(source, fmt, fit, section)
+    track = track_for(source, fmt, fit, section, shots)
     _encode(inputs, reframe_filter(fmt, fit, track, media.output_fps(source)) + ";" + graph, label, out,
             out.parent, section=section)
 

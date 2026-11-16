@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Auto layout** (new default): split screen for two people or a webcam over gameplay, follow the speaker for one
+  steady face, otherwise blur. The Layout choice now sits above both the link box and the upload box.
+- **Follow the speaker follows who is talking**: mouth movement decides who is on screen (it used to lock on the
+  biggest face in the first frame). Cuts land near when the person starts talking, and a quick "yeah" doesn't move it.
+- **Camera tab** in the editor: the wide video with the reel's frame drawn on it, and a timeline of shots. Drag a
+  cut, add or remove cuts, click a person to point a shot at them, or find the shots again automatically.
+
 ## 0.6.0 (2026-11-16)
 
 ### Added

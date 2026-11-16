@@ -124,6 +124,7 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
 
     post = {"file": out.name, "raw": raw.name, "source_clip": src.name, "captions": ass.name,
             "folder": out_dir.name, "name": name, "format": render.MAIN_FORMAT, "fit": plan[0],
+            "shots": getattr(plan[1], "shots", None) if plan[0] == "track" else None,
             "src_offset": section[0], "length": section[1],
             "logo": True, "exports": {}, "score": round(c.score, 2), "why": c.reasons, "hook": hook,
             "hook_original": hook_original, "language": clip.get("language"),

@@ -246,3 +246,18 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .card-row .row { gap: 6px; flex-wrap: wrap; align-items: center; }
 .card-row input[type=number] { width: 70px; }
 .card-row .kind { font-weight: 600; font-size: 13px; text-transform: capitalize; }
+
+/* Camera tab: the wide master with the reel's crop box, and a timeline of shots */
+.cam-stage { position: relative; width: 100%; background: #000; border-radius: 10px; overflow: hidden; }
+.editor .cam-stage video { display: block; width: 100%; aspect-ratio: auto; border-radius: 0; }
+.cam-box { position: absolute; top: 0; bottom: 0; border: 3px solid #ffd400; box-shadow: 0 0 0 9999px rgba(0,0,0,.45);
+  pointer-events: none; transition: left .15s linear; }
+.cam-hit { position: absolute; inset: 0; cursor: crosshair; }
+.cam-bar { position: relative; height: 46px; border-radius: 8px; overflow: hidden; background: var(--line); touch-action: none; user-select: none; }
+.cam-shot { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: #111; cursor: pointer; border-right: 1px solid rgba(0,0,0,.25); overflow: hidden; white-space: nowrap; }
+.cam-shot.sel { outline: 3px solid var(--ink); outline-offset: -3px; }
+.cam-cut { position: absolute; top: 0; bottom: 0; width: 14px; margin-left: -7px; cursor: ew-resize; z-index: 2; }
+.cam-cut::after { content: ""; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: #111; }
+.cam-head { position: absolute; top: 0; bottom: 0; width: 2px; background: #e11; pointer-events: none; z-index: 3; }
+.editor[data-edpanel="camera"] { grid-template-columns: 1fr; }

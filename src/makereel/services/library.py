@@ -21,7 +21,7 @@ import shutil
 from pathlib import Path
 
 from ..config import env, load_settings
-from ..core import branding, captions, language, render, transcribe
+from ..core import branding, captions, framing, language, render, transcribe
 from ..core.pipeline import FOLDER_FILE, caption_hook, folder_language
 from ..errors import Forbidden, InvalidInput, NotFound
 
@@ -161,6 +161,20 @@ def _look(post: dict) -> dict:
             "script": branding.script_mode(b, post.get("look")), "custom": bool(post.get("look"))}
 
 
+def _camera_view(folder: str, d: Path, post: dict) -> dict:
+    """What the Camera editor needs: the wide master and how much of its width the 9:16 crop shows."""
+    src = d / post.get("source_clip", "-")
+    if post.get("fit") != "track" or not src.is_file():
+        return {}
+    try:
+        w, h = framing._dimensions(src)
+    except Exception:  # noqa: BLE001
+        return {}
+    out_w, out_h = render.FORMATS[render.MAIN_FORMAT]
+    return {"source": _media_url(folder, src.name, src), "src_offset": post.get("src_offset", 0.0),
+            "crop_share": round(min(1.0, h * out_w / out_h / w), 4)}
+
+
 def get_reel(folder: str, name: str) -> dict:
     meta_file, post = _reel_paths(folder, name)
     ass_text = (meta_file.parent / post["captions"]).read_text(encoding="utf-8")
@@ -172,6 +186,8 @@ def get_reel(folder: str, name: str) -> dict:
             "transcript": " ".join(w["word"] for w in words), "words": words, "ass": ass_text,
             "templates": {k: v["label"] for k, v in captions.TEMPLATES.items()},
             "safe_zone": _safe_zone(), "cards": post.get("cards") or [],
+            "shots": post.get("shots") if post.get("fit") == "track" else None,
+            **_camera_view(folder, d, post),
             "language": _language(d, post), "script": language.script_of(" ".join(w["word"] for w in words)),
             "can_trim": bool(sec), "length": sec[1] if sec else captions.length_of(ass_text),
             "room_before": sec[0] if sec else 0.0,
@@ -208,8 +224,13 @@ def _write_and_render(d: Path, meta_file: Path, post: dict, ass_text: str, brand
     ass_text = captions.set_cards(ass_text, post.get("cards"), post.get("length") or captions.length_of(ass_text))
     (d / post["captions"]).write_text(ass_text, encoding="utf-8")
     if reraw:
-        render.make_raw(d / post["source_clip"], d / post["raw"], render.MAIN_FORMAT,
-                        post.get("fit") or "blur", _section(d, post), plan)
+        fit = post.get("fit") or "blur"
+        section = _section(d, post)
+        plan = plan or render.plan_fit(d / post["source_clip"], render.MAIN_FORMAT, fit, section,
+                                       post.get("shots") if fit == "track" else None)
+        if plan[0] == "track" and getattr(plan[1], "shots", None):
+            post["shots"] = plan[1].shots                  # remember the camera moves, for the editor
+        render.make_raw(d / post["source_clip"], d / post["raw"], render.MAIN_FORMAT, fit, section, plan)
     render.burn(d / post["raw"], d / post["captions"], d / post["file"],
                 branding.logo_for(brand, post.get("logo", True)), branding.fonts_dir())
     meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -248,7 +269,8 @@ def _rebuild(post: dict, current: str, words: list[dict], hook: str | None, bran
 def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str | None = None,
                 transcript: str | None = None, words: list[dict] | None = None, offset: float | None = None,
                 ass: str | None = None, logo: bool | None = None, restyle: bool = False,
-                look: dict | None = None, fit: str | None = None, cards: list | None = None) -> dict:
+                look: dict | None = None, fit: str | None = None, cards: list | None = None,
+                camera: list | str | None = None) -> dict:
     """Apply edits and re-render the reel (and any exports).
 
     - `transcript`: the caption words as a paragraph. Unchanged words keep their timing; edited,
@@ -267,6 +289,8 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
       or split (two people, or webcam over gameplay).
     - `cards`: text overlays, replacing the current ones: [{"kind": "quote" | "note", "text", "start", "end",
       "position": "top" | "middle" | "bottom"}] or {"kind": "outro", "text", "secs"} (the last seconds).
+    - `camera`: follow-the-speaker shots, replacing the found ones: [{"start": seconds, "x": 0..1 centre}],
+      or "auto" to find them again from who is talking.
     """
     meta_file, post = _reel_paths(folder, name)
     d = meta_file.parent
@@ -297,13 +321,28 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
         if fit not in render.FITS + ("auto",):
             raise InvalidInput(f"fit must be auto or one of {', '.join(render.FITS)}")
         _require_section(d, post)
-        plan = render.plan_fit(d / post["source_clip"], render.MAIN_FORMAT, fit, _section(d, post))
+        if camera is None:
+            post.pop("shots", None)                       # a new layout: find the camera moves afresh
+        plan = render.plan_fit(d / post["source_clip"], render.MAIN_FORMAT, fit, _section(d, post),
+                               post.get("shots") if fit == "track" else None)
         if fit == "auto":
             fit = plan[0]
         elif plan[0] != fit:
             raise InvalidInput({"split": "no two people or webcam found in this reel",
                                 "track": "no steady face found in this reel"}[fit],
                                "The layout was left as it was.")
+    if camera is not None:
+        if (fit or post.get("fit")) != "track":
+            raise InvalidInput("camera shots only apply to the follow-the-speaker layout")
+        _require_section(d, post)
+        if camera == "auto":
+            post.pop("shots", None)
+        else:
+            shots = framing.clean_shots(camera, post.get("length"))
+            if not shots:
+                raise InvalidInput("give at least one camera shot: [{start, x}]")
+            post["shots"] = shots
+        reraw = True
     if fit is not None and fit != post.get("fit"):
         restyle = restyle or "split" in (fit, post.get("fit"))   # split-screen captions sit on the seam
         post["fit"], reraw = fit, True
@@ -444,6 +483,7 @@ def trim_reel(folder: str, name: str, start: float = 0.0, end: float = 0.0) -> d
 
     post["src_offset"], post["length"] = round(new_off, 3), new_len
     post["cards"] = captions.shift_cards(post.get("cards") or [], -shift, new_len)
+    post["shots"] = framing.shift_shots(post.get("shots"), shift, new_len)
     post["start"] = round(post.get("start", 0) + shift, 2)
     post["end"] = round(post["start"] + new_len, 2)
     brand = load_settings().brand
@@ -468,7 +508,8 @@ def split_reel(folder: str, name: str, at: float) -> dict:
     second = {**post, "name": new, "file": f"{new}.mp4", "raw": f"{new}.raw.mp4", "captions": f"{new}.ass",
               "source_clip": f"{new}.src.mp4", "exports": {}, "src_offset": round(off + at, 3),
               "length": round(length - at, 3), "start": round(post.get("start", 0) + at, 2),
-              "cards": captions.shift_cards(post.get("cards") or [], -at, round(length - at, 3))}
+              "cards": captions.shift_cards(post.get("cards") or [], -at, round(length - at, 3)),
+              "shots": framing.shift_shots(post.get("shots"), at, round(length - at, 3))}
     shutil.copyfile(d / post["source_clip"], d / second["source_clip"])   # each reel owns its master
     later = [{**w, "start": round(w["start"] - at, 2), "end": round(w["end"] - at, 2)} for w in words
              if w["start"] >= at]
@@ -479,6 +520,7 @@ def split_reel(folder: str, name: str, at: float) -> dict:
 
     post["length"], post["end"] = round(at, 3), round(post.get("start", 0) + at, 2)
     post["cards"] = [c for c in captions.shift_cards(post.get("cards") or [], 0, at) if c["kind"] != "outro"]
+    post["shots"] = framing.shift_shots(post.get("shots"), 0, at)
     earlier = [w for w in words if w["start"] < at]
     _write_and_render(d, meta_file, post, _rebuild(post, current, earlier, post.get("hook"), brand, False, at),
                       brand, reraw=True)
@@ -516,8 +558,9 @@ def merge_reels(folder: str, names: list[str]) -> dict:
     media.run(cmd + ["-filter_complex", graph, "-map", "[v]", "-map", "[a]", *media.encoder_args("raw"),
                      "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(src)])
 
-    words, cards, t = [], [], 0.0
+    words, cards, shots, t = [], [], [], 0.0
     for i, (pd, post, (_, length)) in enumerate(parts):
+        shots += [{**s, "start": s["start"] + t} for s in post.get("shots") or []]
         cards += [c for c in captions.shift_cards(post.get("cards") or [], t, t + length)
                   if c["kind"] != "outro" or i == len(parts) - 1]
         ass_text = (pd / post["captions"]).read_text(encoding="utf-8")
@@ -526,7 +569,8 @@ def merge_reels(folder: str, names: list[str]) -> dict:
         t += length
     merged = {**first, "name": new, "file": f"{new}.mp4", "raw": f"{new}.raw.mp4", "captions": f"{new}.ass",
               "source_clip": src.name, "exports": {}, "src_offset": 0.0, "length": round(t, 3),
-              "end": round(first.get("start", 0) + t, 2), "merged_from": names, "cards": cards}
+              "end": round(first.get("start", 0) + t, 2), "merged_from": names, "cards": cards,
+              "shots": framing.clean_shots(shots) if all(p.get("shots") for _, p, _ in parts) else None}
     brand = load_settings().brand
     current = (d / first["captions"]).read_text(encoding="utf-8")
     (d / f"{new}.json").write_text("{}", encoding="utf-8")
@@ -552,7 +596,7 @@ def export_reel(folder: str, name: str, fmt: str, fit: str | None = None) -> dic
     ass.write_text(captions.set_cards(text, post.get("cards"), section[1]), encoding="utf-8")
     out = d / f"{name}.{fmt}.mp4"
     render.export(d / post["source_clip"], ass, out, fmt, fit, branding.logo_for(brand, post.get("logo", True), fmt),
-                  branding.fonts_dir(), section)
+                  branding.fonts_dir(), section, post.get("shots") if fit == "track" else None)
     post.setdefault("exports", {})[fmt] = {"file": out.name, "fit": fit, "captions": ass.name}
     meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
     return get_reel(folder, name)
