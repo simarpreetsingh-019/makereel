@@ -104,6 +104,7 @@ CLIP_DEFAULTS: dict[str, Any] = {
     "language": None,        # None = auto-detect (once per video, so every reel matches)
     "model_other": "small",  # model for non-English speech when `model` is tiny/base ("same" = don't switch)
     "silence": False,        # trim dead air with auto-editor (talk content)
+    "fps": 30,               # 30, or 60 to keep smooth motion from 50/60 fps sources (gameplay)
 }
 
 BRAND_DEFAULTS: dict[str, Any] = {
@@ -184,6 +185,12 @@ class Settings:
 
 def validate_clip(clip: dict[str, Any]) -> None:
     clip.setdefault("model_other", "small")
+    try:
+        clip["fps"] = int(clip.get("fps") or 30)
+    except (TypeError, ValueError) as e:
+        raise ConfigError("clip.fps must be 30 or 60") from e
+    if clip["fps"] not in (30, 60):
+        raise ConfigError("clip.fps must be 30 or 60")
     for key, choices in CLIP_CHOICES.items():
         if clip.get(key) not in choices:
             raise ConfigError(f"clip.{key} must be one of {', '.join(choices)}, got {clip.get(key)!r}")

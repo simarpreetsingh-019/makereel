@@ -103,7 +103,7 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
     s0, e0 = max(0.0, c.start - MARGIN), min(total, c.end + MARGIN)
     section = (round(c.start - s0, 3), round(c.end - c.start, 3))     # the reel inside its master
     with stage("render"):
-        render.cut_source(video, s0, e0, src)
+        render.cut_source(video, s0, e0, src, int(clip.get("fps", 30)))
     with stage("sync"):
         words = synced_words(src, section, c.words, c.start, clip, mode)
     # the title comes from the precise words (the first, fast pass is rougher, more so outside English)

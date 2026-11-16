@@ -50,9 +50,10 @@ passes a one-frame test; otherwise it falls back to `libx264`.
 | `clip.max_clips` | 8 | reels per video (1–50) |
 | `clip.min_len` / `clip.max_len` | 15 / 45 | reel length in seconds |
 | `clip.model` | `base` | speech model: `tiny`, `base`, `small`, `medium` or `large-v3` |
-| `clip.layout` | `blur` | `blur` (whole frame over a blurred fill), `crop`, `pad` (black bars) or `track` (follow the speaker) |
+| `clip.layout` | `blur` | `blur` (whole frame over a blurred fill), `crop`, `pad` (black bars), `track` (follow the speaker) or `split` (two people stacked, or webcam over gameplay) |
 | `clip.language` | auto | e.g. `en`, `hi`, `pa`. Auto-detected once per video, so every reel of a video uses the same language and script |
 | `clip.model_other` | `small` | model used for non-English speech when `clip.model` is `tiny` or `base`: `small`, `medium`, `large-v3`, or `same` to never switch |
+| `clip.fps` | `30` | `60` keeps smooth motion when the source is 50/60 fps (gameplay); 30 fps sources stay 30 |
 | `clip.silence` | false | cut dead air with auto-editor (`pip install -e ".[silence]"`) |
 
 ### Brand kit (`brand`)

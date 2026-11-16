@@ -52,7 +52,7 @@ def _check_format(fmt: str, fit: str) -> tuple[int, int]:
     return FORMATS[fmt]
 
 
-def reframe_filter(fmt: str, fit: str, track=None) -> str:
+def reframe_filter(fmt: str, fit: str, track=None, fps: int = 30) -> str:
     """Filter chain (input [0:v] → output [v]) that turns any shape into `fmt`.
 
     fit="track" needs `track` from framing.crop_expression; fit="split" needs the panels from
@@ -68,24 +68,24 @@ def reframe_filter(fmt: str, fit: str, track=None) -> str:
             for i, ((x, y, cw, ch), ph) in enumerate(track):
                 parts.append(f"[s{i}]crop={cw}:{ch}:{x}:{y},scale={w}:{ph}:force_original_aspect_ratio=increase,"
                              f"crop={w}:{ph},setsar=1[p{i}]")
-            parts.append("".join(f"[p{i}]" for i in range(n)) + f"vstack=inputs={n},fps=30[v]")
+            parts.append("".join(f"[p{i}]" for i in range(n)) + f"vstack=inputs={n},fps={fps}[v]")
             return ";".join(parts)
     if fit == "track":
         if track is None:
             fit = "blur"
         else:
             expr, cw, ch = track
-            return f"[0:v]crop=w={cw}:h={ch}:x='{expr}':y=0,scale={w}:{h},setsar=1,fps=30[v]"
+            return f"[0:v]crop=w={cw}:h={ch}:x='{expr}':y=0,scale={w}:{h},setsar=1,fps={fps}[v]"
     cover = f"scale={w}:{h}:force_original_aspect_ratio=increase:force_divisible_by=2,crop={w}:{h}"
     contain = f"scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2"
     if fit == "crop":
-        return f"[0:v]{cover},setsar=1,fps=30[v]"
+        return f"[0:v]{cover},setsar=1,fps={fps}[v]"
     if fit == "pad":
-        return f"[0:v]{contain},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=30[v]"
+        return f"[0:v]{contain},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps={fps}[v]"
     sw, sh = w // 4, h // 4   # blur a small copy: same look, a fraction of the work
     return (f"[0:v]split[a][b];[a]scale={sw}:{sh}:force_original_aspect_ratio=increase,crop={sw}:{sh},"
             f"boxblur=10:2,eq=brightness=-0.08,scale={w}:{h}[bg];[b]{contain}[fg];"
-            f"[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1,fps=30[v]")
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1,fps={fps}[v]")
 
 
 def _overlay_filters(label: str, ass: Path | None, fonts_dir: Path | None, logo: Logo | None,
@@ -131,10 +131,15 @@ def _encode(inputs: list[Path], graph: str, out_label: str, out: Path, cwd: Path
     tmp.replace(out)
 
 
-def cut_source(src: Path, start: float, end: float, out: Path) -> None:
-    """The moment in its original shape, loudness-normalised (-14 LUFS): the master for every format."""
+def cut_source(src: Path, start: float, end: float, out: Path, fps: int = 30) -> None:
+    """The moment in its original shape, loudness-normalised (-14 LUFS): the master for every format.
+
+    fps=60 keeps real 50/60 fps motion (gameplay); a 30 fps source stays 30 either way. Every format
+    made from this master then uses the master's rate.
+    """
+    rate = media.output_fps(src, fps)
     media.run([media.binary("ffmpeg"), "-y", "-v", "error", "-ss", f"{start:.3f}", "-to", f"{end:.3f}",
-               "-i", str(src), "-map", "0:v:0", "-map", "0:a?", "-vf", "fps=30,setsar=1",
+               "-i", str(src), "-map", "0:v:0", "-map", "0:a?", "-vf", f"fps={rate},setsar=1",
                *media.encoder_args("raw"), "-pix_fmt", "yuv420p",
                "-c:a", "aac", "-b:a", "160k", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
                "-movflags", "+faststart", str(out)])
@@ -156,7 +161,8 @@ def make_raw(source: Path, raw: Path, fmt: str = MAIN_FORMAT, fit: str = "blur",
              section: tuple[float, float] | None = None) -> None:
     """Reframe the reel's part of the master into `fmt`, without captions (cached so caption edits are fast)."""
     track = track_for(source, fmt, fit, section)
-    _encode([source], reframe_filter(fmt, fit, track), "v", raw, raw.parent, section=section)
+    _encode([source], reframe_filter(fmt, fit, track, media.output_fps(source)), "v", raw, raw.parent,
+            section=section)
 
 
 def burn(raw: Path, ass: Path, out: Path, logo: Logo | None = None, fonts_dir: Path | None = None) -> None:
@@ -176,7 +182,8 @@ def export(source: Path, ass: Path, out: Path, fmt: str, fit: str, logo: Logo | 
     inputs = [source] + ([logo.path] if logo else [])
     graph, label = _overlay_filters("v", ass, fonts_dir, logo, w, 1)
     track = track_for(source, fmt, fit, section)
-    _encode(inputs, reframe_filter(fmt, fit, track) + ";" + graph, label, out, out.parent, section=section)
+    _encode(inputs, reframe_filter(fmt, fit, track, media.output_fps(source)) + ";" + graph, label, out,
+            out.parent, section=section)
 
 
 def _probe_width(path: Path) -> float:

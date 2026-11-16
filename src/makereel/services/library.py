@@ -494,12 +494,13 @@ def merge_reels(folder: str, names: list[str]) -> dict:
     w, h = (int(x) for x in media.run([media.binary("ffprobe"), "-v", "error", "-select_streams", "v:0",
                                        "-show_entries", "stream=width,height", "-of", "csv=p=0",
                                        str(d / first["source_clip"])], capture=True).decode().split(",")[:2])
+    rate = media.output_fps(d / first["source_clip"])
     cmd = [media.binary("ffmpeg"), "-y", "-v", "error"]
     chains, labels = [], ""
     for i, (pd, post, (off, length)) in enumerate(parts):
         cmd += ["-ss", f"{off:.3f}", "-t", f"{length:.3f}", "-i", str(pd / post["source_clip"])]
         chains.append(f"[{i}:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,"
-                      f"setsar=1,fps=30[v{i}];[{i}:a]aresample=48000[a{i}]")
+                      f"setsar=1,fps={rate}[v{i}];[{i}:a]aresample=48000[a{i}]")
         labels += f"[v{i}][a{i}]"
     graph = ";".join(chains) + f";{labels}concat=n={len(parts)}:v=1:a=1[v][a]"
     media.run(cmd + ["-filter_complex", graph, "-map", "[v]", "-map", "[a]", *media.encoder_args("raw"),

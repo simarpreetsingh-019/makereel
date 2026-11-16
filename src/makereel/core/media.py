@@ -104,6 +104,22 @@ def encoder_args(quality: str = "final") -> list[str]:
     return _encoder_options("8M" if quality == "final" else "12M")[encoder_name()]
 
 
+def frame_rate(path: Path) -> float:
+    """Frames per second of the first video stream (0 if unknown)."""
+    out = run([binary("ffprobe"), "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=avg_frame_rate",
+               "-of", "csv=p=0", str(path)], capture=True).decode().strip().split("\n")[0]
+    try:
+        num, _, den = out.partition("/")
+        return float(num) / float(den or 1) if float(den or 1) else 0.0
+    except ValueError:
+        return 0.0
+
+
+def output_fps(path: Path, wanted: int = 60) -> int:
+    """60 when `wanted` is 60 and the video really moves at 50 fps or more; otherwise 30."""
+    return 60 if wanted >= 60 and frame_rate(path) >= 49 else 30
+
+
 def duration(path: Path) -> float:
     out = run([binary("ffprobe"), "-v", "error", "-show_entries", "format=duration",
                "-of", "csv=p=0", str(path)], capture=True)

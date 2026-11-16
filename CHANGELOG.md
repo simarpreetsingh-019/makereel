@@ -16,6 +16,9 @@
 - **Import subtitles** (editor → Text): an SRT or WebVTT of the reel, or of the whole video it came from
   (moved to the reel's clock automatically; YouTube's repeating auto-captions are cleaned up), or a plain
   transcript (fitted to the current timing). **Download .srt** gives the reel's captions as a subtitle file.
+- **60 fps** (`clip.fps`, Create → Frame rate, `--fps 60`): reels from 50/60 fps sources (gameplay, Twitch
+  720p60) keep their smooth motion; 30 fps sources stay 30 rather than repeating frames. Trims, layouts,
+  exports and joins follow the reel's own rate.
 
 ## 0.5.0 (2026-11-16)
 

@@ -172,7 +172,7 @@ class JobManager:
             job.error = {"code": "internal", "message": str(error) or error.__class__.__name__, "hint": None}
 
     def _settings(self, options: dict[str, Any]) -> Settings:
-        clip_keys = ("profile", "max_clips", "min_len", "max_len", "model", "model_other", "language", "layout")
+        clip_keys = ("profile", "max_clips", "min_len", "max_len", "model", "model_other", "language", "layout", "fps")
         return load_settings(self.settings_path).with_clip(**{k: options.get(k) for k in clip_keys})
 
     def _work(self) -> None:
