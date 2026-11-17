@@ -1,22 +1,24 @@
-"""24/7 mode: watch channels for live streams, work through inbox.txt, clean up old reels.
+"""24/7 mode: watch channels for live streams and new uploads, work through inbox.txt, clean up old reels.
 
 Between streams it uses almost no CPU: a live check is one small request per channel every
 `poll_minutes`. Settings are re-read on every loop, so edits apply without a restart.
 """
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from pathlib import Path
 
 from .. import logs
-from ..config import load_settings
+from ..config import env, load_settings
 from ..core import sources, transcribe
 from ..errors import MakereelError
 from . import library, runner
 from .jobs import JobManager, Status
 
 log = logging.getLogger(__name__)
+SEEN_KEEP = 50   # upload ids remembered per channel (only the newest few are ever listed)
 
 
 class Watcher:
@@ -87,9 +89,54 @@ class Watcher:
             except MakereelError as e:
                 log.warning("could not start recording %s: %s", channel, e.message)
 
+        if settings["watch_uploads"]:
+            self._check_uploads(settings)
+
         library.cleanup(settings["keep_days"])
         if not self._watching:
             transcribe.release_if_idle(300)  # give the speech model's RAM back between streams
+
+    # ------------------------------------------------------------------ new uploads
+    def _seen_path(self) -> Path:
+        return (self.settings_path or env().config_file).with_name("seen_uploads.json")
+
+    def _check_uploads(self, settings) -> None:
+        """Queue each channel's uploads we haven't seen (new videos, premieres once they've aired).
+
+        The first time a channel is checked, its current videos are only remembered, not clipped:
+        adding a channel shouldn't turn its back catalogue into reels.
+        """
+        path = self._seen_path()
+        try:
+            seen: dict[str, list[str]] = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            seen = {}
+        changed = False
+        for channel in settings["channels"]:
+            try:
+                uploads = sources.recent_uploads(channel)
+            except MakereelError as e:
+                log.debug("uploads check failed for %s: %s", channel, e.message)
+                continue
+            if not uploads:
+                continue
+            known = seen.get(channel)
+            ids = [u.id for u in uploads]
+            if known is None:                               # first look: remember, don't clip
+                seen[channel] = ids
+                changed = True
+                log.info("%s: watching for new uploads (%d existing ones skipped)", channel, len(ids))
+                continue
+            for up in reversed(uploads):                    # oldest new one first
+                if up.id in known or up.id in self._watching:
+                    continue
+                self.jobs.submit_link(up.url, {})
+                log.info("%s uploaded: %s", channel, up.title)
+                known.append(up.id)
+                changed = True
+            seen[channel] = known[-SEEN_KEEP:]
+        if changed:
+            path.write_text(json.dumps(seen, indent=1), encoding="utf-8")
 
     @staticmethod
     def _take_inbox(path: Path) -> list[str]:

@@ -139,6 +139,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "inbox": "inbox.txt",    # headless use: paste links here, one per line
     "poll_minutes": 4,
     "max_parallel_live": 2,
+    "watch_uploads": True,   # also clip new uploads and finished premieres (YouTube), not only live streams
     "keep_days": 7,          # delete reels older than this
     "keep_source": False,    # keep downloaded videos after clipping
     "buffer_minutes": 10,    # live rolling buffer
@@ -292,8 +293,9 @@ def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings
             if value < 1:
                 raise ConfigError(f"{key} must be at least 1")
             current[key] = value
-    if "keep_source" in changes:
-        current["keep_source"] = bool(changes["keep_source"])
+    for key in ("keep_source", "watch_uploads"):
+        if key in changes:
+            current[key] = bool(changes[key])
     if isinstance(changes.get("clip"), dict):
         current["clip"].update({k: v for k, v in changes["clip"].items()
                                 if k in CLIP_DEFAULTS and v != ""})

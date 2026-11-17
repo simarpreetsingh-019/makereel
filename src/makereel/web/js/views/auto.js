@@ -31,6 +31,7 @@ export function render(state) {
   if (!filled && state.settings) {   // fill the form once; don't overwrite what the user is typing
     $("#channels").value = state.settings.channels.join("\n");
     LIMITS.forEach((k) => ($(`#${k}`).value = state.settings[k]));
+    $("#watch_uploads").checked = state.settings.watch_uploads !== false;
     const ai = state.settings.ai || {};
     $("#ai-provider").value = ai.provider || "off";
     $("#ai-model").value = ai.model || "";
@@ -54,6 +55,16 @@ export function mount() {
       const { running } = await api.setWatcher(e.target.checked);
       store.set({ watcher: running });
       toast(running ? "Watching your channels" : "Stopped watching");
+    } catch (err) {
+      e.target.checked = !e.target.checked;
+      showError(err);
+    }
+  });
+
+  $("#watch_uploads").addEventListener("change", async (e) => {
+    try {
+      store.set({ settings: await api.saveSettings({ watch_uploads: e.target.checked }) });
+      toast(e.target.checked ? "New uploads will be clipped too" : "Only live streams will be clipped");
     } catch (err) {
       e.target.checked = !e.target.checked;
       showError(err);

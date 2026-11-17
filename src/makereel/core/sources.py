@@ -151,6 +151,61 @@ def channel_live_url(channel: str) -> str:
     return c  # twitch.tv/name and kick.com/name already point at the live stream
 
 
+MIN_UPLOAD_SECONDS = 90    # shorter uploads are Shorts already: nothing to cut
+
+
+def channel_uploads_url(channel: str) -> str | None:
+    """'@name' or a YouTube channel URL -> its Videos tab (new uploads and finished premieres).
+
+    None for Twitch/Kick: their past broadcasts are the live streams we already clip.
+    """
+    c = channel.strip().rstrip("/")
+    if c.startswith("@"):
+        return f"https://www.youtube.com/{c}/videos"
+    if "youtube.com/" in c and any(k in c for k in ("/@", "/channel/", "/c/")):
+        for tab in ("/live", "/videos", "/streams", "/shorts", "/featured"):
+            if c.endswith(tab):
+                c = c[: -len(tab)]
+        return c + "/videos"
+    return None
+
+
+@dataclass
+class Upload:
+    id: str
+    url: str
+    title: str
+    duration: float | None
+
+
+def recent_uploads(channel: str, count: int = 5) -> list[Upload]:
+    """The newest few uploads of a channel, newest first, from one small listing request.
+
+    Upcoming premieres (no length yet) and Shorts are left out.
+    """
+    url = channel_uploads_url(channel)
+    if not url:
+        return []
+    opts = {**BASE_OPTS, "extract_flat": "in_playlist", "playlistend": count, "skip_download": True}
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            raw = ydl.extract_info(url, download=False) or {}
+    except DownloadError as e:
+        raise _friendly(e) from e
+    out = []
+    for e in (raw.get("entries") or [])[:count]:
+        if not e or not e.get("id") or e.get("live_status") in ("is_live", "is_upcoming"):
+            continue
+        dur = e.get("duration")
+        if dur is None or dur < MIN_UPLOAD_SECONDS:
+            continue
+        link = e.get("url") or f"https://www.youtube.com/watch?v={e['id']}"
+        if not link.startswith("http"):
+            link = f"https://www.youtube.com/watch?v={e['id']}"
+        out.append(Upload(e["id"], link, e.get("title") or e["id"], dur))
+    return out
+
+
 def parse_timestamp(ts: str) -> float:
     """'1:02:03' / '62:03' / '3723' -> seconds."""
     total = 0.0

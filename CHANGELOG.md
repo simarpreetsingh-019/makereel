@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **24/7 watches new uploads too** (YouTube): new videos and premieres that have aired are clipped as
+  they appear, not only live streams. A channel's older videos are skipped the first time it's checked.
+  Switch: Settings → "Also clip new uploads and premieres" (`watch_uploads`, on by default).
 - **Show everyone** shots in the Camera tab: pick a shot and the reel zooms out smoothly to the whole frame
   (both people over a blurred fill), then zooms back in to the speaker at the next cut.
 - **Auto layout** (new default): split screen for two people or a webcam over gameplay, follow the speaker for one
