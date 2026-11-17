@@ -7,18 +7,28 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import threading
+import time
 from pathlib import Path
 
 from .. import logs
-from ..config import env, load_settings
+from ..config import env, load_settings, since_cutoff
 from ..core import sources, transcribe
 from ..errors import MakereelError
 from . import library, runner
 from .jobs import JobManager, Status
 
 log = logging.getLogger(__name__)
-SEEN_KEEP = 50   # upload ids remembered per channel (only the newest few are ever listed)
+SEEN_KEEP = 100  # upload ids remembered per channel (only the newest few are ever listed)
+RANDOM_EVERY = (4, 30)   # "random": each wait between uploads checks is anything in this range (minutes)
+
+
+def uploads_wait(every: str) -> float:
+    """Seconds until the next uploads check."""
+    if every == "random":
+        return random.uniform(*RANDOM_EVERY) * 60
+    return int(every) * 60
 
 
 class Watcher:
@@ -27,6 +37,8 @@ class Watcher:
         self._stop: threading.Event | None = None
         self._job = None
         self._watching: dict[str, str] = {}   # video id -> job id
+        self._next_live = 0.0                 # when the next live check / uploads check is due
+        self._next_uploads = 0.0
 
     @property
     def running(self) -> bool:
@@ -45,7 +57,7 @@ class Watcher:
             try:
                 while not stop.is_set():
                     self.tick()
-                    stop.wait(load_settings(self.settings_path)["poll_minutes"] * 60)
+                    stop.wait(self.wait_seconds())
             finally:
                 if self._job is not None:
                     self._job.status = Status.STOPPED
@@ -64,12 +76,31 @@ class Watcher:
                     pass
             self._watching.clear()
 
+    def wait_seconds(self) -> float:
+        """Sleep until whichever check is due next (live every poll_minutes, uploads on their own clock)."""
+        settings = load_settings(self.settings_path)
+        due = [self._next_live] + ([self._next_uploads] if settings["watch_uploads"] else [])
+        return min(max(min(due) - time.time(), 5.0), settings["poll_minutes"] * 60)
+
     def tick(self) -> None:
-        """One pass: inbox links, then each channel, then cleanup."""
+        """One pass: inbox links, then each channel (live and uploads, when due), then cleanup."""
         settings = load_settings(self.settings_path)
         for url in self._take_inbox(Path(settings["inbox"])):
             self.jobs.submit_link(url, {})
             log.info("inbox: queued %s", url)
+
+        now = time.time()
+        key = (settings["uploads_since"], settings["uploads_every"])
+        if key != getattr(self, "_uploads_key", key):       # window or interval changed: check now
+            self._next_uploads = 0.0
+        self._uploads_key = key
+        if settings["watch_uploads"] and now >= self._next_uploads:
+            self._check_uploads(settings)
+            self._next_uploads = time.time() + uploads_wait(settings["uploads_every"])
+            log.info("next uploads check in %.0f min", (self._next_uploads - time.time()) / 60)
+        if now < self._next_live:
+            return
+        self._next_live = now + settings["poll_minutes"] * 60
 
         active = {j["id"] for j in self.jobs.list() if j["status"] == Status.LIVE.value}
         self._watching = {vid: jid for vid, jid in self._watching.items() if jid in active}
@@ -89,9 +120,6 @@ class Watcher:
             except MakereelError as e:
                 log.warning("could not start recording %s: %s", channel, e.message)
 
-        if settings["watch_uploads"]:
-            self._check_uploads(settings)
-
         library.cleanup(settings["keep_days"])
         if not self._watching:
             transcribe.release_if_idle(300)  # give the speech model's RAM back between streams
@@ -101,17 +129,19 @@ class Watcher:
         return (self.settings_path or env().config_file).with_name("seen_uploads.json")
 
     def _check_uploads(self, settings) -> None:
-        """Queue each channel's uploads we haven't seen (new videos, premieres once they've aired).
+        """Queue each channel's uploads inside the chosen window that we haven't clipped yet.
 
-        The first time a channel is checked, its current videos are only remembered, not clipped:
-        adding a channel shouldn't turn its back catalogue into reels.
+        uploads_since "new": the first check only notes a channel's existing videos; what's posted
+        after that is clipped. "24h" / "48h" / a date: videos posted since then are clipped too, so
+        the first check can catch up on the last day or two. Changing the window re-checks videos
+        that were skipped before.
         """
         path = self._seen_path()
         try:
-            seen: dict[str, list[str]] = json.loads(path.read_text(encoding="utf-8"))
+            seen: dict = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             seen = {}
-        changed = False
+        since, now, changed = settings["uploads_since"], time.time(), False
         for channel in settings["channels"]:
             try:
                 uploads = sources.recent_uploads(channel)
@@ -120,23 +150,51 @@ class Watcher:
                 continue
             if not uploads:
                 continue
-            known = seen.get(channel)
-            ids = [u.id for u in uploads]
-            if known is None:                               # first look: remember, don't clip
-                seen[channel] = ids
-                changed = True
-                log.info("%s: watching for new uploads (%d existing ones skipped)", channel, len(ids))
-                continue
-            for up in reversed(uploads):                    # oldest new one first
-                if up.id in known or up.id in self._watching:
-                    continue
+            state = seen.get(channel)
+            if isinstance(state, list):                     # older format: a plain list of seen ids
+                state = {"done": [], "skipped": state, "added": now, "since": since}
+            first = state is None
+            if first:
+                state = {"done": [], "skipped": [], "added": now, "since": since}
+            if state.get("since") != since:                 # new window: look at skipped videos again
+                state["skipped"], state["since"] = [], since
+            cutoff = since_cutoff(since, now)
+            picked = self._pick_uploads(uploads, state, first, cutoff)
+            for up in reversed(picked):                     # oldest first
                 self.jobs.submit_link(up.url, {})
+                state["done"].append(up.id)
                 log.info("%s uploaded: %s", channel, up.title)
-                known.append(up.id)
-                changed = True
-            seen[channel] = known[-SEEN_KEEP:]
+            if first:
+                log.info("%s: watching for uploads (%d to clip now)", channel, len(picked))
+            state["done"], state["skipped"] = state["done"][-SEEN_KEEP:], state["skipped"][-SEEN_KEEP:]
+            seen[channel] = state
+            changed = True
         if changed:
             path.write_text(json.dumps(seen, indent=1), encoding="utf-8")
+
+    def _pick_uploads(self, uploads, state: dict, first: bool, cutoff: float | None) -> list:
+        """Uploads (newest first) to clip now; the rest are noted as skipped."""
+        known = set(state["done"]) | set(state["skipped"]) | set(self._watching)
+        fresh = [u for u in uploads if u.id not in known]
+        if cutoff is None:                                  # "new": everything unseen is new, except on the first look
+            if first:
+                state["skipped"] += [u.id for u in fresh]
+                return []
+            return fresh
+        picked = []
+        for i, up in enumerate(fresh):                      # newest first: stop at the first one before the cutoff
+            try:
+                when = sources.probe(up.url).published
+            except MakereelError:
+                continue                                    # try again on the next check
+            if when is not None and when < cutoff:
+                state["skipped"] += [u.id for u in fresh[i:]]
+                break
+            if when is None and first:
+                state["skipped"].append(up.id)
+                continue
+            picked.append(up)
+        return picked
 
     @staticmethod
     def _take_inbox(path: Path) -> list[str]:

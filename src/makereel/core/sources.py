@@ -40,6 +40,7 @@ class SourceInfo:
     streams: list[str] = field(default_factory=list)  # direct media URLs (live: video + audio)
     tags: list[str] = field(default_factory=list)
     offset: float = 0.0                 # seconds into the original where our file starts
+    published: float | None = None      # unix time it was uploaded / premiered, when known
 
     def to_meta(self) -> dict:
         return asdict(self)
@@ -65,6 +66,18 @@ def _friendly(e: Exception) -> SourceError:
     return SourceError(msg[:300], hint)
 
 
+def _published(raw: dict) -> float | None:
+    """Unix time a video went up: exact when YouTube gives it, else the start of its upload day (UTC)."""
+    for key in ("release_timestamp", "timestamp"):
+        if raw.get(key):
+            return float(raw[key])
+    day = raw.get("upload_date")
+    if day and len(day) == 8:
+        import calendar
+        return float(calendar.timegm((int(day[:4]), int(day[4:6]), int(day[6:]), 0, 0, 0)))
+    return None
+
+
 def _info(raw: dict, url: str, offset: float = 0.0) -> SourceInfo:
     if raw.get("_type") == "playlist":  # e.g. /@channel/live redirect quirks
         raw = next(iter(raw.get("entries") or []), None) or {}
@@ -82,6 +95,7 @@ def _info(raw: dict, url: str, offset: float = 0.0) -> SourceInfo:
         streams=[f["url"] for f in raw.get("requested_formats") or [raw] if f.get("url")],
         tags=(raw.get("tags") or [])[:8],
         offset=offset,
+        published=_published(raw),
     )
 
 
@@ -178,7 +192,7 @@ class Upload:
     duration: float | None
 
 
-def recent_uploads(channel: str, count: int = 5) -> list[Upload]:
+def recent_uploads(channel: str, count: int = 15) -> list[Upload]:
     """The newest few uploads of a channel, newest first, from one small listing request.
 
     Upcoming premieres (no length yet) and Shorts are left out.

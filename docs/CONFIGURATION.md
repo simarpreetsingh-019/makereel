@@ -41,7 +41,9 @@ passes a one-frame test; otherwise it falls back to `libx264`.
 | `inbox` | `inbox.txt` | for headless use: links pasted here (one per line) get clipped |
 | `poll_minutes` | 4 | how often to check if channels are live |
 | `max_parallel_live` | 2 | live streams recorded at once |
-| `watch_uploads` | true | also clip new YouTube uploads and finished premieres (older videos are skipped) |
+| `watch_uploads` | true | also clip new YouTube uploads and finished premieres |
+| `uploads_since` | "new" | first check of a channel: `new` (only later uploads), `24h`, `48h`, or a date `YYYY-MM-DD` |
+| `uploads_every` | "5" | minutes between upload checks: 4, 5, 10, 15, 30, 60, or `random` (4–30 each time) |
 | `keep_days` | 7 | folders untouched this long are deleted by the watcher |
 | `keep_source` | false | keep downloaded videos after clipping |
 | `buffer_minutes` | 10 | live rolling buffer (about 9 MB per minute at 720p) |

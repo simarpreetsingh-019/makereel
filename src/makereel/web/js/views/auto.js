@@ -6,6 +6,26 @@ import { $, busy, showError, toast } from "../ui.js";
 const LIMITS = ["poll_minutes", "clips_per_hour", "max_parallel_live", "buffer_minutes", "keep_days"];
 let filled = false;
 
+const SINCE_HELP = {
+  new: "Videos already on a channel are left alone; anything posted after makereel first checks it is clipped.",
+  "24h": "The first check also clips what each channel posted in the last 24 hours, then every new upload.",
+  "48h": "The first check also clips what each channel posted in the last 48 hours, then every new upload.",
+  date: "The first check also clips what each channel posted since this date (its 15 newest videos at most), then every new upload.",
+};
+
+function drawUploads() {
+  const on = $("#watch_uploads").checked, kind = $("#uploads_since_kind").value;
+  $("#uploads-opts").hidden = !on;
+  $("#uploads_date_field").hidden = kind !== "date";
+  $("#uploads-hint").textContent = on ? SINCE_HELP[kind] : "";
+}
+
+function uploadsBody() {
+  const kind = $("#uploads_since_kind").value;
+  return { watch_uploads: $("#watch_uploads").checked, uploads_every: $("#uploads_every").value,
+           uploads_since: kind === "date" ? $("#uploads_date").value : kind };
+}
+
 const AI_HELP = {
   off: "Off: picks come from loudness, chat and hype words. Free and fully offline.",
   local: "Runs on this computer. Install Ollama (ollama.com), run `ollama pull llama3.1:8b`, and leave Model empty. Nothing leaves your machine. Models under 7B often return broken results.",
@@ -32,6 +52,11 @@ export function render(state) {
     $("#channels").value = state.settings.channels.join("\n");
     LIMITS.forEach((k) => ($(`#${k}`).value = state.settings[k]));
     $("#watch_uploads").checked = state.settings.watch_uploads !== false;
+    const since = state.settings.uploads_since || "new";
+    $("#uploads_since_kind").value = ["new", "24h", "48h"].includes(since) ? since : "date";
+    $("#uploads_date").value = /^\d{4}-/.test(since) ? since : new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+    $("#uploads_every").value = state.settings.uploads_every || "5";
+    drawUploads();
     const ai = state.settings.ai || {};
     $("#ai-provider").value = ai.provider || "off";
     $("#ai-model").value = ai.model || "";
@@ -61,15 +86,19 @@ export function mount() {
     }
   });
 
-  $("#watch_uploads").addEventListener("change", async (e) => {
-    try {
-      store.set({ settings: await api.saveSettings({ watch_uploads: e.target.checked }) });
-      toast(e.target.checked ? "New uploads will be clipped too" : "Only live streams will be clipped");
-    } catch (err) {
-      e.target.checked = !e.target.checked;
-      showError(err);
-    }
-  });
+  // upload watching saves as soon as it changes
+  ["#watch_uploads", "#uploads_since_kind", "#uploads_date", "#uploads_every"].forEach((id) =>
+    $(id).addEventListener("change", async () => {
+      drawUploads();
+      const body = uploadsBody();
+      if ($("#uploads_since_kind").value === "date" && !body.uploads_since) return;
+      try {
+        store.set({ settings: await api.saveSettings(body) });
+        toast(body.watch_uploads ? "Upload watching saved. It applies on the next check." : "Only live streams will be clipped");
+      } catch (err) {
+        showError(err);
+      }
+    }));
 
   $("#save-settings").addEventListener("click", (e) => {
     const body = { channels: $("#channels").value.split("\n") };

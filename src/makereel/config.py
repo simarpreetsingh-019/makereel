@@ -10,6 +10,7 @@ See docs/CONFIGURATION.md for every option.
 from __future__ import annotations
 
 import copy
+import datetime
 import json
 import os
 from dataclasses import dataclass, field
@@ -140,6 +141,8 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "poll_minutes": 4,
     "max_parallel_live": 2,
     "watch_uploads": True,   # also clip new uploads and finished premieres (YouTube), not only live streams
+    "uploads_since": "new",  # first check of a channel: "new" (only what comes next), "24h", "48h" or "YYYY-MM-DD"
+    "uploads_every": "5",    # minutes between upload checks, or "random" (anything from 4 to 30 each time)
     "keep_days": 7,          # delete reels older than this
     "keep_source": False,    # keep downloaded videos after clipping
     "buffer_minutes": 10,    # live rolling buffer
@@ -273,6 +276,32 @@ def load_settings(path: Path | None = None) -> Settings:
     return Settings(data)
 
 
+UPLOADS_EVERY = ("4", "5", "10", "15", "30", "60", "random")
+
+
+def validate_since(value: Any) -> str:
+    v = str(value or "new").strip()
+    if v in ("new", "24h", "48h"):
+        return v
+    try:
+        datetime.date.fromisoformat(v)
+    except ValueError as e:
+        raise ConfigError("uploads_since must be new, 24h, 48h or a date like 2026-11-01") from e
+    return v
+
+
+def since_cutoff(value: str, now: float) -> float | None:
+    """Unix time from which uploads are clipped; None = only uploads that appear from now on."""
+    if value == "24h":
+        return now - 24 * 3600
+    if value == "48h":
+        return now - 48 * 3600
+    if value and value != "new":
+        d = datetime.date.fromisoformat(value)
+        return datetime.datetime(d.year, d.month, d.day).timestamp()   # midnight, this computer's time
+    return None
+
+
 def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings:
     """Validate and merge `changes` into makereel.json. Unknown keys are rejected."""
     path = path or env().config_file
@@ -293,6 +322,13 @@ def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings
             if value < 1:
                 raise ConfigError(f"{key} must be at least 1")
             current[key] = value
+    if "uploads_since" in changes:
+        current["uploads_since"] = validate_since(changes["uploads_since"])
+    if "uploads_every" in changes:
+        every = str(changes["uploads_every"]).strip()
+        if every not in UPLOADS_EVERY:
+            raise ConfigError(f"uploads_every must be one of {', '.join(UPLOADS_EVERY)}")
+        current["uploads_every"] = every
     for key in ("keep_source", "watch_uploads"):
         if key in changes:
             current[key] = bool(changes[key])

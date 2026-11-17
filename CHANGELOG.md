@@ -5,6 +5,8 @@
 - **24/7 watches new uploads too** (YouTube): new videos and premieres that have aired are clipped as
   they appear, not only live streams. A channel's older videos are skipped the first time it's checked.
   Switch: Settings → "Also clip new uploads and premieres" (`watch_uploads`, on by default).
+- **Upload window and check interval**: clip uploads from now on, the last 24 or 48 hours, or since a date
+  (`uploads_since`), and check every 4, 5, 10, 15, 30 or 60 minutes or at random 4–30 minutes (`uploads_every`).
 - **Show everyone** shots in the Camera tab: pick a shot and the reel zooms out smoothly to the whole frame
   (both people over a blurred fill), then zooms back in to the speaker at the next cut.
 - **Auto layout** (new default): split screen for two people or a webcam over gameplay, follow the speaker for one
