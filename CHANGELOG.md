@@ -97,7 +97,6 @@
   Trimming keeps corrected captions and transcribes newly revealed audio.
 - **Optional AI judge:** local (Ollama / LM Studio), Claude (`makereel[ai]`) or any OpenAI-compatible
   API. Four scores plus a title and reason, blended with signals, shown on reel cards. Off by default.
-- Docs: COMPETITORS.md (gap analysis vs PeakCut, OpenShorts, SupoClip, ClipStudio) and MONETIZATION.md.
 
 ### Changed
 - The 24/7 tab is now **Settings** and holds the AI judge settings.

@@ -69,8 +69,6 @@ Live streams use a rolling buffer (idea from [PeakCut](https://github.com/haziqa
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Setting up, tests, lint, conventions, adding a route |
 | [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | What's measured, how to share results, results table |
 | [docs/CLIENT_SIDE_PLAN.md](docs/CLIENT_SIDE_PLAN.md) | Plan: offer makereel as a website that runs on each visitor's own device (no servers to pay for) |
-| [docs/COMPETITORS.md](docs/COMPETITORS.md) | PeakCut, OpenShorts, SupoClip, ClipStudio compared; what's next |
-| [docs/MONETIZATION.md](docs/MONETIZATION.md) | Plan for a paid version: what to charge for, tiers, licence, payments without servers |
 | [CHANGELOG.md](CHANGELOG.md) | What changed |
 
 ## Credits and responsibility
