@@ -3,6 +3,7 @@ output/
 downloads/
 logs/
 inbox.txt
+seen_uploads.json
 makereel.json
 .env
 
