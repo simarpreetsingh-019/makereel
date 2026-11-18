@@ -56,6 +56,7 @@ export function render(state) {
     $("#uploads_since_kind").value = ["new", "24h", "48h"].includes(since) ? since : "date";
     $("#uploads_date").value = /^\d{4}-/.test(since) ? since : new Date(Date.now() - 864e5).toISOString().slice(0, 10);
     $("#uploads_every").value = state.settings.uploads_every || "5";
+    $("#cookies_browser").value = state.settings.cookies_browser || "";
     drawUploads();
     const ai = state.settings.ai || {};
     $("#ai-provider").value = ai.provider || "off";
@@ -86,6 +87,12 @@ export function mount() {
     }
   });
 
+  $("#cookies_browser").addEventListener("change", async (e) => {
+    try {
+      store.set({ settings: await api.saveSettings({ cookies_browser: e.target.value }) });
+      toast(e.target.value ? `Using your ${e.target.selectedOptions[0].text} YouTube sign-in for new checks` : "Not using a YouTube sign-in");
+    } catch (err) { showError(err); }
+  });
   // upload watching saves as soon as it changes
   ["#watch_uploads", "#uploads_since_kind", "#uploads_date", "#uploads_every"].forEach((id) =>
     $(id).addEventListener("change", async () => {

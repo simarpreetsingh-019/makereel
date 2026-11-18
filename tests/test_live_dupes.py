@@ -39,3 +39,15 @@ def test_same_video_reuses_its_folder_when_title_changes():
     (d / "folder.json").write_text(json.dumps({"id": "vid1"}))
     assert library.folder_for("Live 22 32", "vid1") == d
     assert library.folder_for("Live 22 32", "other") != d
+
+
+def test_clear_finished_jobs_keeps_running_ones(tmp_path):
+    jobs = JobManager(tmp_path / "makereel.json")
+    live = jobs.adopt_live(FakeSession("run1"))
+    done = jobs.adopt_live(FakeSession("run2"))
+    jobs.stop(done.id)
+    with pytest.raises(Conflict):
+        jobs.remove(live.id)
+    assert jobs.clear_finished() == 1
+    assert [j["id"] for j in jobs.list()] == [live.id]
+    jobs.stop_all_live()

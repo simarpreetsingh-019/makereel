@@ -4,7 +4,8 @@ Releases are GitHub releases on `update_repo` ("owner/repo") tagged like v0.7.0.
 small request to GitHub's public API (no account, nothing about the user is sent), at most every
 few hours. Installing:
   - a git checkout (installed with `pip install -e .`): fetch the tag, check it out, reinstall;
-  - otherwise: pip installs the release's source archive from GitHub.
+  - otherwise: downloads the wheel attached to the release, checks it against the SHA-256 published
+    next to it (like Thermo), and only then pip-installs that file.
 Then the app restarts itself, but only when no reel is being made or recorded.
 """
 from __future__ import annotations
@@ -47,9 +48,41 @@ def _fetch_latest(repo: str) -> dict:
                                  headers={"Accept": "application/vnd.github+json", "User-Agent": "makereel-updater"})
     with urllib.request.urlopen(req, timeout=10) as r:
         data = json.loads(r.read().decode("utf-8"))
+    assets = {a.get("name", ""): a.get("browser_download_url", "") for a in data.get("assets") or []}
+    wheel = next((n for n in assets if n.startswith("makereel-") and n.endswith(".whl")), None)
     return {"version": data.get("tag_name", "").lstrip("v"), "tag": data.get("tag_name", ""),
             "notes": (data.get("body") or "")[:4000], "url": data.get("html_url"),
-            "published": data.get("published_at")}
+            "published": data.get("published_at"),
+            "wheel": assets.get(wheel) if wheel else None,
+            "sha256": assets.get(f"{wheel}.sha256") if wheel else None, "wheel_name": wheel}
+
+
+def _download(url: str) -> bytes:
+    from urllib.parse import urlparse
+    if urlparse(url).hostname not in ("github.com", "objects.githubusercontent.com",
+                                      "release-assets.githubusercontent.com"):
+        raise MakereelError("the update file isn't hosted on GitHub; not downloading it")
+    req = urllib.request.Request(url, headers={"User-Agent": "makereel-updater"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return r.read()
+
+
+def _verified_wheel(latest: dict, folder: Path) -> Path:
+    """Download the release's wheel and install it only if it matches its published SHA-256."""
+    import hashlib
+    if not (latest.get("wheel") and latest.get("sha256")):
+        raise MakereelError("this release has no verified package attached",
+                            "Download it from the release page instead.")
+    expected = _download(latest["sha256"]).decode("utf-8", "replace").split()[0].strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise MakereelError("the release's checksum file is invalid; not installing it")
+    data = _download(latest["wheel"])
+    if hashlib.sha256(data).hexdigest() != expected:
+        raise MakereelError("the downloaded package doesn't match its checksum; not installing it")
+    _state["log"].append(f"verified {latest['wheel_name']} (sha256 {expected[:12]}…)")
+    path = folder / Path(latest["wheel_name"]).name
+    path.write_bytes(data)
+    return path
 
 
 def check(force: bool = False) -> dict:
@@ -108,8 +141,10 @@ def install(busy: bool) -> dict:
                 _run(["git", "checkout", tag], REPO_ROOT)
                 _run([sys.executable, "-m", "pip", "install", "--quiet", "-e", "."], REPO_ROOT)
             else:
-                _run([sys.executable, "-m", "pip", "install", "--quiet", "--upgrade",
-                      f"makereel @ https://github.com/{repo}/archive/refs/tags/{tag}.zip"])
+                import tempfile
+                with tempfile.TemporaryDirectory() as tmp:
+                    wheel = _verified_wheel(info["latest"], Path(tmp))
+                    _run([sys.executable, "-m", "pip", "install", "--quiet", "--upgrade", str(wheel)])
             _state["installed"] = info["latest"]["version"]
             log.info("makereel %s installed; restart to use it", tag)
         except Exception as e:  # noqa: BLE001

@@ -273,3 +273,22 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .banner.notice { background: color-mix(in srgb, var(--accent, #e5484d) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent, #e5484d) 35%, transparent); }
 .banner.notice a { font-weight: 600; margin-left: 6px; }
+
+/* notification card (welcome, update available, what's new): slides in at the top right */
+.ncard { position: fixed; top: 16px; right: 16px; width: min(340px, calc(100vw - 32px)); z-index: 60;
+  background: var(--panel, #18181b); color: var(--ink, #f4f4f5); border: 1px solid var(--line, #2a2a30);
+  border-radius: 16px; padding: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.35);
+  transform: translateX(calc(100% + 32px)); opacity: 0; transition: transform .25s ease, opacity .25s ease; }
+.ncard.in { transform: none; opacity: 1; }
+.ncard-head { display: grid; grid-template-columns: 30px 1fr 20px; gap: 10px; align-items: start; }
+.ncard-icon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.ncard-sub { font-size: 12px; color: var(--muted, #a1a1aa); margin-top: 2px; }
+.ncard-x { background: none; border: 0; color: var(--muted, #a1a1aa); font-size: 18px; line-height: 1; cursor: pointer; }
+.ncard ul { margin: 8px 0 0 40px; padding: 0; font-size: 12.5px; }
+.ncard li { margin: 3px 0; }
+.ncard-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+@media (prefers-reduced-motion: reduce) { .ncard { transition: none; } }
+
+.job-x { margin-left: auto; font-size: 16px; line-height: 1; padding: 2px 8px; }
+#su-models-box summary { cursor: pointer; font-size: 13px; margin: 6px 0; }

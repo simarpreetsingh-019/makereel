@@ -32,6 +32,7 @@ BEFORE, AFTER = 30, 18           # seconds kept around a spike
 JUMP = 0.6                       # 60% above the 3-minute baseline counts as a spike
 MIN_GAP = 75                     # seconds between spikes
 WARMUP = 90                      # seconds of baseline before spikes can fire
+RETRY_FOR = 600                  # keep retrying a failing live check this long before giving up
 CHAT_BACKLOG_SECS = 45           # ignore chat for this long: yt-dlp replays old messages first
 
 
@@ -64,14 +65,26 @@ class LiveSession:
 
     # ------------------------------------------------------------------ recording
     def _record(self) -> None:
-        fails = 0
-        while not self.stop.is_set() and fails < 3:
+        # A failed check is usually YouTube being briefly unhappy (rate limits, its bot check), not the
+        # stream ending: keep trying with growing gaps for RETRY_FOR seconds. A stream that really ended
+        # answers "not live", which stops at once.
+        tries, empty, failing_since = 0, 0, None
+        while not self.stop.is_set():
             try:
                 info = sources.probe(self.info.url, self.max_height)
+                tries, failing_since = 0, None
             except MakereelError as e:
-                log.warning("live check failed (%s); retrying", e.message)
-                fails += 1
-                self.stop.wait(15)
+                failing_since = failing_since or time.time()
+                waited = time.time() - failing_since
+                if waited > RETRY_FOR:
+                    log.warning("live check kept failing for %d min (%s); stopping", waited // 60, e.message)
+                    break
+                gap = min(15 * 2 ** tries, 120)
+                tries += 1
+                log.warning("live check failed (%s); trying again in %ds", e.message, gap)
+                if e.hint and tries == 1:
+                    log.warning("  %s", e.hint)
+                self.stop.wait(gap)
                 continue
             if info.live_status != "is_live":
                 log.info("stream is no longer live")
@@ -99,7 +112,10 @@ class LiveSession:
                     got += 1
                     self.db.append(float(signals.level_db(data, 1)[0]))
                 self.proc.wait()
-            fails = 0 if got > 30 else fails + 1
+            empty = 0 if got > 30 else empty + 1
+            if empty >= 3:                    # the feed opens but gives (almost) nothing, three times running
+                log.warning("the stream gives no video; stopping")
+                break
         self.stop.set()
 
     def _follow_chat(self) -> None:

@@ -56,7 +56,10 @@ class Watcher:
             log.info("watcher started")
             try:
                 while not stop.is_set():
-                    self.tick()
+                    try:
+                        self.tick()
+                    except Exception:  # noqa: BLE001 - one bad pass must never stop 24/7 watching
+                        log.exception("watcher pass failed; trying again on the next check")
                     stop.wait(self.wait_seconds())
             finally:
                 if self._job is not None:

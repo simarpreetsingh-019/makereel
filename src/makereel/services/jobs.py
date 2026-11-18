@@ -156,6 +156,25 @@ class JobManager:
                                "It will finish on its own; delete its reels afterwards if unwanted.")
         return job
 
+    def remove(self, job_id: str) -> None:
+        """Forget a finished job (its reels stay in the library). Active jobs can't be removed."""
+        job = self.get(job_id)
+        with self._lock:
+            if job.status in ACTIVE:
+                raise Conflict("this job is still running", "Stop it first, or wait for it to finish.")
+            self._jobs.pop(job_id, None)
+        logs.unregister_sink(job_id)
+
+    def clear_finished(self) -> int:
+        """Forget every finished, failed and stopped job. Returns how many were cleared."""
+        with self._lock:
+            done = [j.id for j in self._jobs.values() if j.status not in ACTIVE]
+            for job_id in done:
+                self._jobs.pop(job_id, None)
+        for job_id in done:
+            logs.unregister_sink(job_id)
+        return len(done)
+
     def stop_all_live(self) -> None:
         with self._lock:
             for job in list(self._jobs.values()):

@@ -25,6 +25,21 @@ class _QuietLogger:
 
 
 BASE_OPTS = {"quiet": True, "logger": _QuietLogger(), "js_runtimes": JS_RUNTIMES}
+COOKIE_BROWSERS = ("chrome", "firefox", "edge", "brave", "safari", "chromium", "opera", "vivaldi")
+
+
+def cookies_browser() -> str | None:
+    """The browser whose YouTube sign-in yt-dlp may use (setting: cookies_browser), or None."""
+    from ..config import load_settings
+    name = load_settings()["cookies_browser"]
+    return name if name in COOKIE_BROWSERS else None
+
+
+def ydl_opts() -> dict:
+    """yt-dlp options for every request. With cookies_browser set, YouTube sees a signed-in viewer,
+    which avoids its "confirm you're not a bot" check when several streams are followed at once."""
+    browser = cookies_browser()
+    return {**BASE_OPTS, **({"cookiesfrombrowser": (browser,)} if browser else {})}
 
 
 @dataclass
@@ -61,6 +76,9 @@ def _friendly(e: Exception) -> SourceError:
         hint = "The video is private, members-only or age-restricted."
     elif "unavailable" in low or "not available" in low:
         hint = "Check the link. If it opens in a browser, update yt-dlp: pip install -U \"yt-dlp[default]\""
+    elif "not a bot" in low or "confirm you" in low:
+        hint = ("YouTube asked makereel to prove it isn't a bot. In Settings, choose the browser you're signed in "
+                "to YouTube with (Use my YouTube sign-in from), then try again.")
     elif "not currently live" in low or "offline" in low:
         hint = "The channel is not live right now."
     return SourceError(msg[:300], hint)
@@ -108,7 +126,7 @@ def validate_url(url: str) -> str:
 
 def probe(url: str, max_height: int = 720) -> SourceInfo:
     """Metadata only (one small request)."""
-    opts = {**BASE_OPTS, "skip_download": True,
+    opts = {**ydl_opts(), "skip_download": True,
             "format": f"bv*[height<={max_height}]+ba/best[height<={max_height}]/best"}
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -151,8 +169,10 @@ def download(url: str, out_dir: Path, section: str | None = None, chat: bool = T
 def live_chat_command(url: str, out_base: Path) -> list[str]:
     """yt-dlp subprocess that follows live chat (same interpreter, so it works on every OS)."""
     js = ["--js-runtimes", ",".join(JS_RUNTIMES)] if JS_RUNTIMES else []
+    browser = cookies_browser()
+    cookies = ["--cookies-from-browser", browser] if browser else []
     return [sys.executable, "-m", "yt_dlp", "--skip-download", "--write-subs", "--sub-langs",
-            "live_chat", "-o", str(out_base), "--quiet", *js, url]
+            "live_chat", "-o", str(out_base), "--quiet", *js, *cookies, url]
 
 
 def channel_live_url(channel: str) -> str:
@@ -200,7 +220,7 @@ def recent_uploads(channel: str, count: int = 15) -> list[Upload]:
     url = channel_uploads_url(channel)
     if not url:
         return []
-    opts = {**BASE_OPTS, "extract_flat": "in_playlist", "playlistend": count, "skip_download": True}
+    opts = {**ydl_opts(), "extract_flat": "in_playlist", "playlistend": count, "skip_download": True}
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             raw = ydl.extract_info(url, download=False) or {}

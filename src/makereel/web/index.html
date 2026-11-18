@@ -63,7 +63,8 @@
       </details>
     </div>
     <div class="card">
-      <h2>Jobs</h2>
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Jobs</h2>
+        <button class="btn small" id="jobs-clear" type="button" title="Remove finished, failed and stopped jobs from this list">Clear finished</button></div>
       <div id="jobs"></div>
     </div>
   </section>
@@ -94,6 +95,13 @@
           <option value="random">Random (4 to 30 minutes)</option></select></label>
       </div>
       <p class="hint" id="uploads-hint"></p>
+      <label class="field" style="max-width:360px">Use my YouTube sign-in from<select id="cookies_browser">
+        <option value="">Nothing (not signed in)</option>
+        <option value="chrome">Chrome</option><option value="safari">Safari</option><option value="firefox">Firefox</option>
+        <option value="edge">Edge</option><option value="brave">Brave</option></select></label>
+      <p class="hint" style="margin-top:-6px">If jobs say "Sign in to confirm you're not a bot", pick the browser you're signed in to
+        YouTube with. makereel then reads that browser's YouTube cookies on this computer and sends them only to YouTube.
+        Your computer may ask for permission the first time.</p>
       <p class="hint">Checks each channel every few minutes and uses almost no CPU while nobody is live.
         Keep makereel running (or start it with <code>makereel web --watch</code> on a machine that stays on).</p>
     </div>
@@ -226,6 +234,7 @@
       </div>
       <p class="hint" id="su-why"></p>
       <div id="su-progress" class="hint"></div>
+      <details id="su-models-box"><summary>Downloaded models (stop or delete)</summary><div id="su-models"></div></details>
       <div class="row" style="gap:8px">
         <button class="btn primary" id="su-apply" type="button">Download and use these</button>
         <button class="btn" id="su-skip" type="button">Keep current models</button>
@@ -510,5 +519,6 @@
 </dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<aside class="ncard" id="ncard" role="status" aria-live="polite" hidden></aside>
 </body>
 </html>

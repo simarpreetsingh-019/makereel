@@ -150,6 +150,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "buffer_minutes": 10,    # live rolling buffer
     "clips_per_hour": 6,     # per live stream
     "max_height": 720,       # source resolution to download
+    "cookies_browser": "",   # use this browser's YouTube sign-in (chrome, firefox, edge, safari...): avoids bot checks
     "speech_device": "auto", # where speech recognition runs: auto (NVIDIA GPU if usable) | gpu | cpu
     "setup_done": False,     # the first-run setup (model suggestions) was finished or skipped
     "update_repo": "",       # GitHub "owner/repo" that publishes makereel releases ("" = don't check)
@@ -337,6 +338,11 @@ def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings
         if every not in UPLOADS_EVERY:
             raise ConfigError(f"uploads_every must be one of {', '.join(UPLOADS_EVERY)}")
         current["uploads_every"] = every
+    if "cookies_browser" in changes:
+        browser = str(changes["cookies_browser"] or "").strip().lower()
+        if browser not in ("", "chrome", "firefox", "edge", "brave", "safari", "chromium", "opera", "vivaldi"):
+            raise ConfigError("cookies_browser must be empty or one of chrome, firefox, edge, brave, safari...")
+        current["cookies_browser"] = browser
     if "speech_device" in changes:
         if changes["speech_device"] not in ("auto", "gpu", "cpu"):
             raise ConfigError("speech_device must be auto, gpu or cpu")

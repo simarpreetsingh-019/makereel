@@ -104,42 +104,86 @@ def installed(name: str) -> bool:
 
 
 def _cache_bytes(name: str) -> int:
-    try:
-        from huggingface_hub.constants import HF_HUB_CACHE
-    except ImportError:
-        return 0
-    d = Path(HF_HUB_CACHE) / ("models--" + _repo(name).replace("/", "--"))
-    return sum(f.stat().st_size for f in d.rglob("*") if f.is_file()) if d.is_dir() else 0
+    d = _cache_dir(name)
+    return sum(f.stat().st_size for f in d.rglob("*") if f.is_file()) if d and d.is_dir() else 0
 
 
-_downloads: dict[str, dict] = {}     # name -> {"state": "downloading" | "done" | "failed", "error"}
+_downloads: dict[str, dict] = {}     # name -> {"state": "downloading" | "done" | "failed" | "cancelled", ...}
+_procs: dict[str, subprocess.Popen] = {}
 _dl_lock = threading.Lock()
 
 
+def _cache_dir(name: str) -> Path | None:
+    try:
+        from huggingface_hub.constants import HF_HUB_CACHE
+    except ImportError:
+        return None
+    return Path(HF_HUB_CACHE) / ("models--" + _repo(name).replace("/", "--"))
+
+
 def download(name: str) -> dict:
-    """Start downloading a model in the background (no-op if it's there or already downloading)."""
+    """Start downloading a model in a separate process (so Stop can end it at once)."""
+    import sys
     if name not in CATALOG:
         raise ValueError(f"unknown model {name}")
     with _dl_lock:
         if installed(name):
             _downloads[name] = {"state": "done"}
         elif _downloads.get(name, {}).get("state") != "downloading":
-            _downloads[name] = {"state": "downloading"}
+            code = "import sys; from faster_whisper import download_model; download_model(sys.argv[1])"
+            proc = subprocess.Popen([sys.executable, "-c", code, name],
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            _procs[name], _downloads[name] = proc, {"state": "downloading"}
 
-            def run() -> None:
-                try:
-                    from faster_whisper import download_model
-                    download_model(name)
-                    _downloads[name] = {"state": "done"}
-                    log.info("speech model '%s' downloaded", name)
-                except Exception as e:  # noqa: BLE001
-                    _downloads[name] = {"state": "failed", "error": str(e).split("\n")[0][:200]}
-            threading.Thread(target=run, name=f"download-{name}", daemon=True).start()
+            def wait() -> None:
+                err = proc.communicate()[1].decode("utf-8", "replace").strip().splitlines()
+                with _dl_lock:
+                    if _downloads.get(name, {}).get("state") == "cancelled":
+                        return
+                    _procs.pop(name, None)
+                    if proc.returncode == 0:
+                        _downloads[name] = {"state": "done"}
+                        log.info("speech model '%s' downloaded", name)
+                    else:
+                        _downloads[name] = {"state": "failed", "error": (err[-1] if err else "download failed")[:200]}
+            threading.Thread(target=wait, name=f"download-{name}", daemon=True).start()
+    return status(name)
+
+
+def cancel(name: str) -> dict:
+    """Stop a download and remove what it had fetched so far."""
+    with _dl_lock:
+        proc = _procs.pop(name, None)
+        if proc is not None and proc.poll() is None:
+            _downloads[name] = {"state": "cancelled"}
+            proc.terminate()
+            try:
+                proc.wait(10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            d = _cache_dir(name)
+            if d is not None:
+                shutil.rmtree(d, ignore_errors=True)
+            log.info("download of '%s' stopped", name)
+    return status(name)
+
+
+def delete(name: str) -> dict:
+    """Remove a downloaded model from disk (it is downloaded again if it's ever needed)."""
+    cancel(name)
+    d = _cache_dir(name)
+    if d is not None and d.is_dir():
+        shutil.rmtree(d, ignore_errors=True)
+        log.info("speech model '%s' deleted", name)
+    with _dl_lock:
+        _downloads.pop(name, None)
     return status(name)
 
 
 def status(name: str) -> dict:
-    st = dict(_downloads.get(name) or {"state": "done" if installed(name) else "missing"})
+    st = dict(_downloads.get(name) or {})
+    if st.get("state") in (None, "cancelled"):
+        st = {"state": "done" if installed(name) else "missing"}
     if st["state"] == "downloading":
         total = CATALOG[name]["size_gb"] * 1024**3
         st["percent"] = min(99, round(_cache_bytes(name) / total * 100))

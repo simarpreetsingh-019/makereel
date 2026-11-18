@@ -93,3 +93,13 @@ def test_old_seen_file_format_is_upgraded(setup):
     listing["@a"] = [_up("v2"), _up("v1")]
     w._check_uploads({"channels": ["@a"], "uploads_since": "new"})
     assert jobs.links == ["v2"]
+
+
+def test_ydl_opts_with_and_without_browser_sign_in(monkeypatch):
+    import makereel.config as config
+    real = config.load_settings
+    assert "cookiesfrombrowser" not in sources.ydl_opts()
+    signed_in = real().__class__({**real().data, "cookies_browser": "chrome"})
+    monkeypatch.setattr(config, "load_settings", lambda *a: signed_in)
+    assert sources.ydl_opts()["cookiesfrombrowser"] == ("chrome",)
+    assert "--cookies-from-browser" in sources.live_chat_command("https://youtu.be/x", __import__("pathlib").Path("c"))

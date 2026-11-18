@@ -45,6 +45,12 @@ export function mount(refreshJobs) {
     });
   });
 
+  $("#jobs-clear").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+    const { cleared } = await api.clearJobs();
+    toast(cleared ? `Cleared ${cleared} finished job${cleared === 1 ? "" : "s"}. Their reels stay in Reels.` : "Nothing finished to clear");
+    refreshJobs();
+  }));
+
   $("#jobs").addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-action]");
     if (!btn) return;
@@ -56,6 +62,8 @@ export function mount(refreshJobs) {
       if (id in logs) delete logs[id]; else logs[id] = "loading…";
       store.set({ openLogs: logs });
       refreshJobs();
+    } else if (btn.dataset.action === "remove") {
+      busy(btn, async () => { await api.removeJob(id); refreshJobs(); });
     } else if (btn.dataset.action === "open") {
       location.hash = `#/library/${encodeURIComponent(btn.dataset.folder)}`;
     }
@@ -75,6 +83,8 @@ function jobRow(j, logText) {
       ${j.folder && j.kind !== "watcher" ? `<button class="btn small" data-action="open" data-folder="${esc(j.folder)}">Open folder</button>` : ""}
       ${canStop ? `<button class="btn small" data-action="stop" data-id="${j.id}">Stop</button>` : ""}
       <button class="btn small" data-action="log" data-id="${j.id}">${logText !== undefined ? "Hide log" : "Log"}</button>
+      ${["done", "failed", "stopped"].includes(j.status) && j.kind !== "watcher"
+        ? `<button class="btn tiny job-x" data-action="remove" data-id="${j.id}" title="Remove from this list (reels stay)" aria-label="Remove">×</button>` : ""}
     </div>
     ${err}
     ${logText !== undefined ? `<pre class="log" data-log="${j.id}">${esc(logText)}</pre>` : `<div class="tail">${esc(j.last_line)}</div>`}

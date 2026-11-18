@@ -76,6 +76,15 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
         options.setdefault("title", Path(name).stem.split("_", 1)[-1])
         return Response(jobs.submit_file(dest, options).to_dict(), 201)
 
+    @api.delete("/jobs/{job_id}")
+    def remove_job(req: Request):
+        jobs.remove(req.params["job_id"])
+        return {"removed": req.params["job_id"]}
+
+    @api.post("/jobs/clear")
+    def clear_jobs(req: Request):
+        return {"cleared": jobs.clear_finished()}
+
     @api.get("/jobs/{job_id}")
     def get_job(req: Request):
         return jobs.get(req.params["job_id"]).to_dict(with_log=True)
@@ -238,6 +247,23 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
         if req.params["name"] not in models.CATALOG:
             raise InvalidInput("unknown speech model")
         return models.download(req.params["name"])
+
+    @api.post("/setup/models/{name}/cancel")
+    def cancel_model(req: Request):
+        if req.params["name"] not in models.CATALOG:
+            raise InvalidInput("unknown speech model")
+        return models.cancel(req.params["name"])
+
+    @api.delete("/setup/models/{name}")
+    def delete_model(req: Request):
+        name = req.params["name"]
+        if name not in models.CATALOG:
+            raise InvalidInput("unknown speech model")
+        clip = load_settings().clip
+        if name in (clip["model"], clip["model_other"]):
+            raise InvalidInput(f"{name} is in use for new reels",
+                               "Pick other models and save first, then delete this one.")
+        return models.delete(name)
 
     # ------------------------------------------------------------ updates from GitHub releases
     def busy() -> bool:

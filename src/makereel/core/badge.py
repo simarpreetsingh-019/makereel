@@ -14,7 +14,7 @@ from pathlib import Path
 import yt_dlp
 
 from . import media
-from .sources import BASE_OPTS
+from .sources import ydl_opts
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ SIZE, PAD, FONT_SIZE = 128, 14, 60        # picture size, padding, text size (px
 
 
 def _avatar_and_handle(channel_url: str) -> tuple[str | None, str | None]:
-    opts = {**BASE_OPTS, "extract_flat": True, "playlist_items": "0", "skip_download": True}
+    opts = {**ydl_opts(), "extract_flat": True, "playlist_items": "0", "skip_download": True}
     with yt_dlp.YoutubeDL(opts) as ydl:
         raw = ydl.extract_info(channel_url, download=False) or {}
     thumbs = [t for t in raw.get("thumbnails") or [] if "avatar" in str(t.get("id", ""))]
