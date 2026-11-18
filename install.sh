@@ -26,7 +26,8 @@ main() {
   has_captions() {   # ffmpeg built with libass (text captions)
     local f
     for f in /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg /usr/local/opt/ffmpeg-full/bin/ffmpeg "$(command -v ffmpeg || true)"; do
-      [ -x "$f" ] && "$f" -hide_banner -filters 2>/dev/null | grep -q " ass " && return 0
+      # no `grep -q`: it stops reading early, ffmpeg then fails writing, and pipefail calls that a failure
+      [ -x "$f" ] && "$f" -hide_banner -filters 2>/dev/null | grep " ass " >/dev/null && return 0
     done
     return 1
   }
@@ -53,7 +54,10 @@ main() {
 
   step "Installing uv (brings its own Python, nothing else needed)"
   if ! have uv; then
-    curl -LsSf https://astral.sh/uv/install.sh | sh </dev/null
+    UVI="$(mktemp)"                        # download first, then run it with no input from our pipe
+    curl -LsSf https://astral.sh/uv/install.sh -o "$UVI"
+    sh "$UVI" </dev/null
+    rm -f "$UVI"
   fi
   export PATH="$HOME/.local/bin:$PATH"
 
