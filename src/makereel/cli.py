@@ -1,5 +1,8 @@
 """Command line.
 
+  makereel start                  set up the first time, then open makereel in your browser
+  makereel status                 what's installed, running and recording, and the space it uses
+  makereel help                   the everyday commands, with examples
   makereel web                    the web app (http://localhost:8765)
   makereel run <link>             live stream, past stream, long video or Short (auto-detected)
   makereel local <file.mp4>       a video file you already have
@@ -110,7 +113,20 @@ def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="makereel", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", action="version", version=f"makereel {__version__}")
-    sub = ap.add_subparsers(dest="command", required=True)
+    sub = ap.add_subparsers(dest="command")
+    from . import cli_easy
+
+    p = sub.add_parser("start", help="set up (first time) and open makereel in your browser")
+    p.add_argument("--port", type=int)
+    p.add_argument("--yes", action="store_true", help="accept the suggested setup without asking")
+    p.add_argument("--no-browser", action="store_true")
+    p.set_defaults(fn=cli_easy.cmd_start)
+
+    p = sub.add_parser("status", help="what's installed, running and recording")
+    p.set_defaults(fn=cli_easy.cmd_status)
+
+    p = sub.add_parser("help", help="the everyday commands, with examples")
+    p.set_defaults(fn=cli_easy.cmd_help)
 
     p = sub.add_parser("web", help="the web app")
     p.add_argument("--host", help="default 127.0.0.1; 0.0.0.0 to reach it from other devices")
@@ -164,6 +180,10 @@ def main(argv: list[str] | None = None) -> None:
     try:
         logs.setup(env().log_level)
         args = parser().parse_args(argv)
+        if not getattr(args, "fn", None):          # plain `makereel`: show the friendly help
+            from .cli_easy import cmd_help
+            cmd_help(args)
+            return
         args.fn(args)
     except MakereelError as e:
         log.error("✗ %s", e.message)

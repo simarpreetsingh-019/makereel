@@ -50,7 +50,7 @@ makereel --version
 Step "Creating your makereel folder and shortcuts"
 New-Item -ItemType Directory -Force $Home_ | Out-Null
 $launcher = Join-Path $Home_ "Start makereel.cmd"
-Set-Content -Encoding ASCII $launcher "@echo off`r`ncd /d `"$Home_`"`r`n`"$exe`" web`r`n"
+Set-Content -Encoding ASCII $launcher "@echo off`r`ncd /d `"$Home_`"`r`n`"$exe`" start`r`n"
 $shell = New-Object -ComObject WScript.Shell
 foreach ($dir in @([Environment]::GetFolderPath("Desktop"), (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"))) {
   $lnk = $shell.CreateShortcut((Join-Path $dir "makereel.lnk"))
@@ -62,4 +62,5 @@ foreach ($dir in @([Environment]::GetFolderPath("Desktop"), (Join-Path $env:APPD
 
 Write-Host "`nmakereel is installed." -ForegroundColor Green
 Write-Host "Open it from the desktop or Start menu ('makereel'). Your reels and settings live in $Home_"
+Write-Host "Check on it any time with: makereel status   ·   all commands: makereel help"
 if (-not $env:MAKEREEL_NO_LAUNCH) { Start-Process $launcher -WorkingDirectory $Home_ }

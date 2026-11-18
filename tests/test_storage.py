@@ -43,3 +43,12 @@ def test_clear_cache_keeps_live_recordings(tmp_path):
     res = storage.clear_cache(recording={"abc"})
     assert res["kept"] == ["live_abc"] and res["freed_bytes"] == 5000
     assert (work / "live_abc").exists() and not (work / "live_old").exists() and not (work / "uploads").exists()
+
+
+def test_status_and_help_run(capsys):
+    from makereel import cli
+    cli.main(["help"])
+    assert "makereel start" in capsys.readouterr().out
+    cli.main(["status"])
+    out = capsys.readouterr().out
+    assert "makereel isn't running" in out and "Speech models" in out

@@ -92,7 +92,8 @@ def check_sign_in() -> dict:
                      if platform.system() == "Darwin" else "your browser's profile folder permissions")
             return {"ok": False, "source": browser, "blocked": True,
                     "message": f"Your computer isn't letting makereel read {browser.title()}'s sign-in. "
-                               f"Allow it in {where}. Or upload a sign-in file instead (below)."}
+                               f"Allow it in {where}. "
+                               "Or upload a sign-in file instead (Settings → Upload sign-in file)."}
         return {"ok": False, "source": browser, "message": f"Couldn't read {browser.title()}'s sign-in: {msg[:160]}"}
     signed = any(c.name in ("SID", "__Secure-3PSID", "LOGIN_INFO", "SAPISID") for c in yt)
     return {"ok": signed, "source": browser,

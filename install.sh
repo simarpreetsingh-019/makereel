@@ -62,16 +62,17 @@ step "Creating your makereel folder and launcher"
 mkdir -p "$HOME_DIR"
 if [ "$OS" = "Darwin" ]; then
   LAUNCHER="$HOME/Desktop/makereel.command"
-  printf '#!/bin/bash\ncd "%s"\n"%s" web\n' "$HOME_DIR" "$EXE" > "$LAUNCHER"
+  printf '#!/bin/bash\ncd "%s"\n"%s" start\n' "$HOME_DIR" "$EXE" > "$LAUNCHER"
   chmod +x "$LAUNCHER"
 else
   mkdir -p "$HOME/.local/share/applications"
   LAUNCHER="$HOME/.local/share/applications/makereel.desktop"
-  printf '[Desktop Entry]\nType=Application\nName=makereel\nComment=Turn live streams and videos into reels\nExec=sh -c '"'"'cd "%s" && "%s" web'"'"'\nTerminal=true\nCategories=AudioVideo;\n' \
+  printf '[Desktop Entry]\nType=Application\nName=makereel\nComment=Turn live streams and videos into reels\nExec=sh -c '"'"'cd "%s" && "%s" start'"'"'\nTerminal=true\nCategories=AudioVideo;\n' \
     "$HOME_DIR" "$EXE" > "$LAUNCHER"
 fi
 
 printf '\n\033[32mmakereel is installed.\033[0m\n'
-echo "Start it with the launcher ($LAUNCHER) or by running: cd ~/makereel && makereel web"
+echo "Start it with the launcher ($LAUNCHER) or by running: cd ~/makereel && makereel start"
+echo "Check on it any time with: makereel status   ·   all commands: makereel help"
 echo "Your reels and settings live in $HOME_DIR"
 if [ -z "${MAKEREEL_NO_LAUNCH:-}" ] && [ "$OS" = "Darwin" ]; then open "$LAUNCHER"; fi
