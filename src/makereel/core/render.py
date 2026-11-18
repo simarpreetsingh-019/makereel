@@ -103,7 +103,9 @@ def _overlay_filters(label: str, ass: Path | None, fonts_dir: Path | None, logo:
     """Append captions and logo after `label`; returns (filter text, final label)."""
     parts, cur = [], label
     if ass is not None:
-        fonts = f":fontsdir={fonts_dir.as_posix()}" if fonts_dir and fonts_dir.is_dir() else ""
+        # quoted with \\: so a Windows drive letter (C:/...) isn't read as an option separator
+        fonts = (f":fontsdir='{fonts_dir.as_posix().replace(':', chr(92) + ':')}'"
+                 if fonts_dir and fonts_dir.is_dir() else "")
         parts.append(f"[{cur}]ass={ass.name}{fonts}[c]")
         cur = "c"
     if logo is not None:
