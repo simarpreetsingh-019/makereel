@@ -53,7 +53,7 @@ jobs:
         env:
           MAKEREEL_SOURCE: ${{ github.workspace }}
           MAKEREEL_NO_LAUNCH: "1"
-        run: bash install.sh
+        run: cat install.sh | bash   # piped, exactly like `curl … | bash`
       - name: run install.ps1 (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -97,7 +97,7 @@ jobs:
         env:
           MAKEREEL_SOURCE: ${{ github.workspace }}
           MAKEREEL_NO_LAUNCH: "1"
-        run: bash install.sh
+        run: cat install.sh | bash   # piped, exactly like `curl … | bash`
       - name: the web app starts and answers
         run: |
           export PATH="$HOME/.local/bin:$PATH"
