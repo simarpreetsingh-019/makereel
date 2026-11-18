@@ -80,3 +80,49 @@ jobs:
             try { Invoke-RestMethod http://127.0.0.1:8765/api/v1/health; exit 0 } catch { Start-Sleep 2 }
           }
           exit 1
+
+  # The real question: does it work on a computer with NO Python, Node or ffmpeg?
+  empty-linux:
+    name: install on an empty Linux (no Python, Node or ffmpeg)
+    needs: tests
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    steps:
+      - name: only the OS, curl and git (to read this checkout)
+        run: |
+          apt-get update -qq && apt-get install -y -qq curl git ca-certificates
+          ! command -v python3 && ! command -v node && ! command -v ffmpeg && echo "confirmed: nothing installed"
+      - uses: actions/checkout@v4
+      - name: run install.sh
+        env:
+          MAKEREEL_SOURCE: ${{ github.workspace }}
+          MAKEREEL_NO_LAUNCH: "1"
+        run: bash install.sh
+      - name: the web app starts and answers
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          cd ~/makereel
+          makereel web --no-browser --port 8765 &
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8765/api/v1/health && exit 0; sleep 2; done
+          exit 1
+
+  empty-windows:
+    name: install on Windows with Python and Node hidden
+    needs: tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: hide Python and Node, then run install.ps1
+        shell: pwsh
+        env:
+          MAKEREEL_SOURCE: ${{ github.workspace }}
+          MAKEREEL_NO_LAUNCH: "1"
+        run: |
+          $keep = $env:Path -split ';' | Where-Object { $_ -and $_ -notmatch 'python|nodejs|node|hostedtoolcache' }
+          $env:Path = $keep -join ';'
+          foreach ($c in 'python', 'python3', 'node') {
+            if (Get-Command $c -ErrorAction SilentlyContinue) { Write-Host "still visible: $c ($((Get-Command $c).Source))" }
+          }
+          ./install.ps1
+          $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
+          makereel --version

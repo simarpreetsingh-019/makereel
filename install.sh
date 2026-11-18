@@ -12,6 +12,8 @@ set -euo pipefail
 REPO="${MAKEREEL_REPO:-simarpreetsingh-019/makereel}"
 SOURCE="${MAKEREEL_SOURCE:-git+https://github.com/$REPO}"
 HOME_DIR="$HOME/makereel"
+export UV_PYTHON_PREFERENCE=only-managed   # always uv's own Python: works with no Python, or an old one
+SUDO=""; [ "$(id -u)" -ne 0 ] && SUDO="sudo"   # already root (e.g. a container): no sudo needed
 step() { printf '\n\033[36m==> %s\033[0m\n' "$1"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 OS="$(uname -s)"
@@ -36,9 +38,9 @@ if [ "$OS" = "Darwin" ]; then
 else
   if ! has_captions || ! { have node || have deno; }; then
     echo "Installing ffmpeg and Node.js (asks for your password)…"
-    if have apt-get; then sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg nodejs
-    elif have dnf; then sudo dnf install -y ffmpeg nodejs
-    elif have pacman; then sudo pacman -S --noconfirm ffmpeg nodejs
+    if have apt-get; then $SUDO apt-get update -qq && DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq ffmpeg nodejs
+    elif have dnf; then $SUDO dnf install -y ffmpeg nodejs
+    elif have pacman; then $SUDO pacman -S --noconfirm ffmpeg nodejs
     else echo "Please install ffmpeg and Node.js with your package manager, then run this again."; exit 1; fi
   fi
 fi

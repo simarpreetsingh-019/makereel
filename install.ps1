@@ -11,6 +11,7 @@ $ErrorActionPreference = "Stop"
 $Repo = if ($env:MAKEREEL_REPO) { $env:MAKEREEL_REPO } else { "simarpreetsingh-019/makereel" }
 $Source = if ($env:MAKEREEL_SOURCE) { $env:MAKEREEL_SOURCE } else { "git+https://github.com/$Repo" }
 $Home_ = Join-Path $env:USERPROFILE "makereel"
+$env:UV_PYTHON_PREFERENCE = "only-managed"   # always uv's own Python: works with no Python, or an old one
 
 function Step($m) { Write-Host "`n==> $m" -ForegroundColor Cyan }
 function Have($c) { [bool](Get-Command $c -ErrorAction SilentlyContinue) }
