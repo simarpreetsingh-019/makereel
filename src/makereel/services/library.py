@@ -20,7 +20,7 @@ import re
 import shutil
 from pathlib import Path
 
-from ..config import env, load_settings
+from ..config import load_settings, reels_dir
 from ..core import branding, captions, framing, language, render, transcribe
 from ..core.pipeline import FOLDER_FILE, caption_hook, folder_language
 from ..errors import Forbidden, InvalidInput, NotFound
@@ -30,7 +30,7 @@ REEL_NAME = re.compile(r"reel_\d+")
 
 
 def root() -> Path:
-    path = env().output_dir.resolve()
+    path = reels_dir().resolve()
     path.mkdir(parents=True, exist_ok=True)
     return path
 

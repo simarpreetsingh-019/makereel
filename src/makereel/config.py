@@ -155,8 +155,10 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "speech_device": "auto", # where speech recognition runs: auto (NVIDIA GPU if usable) | gpu | cpu
     "setup_done": False,     # the first-run setup (model suggestions) was finished or skipped
     "watching": False,       # the channel watcher was on when makereel last ran (it starts again)
-    "update_repo": "",       # GitHub "owner/repo" that publishes makereel releases ("" = don't check)
+    "update_repo": "simarpreetsingh-019/makereel",   # GitHub repo whose releases are offered as updates ("" = off)
     "update_check": True,    # look for a new release when the app starts (one small request)
+    "reels_folder": "",      # where reel folders are saved ("" = ./output); MAKEREEL_OUTPUT_DIR wins if set
+    "work_folder": "",       # temporary downloads and live buffers ("" = ./downloads); MAKEREEL_WORK_DIR wins
     "clip": CLIP_DEFAULTS,
     "brand": BRAND_DEFAULTS,
     "ai": AI_DEFAULTS,
@@ -315,6 +317,38 @@ def since_cutoff(value: str, now: float) -> float | None:
     return None
 
 
+def validate_folder(value: Any) -> str:
+    """'' (the default) or an absolute folder path we can write to (created if missing)."""
+    raw = str(value or "").strip().strip('"')
+    if not raw:
+        return ""
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        raise ConfigError("give the full path of the folder, e.g. /Users/you/Movies/makereel or D:\\Reels")
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / ".makereel-write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as e:
+        raise ConfigError(f"makereel can't save files in {path}: {e.strerror or e}") from e
+    return str(path)
+
+
+def reels_dir() -> Path:
+    """Where reel folders go: MAKEREEL_OUTPUT_DIR if set, else the reels_folder setting, else ./output."""
+    if os.environ.get("MAKEREEL_OUTPUT_DIR"):
+        return env().output_dir
+    return Path(load_settings()["reels_folder"] or env().output_dir)
+
+
+def work_dir() -> Path:
+    """Temporary downloads and live buffers: MAKEREEL_WORK_DIR, else the work_folder setting, else ./downloads."""
+    if os.environ.get("MAKEREEL_WORK_DIR"):
+        return env().work_dir
+    return Path(load_settings()["work_folder"] or env().work_dir)
+
+
 def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings:
     """Validate and merge `changes` into makereel.json. Unknown keys are rejected."""
     path = path or env().config_file
@@ -347,6 +381,9 @@ def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings
         if browser not in ("", "chrome", "firefox", "edge", "brave", "safari", "chromium", "opera", "vivaldi"):
             raise ConfigError("cookies_browser must be empty or one of chrome, firefox, edge, brave, safari...")
         current["cookies_browser"] = browser
+    for key in ("reels_folder", "work_folder"):
+        if key in changes:
+            current[key] = validate_folder(changes[key])
     if "speech_device" in changes:
         if changes["speech_device"] not in ("auto", "gpu", "cpu"):
             raise ConfigError("speech_device must be auto, gpu or cpu")

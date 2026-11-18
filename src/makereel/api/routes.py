@@ -9,10 +9,10 @@ import uuid
 from pathlib import Path
 
 from .. import __version__
-from ..config import env, load_settings, save_settings
+from ..config import load_settings, save_settings, work_dir
 from ..core import media, models, sources
 from ..errors import InvalidInput
-from ..services import bench, brand, library, updates
+from ..services import bench, brand, library, storage, updates
 from ..services.jobs import JobManager
 from ..services.watcher import Watcher
 from .router import Request, Response, Router
@@ -59,7 +59,7 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
         if not 0 < req.length <= MAX_UPLOAD_BYTES:
             raise InvalidInput("the file is empty or larger than 8 GB")
         name = re.sub(r"[^\w.\-]", "_", Path(req.query.get("name", "upload.mp4")).name)[-80:]
-        dest = env().work_dir / "uploads" / f"{uuid.uuid4().hex[:6]}_{name}"
+        dest = work_dir() / "uploads" / f"{uuid.uuid4().hex[:6]}_{name}"
         dest.parent.mkdir(parents=True, exist_ok=True)
         left = req.length
         with dest.open("wb") as f:
@@ -276,9 +276,34 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
                                "Pick other models and save first, then delete this one.")
         return models.delete(name)
 
-    # ------------------------------------------------------------ updates from GitHub releases
     def busy() -> bool:
         return any(j["status"] in ("queued", "running", "live") and j["kind"] != "watcher" for j in jobs.list())
+
+    # ------------------------------------------------------------ where files are saved, and the cache
+    @api.get("/storage")
+    def get_storage(req: Request):
+        return storage.info()
+
+    @api.post("/storage/open")
+    def open_storage(req: Request):
+        body = req.json()
+        return storage.open_folder(str(body.get("which", "reels")), body.get("folder") or None)
+
+    @api.post("/storage/clear-cache")
+    def clear_cache(req: Request):
+        recording = {j.session.info.id for j in (jobs.get(x["id"]) for x in jobs.list() if x["status"] == "live")
+                     if j.session is not None}
+        return storage.clear_cache(recording)
+
+    @api.put("/storage/reels-folder")
+    def set_reels_folder(req: Request):
+        body = req.json()
+        if body.get("move") and busy():
+            raise InvalidInput("reels are being made or recorded right now",
+                               "Move the reels when nothing is running, so no reel is left half-written.")
+        return storage.move_reels(str(body.get("path") or ""), bool(body.get("move")))
+
+    # ------------------------------------------------------------ updates from GitHub releases
 
     @api.get("/updates")
     def get_updates(req: Request):

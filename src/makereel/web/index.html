@@ -140,6 +140,24 @@
       </div>
     </div>
     <div><button class="btn primary" id="save-settings">Save</button></div>
+    <div class="card" id="storage-card">
+      <h2>Where files are saved</h2>
+      <p class="hint" style="margin-top:0" id="st-summary">Loading…</p>
+      <label class="field">Reels folder (one folder per video, with its reels)
+        <div class="row" style="gap:8px"><input id="st-reels" style="flex:1" placeholder="/Users/you/Movies/makereel  or  D:\Reels">
+          <button class="btn" id="st-reels-open" type="button">Open</button></div></label>
+      <label class="switch" style="font-weight:400"><input type="checkbox" id="st-move" checked> Move my existing reels to the new folder</label>
+      <div><button class="btn" id="st-reels-save" type="button">Use this folder</button></div>
+      <label class="field" style="margin-top:12px">Cache folder (downloads and live-stream buffers, only needed while a job runs)
+        <div class="row" style="gap:8px"><input id="st-work" style="flex:1">
+          <button class="btn" id="st-work-open" type="button">Open</button>
+          <button class="btn" id="st-work-save" type="button">Use this folder</button></div></label>
+      <div class="row" style="gap:8px;margin-top:8px">
+        <button class="btn danger" id="st-clear" type="button">Clear cache</button>
+        <span class="hint" style="margin:0">Deletes downloads, uploads and old live buffers. Keeps your reels, live streams being
+          recorded, and speech models (delete those in System).</span>
+      </div>
+    </div>
   </section>
   <!-- Brand kit -->
   <section id="tab-brand" hidden>

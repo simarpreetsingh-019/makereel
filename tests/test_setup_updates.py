@@ -39,5 +39,7 @@ def test_versions():
 def test_no_repo_means_no_check(tmp_path, monkeypatch):
     called = []
     monkeypatch.setattr(updates, "_fetch_latest", lambda repo: called.append(repo))
+    from makereel.config import save_settings
+    save_settings({"update_repo": ""})
     info = updates.check(force=True)
     assert info["available"] is False and called == []

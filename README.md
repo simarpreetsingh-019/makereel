@@ -19,22 +19,34 @@ and get captioned 9:16 reels with full creator credits, ready for Instagram, You
 
 Built first for GTA 6 streams; the `talk` profile tunes it for podcasts and talking heads.
 
-## Quick start
+## Install (one command)
+
+No Python needed first: the installer gets ffmpeg, Node.js and its own Python if they're missing.
+
+**Windows 10/11** (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/simarpreetsingh-019/makereel/main/install.ps1 | iex
+```
+
+**macOS / Linux** (Terminal):
 
 ```bash
-# 1. tools: ffmpeg with libass (text captions), Python 3.10+, Node (yt-dlp uses it for YouTube)
-brew install ffmpeg-full python@3.12 node                      # macOS
-# winget install Gyan.FFmpeg Python.Python.3.12 OpenJS.NodeJS  # Windows
-# sudo apt install ffmpeg python3-venv nodejs                  # Debian / Ubuntu
-
-# 2. install
-python3 -m venv .venv && .venv/bin/pip install -e .           # Windows: .venv\Scripts\pip install -e .
-cp makereel.example.json makereel.json                         # optional: your channels and defaults
-cp .env.example .env                                           # optional: ports, password, threads
-
-# 3. run
-.venv/bin/makereel web                                         # opens http://localhost:8765
+curl -LsSf https://raw.githubusercontent.com/simarpreetsingh-019/makereel/main/install.sh | bash
 ```
+
+Then open **makereel** from the shortcut it creates. New here? Read **[Getting started](docs/GETTING_STARTED.md)**.
+
+### For developers
+
+```bash
+git clone https://github.com/simarpreetsingh-019/makereel && cd makereel
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # Windows: .venv\Scripts\pip install -e ".[dev]"
+.venv/bin/makereel web                                         # opens http://localhost:8765
+.venv/bin/python -m pytest -q                                  # tests
+```
+
+You'll need ffmpeg with libass (captions) and Node.js on your PATH; the installers above show how.
 
 From the terminal instead:
 
@@ -62,6 +74,7 @@ Live streams use a rolling buffer (idea from [PeakCut](https://github.com/haziqa
 
 | | |
 |---|---|
+| [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) | First steps: install, speech models, your first reels, editing, 24/7 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Folder structure, layers, data flow, state, error handling |
 | [docs/API.md](docs/API.md) | REST API v1 reference |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every environment variable and setting |

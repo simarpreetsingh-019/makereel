@@ -41,9 +41,20 @@ function drawAi() {
   $("#ai-weight-v").textContent = `${Math.round(Number($("#ai-weight").value) * 100)}%`;
 }
 
+const gb = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.round(b / 1e6)} MB`);
+
+function drawStorage(st) {
+  $("#st-summary").textContent = `Reels: ${gb(st.reels_bytes)} · cache: ${gb(st.cache_bytes)} · ${gb(st.free_bytes)} free on this disk.`;
+  if (document.activeElement !== $("#st-reels")) $("#st-reels").value = st.reels_folder;
+  if (document.activeElement !== $("#st-work")) $("#st-work").value = st.work_folder;
+  $("#st-reels").disabled = $("#st-reels-save").disabled = st.fixed_by_env.reels;
+  $("#st-work").disabled = $("#st-work-save").disabled = st.fixed_by_env.work;
+}
+
 export async function load() {
-  const [settings, watcher] = await Promise.all([api.settings(), api.watcher()]);
+  const [settings, watcher, st] = await Promise.all([api.settings(), api.watcher(), api.storage()]);
   store.set({ settings, watcher: watcher.running });
+  drawStorage(st);
 }
 
 export function render(state) {
@@ -106,6 +117,25 @@ export function mount() {
         showError(err);
       }
     }));
+
+  $("#st-reels-open").addEventListener("click", (e) => busy(e.currentTarget, () => api.openFolder("reels")));
+  $("#st-work-open").addEventListener("click", (e) => busy(e.currentTarget, () => api.openFolder("work")));
+  $("#st-reels-save").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+    const res = await api.setReelsFolder($("#st-reels").value.trim(), $("#st-move").checked);
+    drawStorage(res);
+    toast(res.moved ? `Saving reels in the new folder; moved ${res.moved} video folder${res.moved === 1 ? "" : "s"} there`
+                    : "New reels are saved in this folder");
+  }));
+  $("#st-work-save").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+    await api.saveSettings({ work_folder: $("#st-work").value.trim() });
+    drawStorage(await api.storage());
+    toast("Cache folder changed (used by new jobs)");
+  }));
+  $("#st-clear").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+    const res = await api.clearCache();
+    drawStorage(res);
+    toast(`Freed ${gb(res.freed_bytes)}${res.kept.length ? ` (kept ${res.kept.length} live recording${res.kept.length === 1 ? "" : "s"})` : ""}`);
+  }));
 
   $("#save-settings").addEventListener("click", (e) => {
     const body = { channels: $("#channels").value.split("\n") };

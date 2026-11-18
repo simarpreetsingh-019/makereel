@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 — 2026-11-18
+
+- **One-command install** for Windows, macOS and Linux (`install.ps1`, `install.sh`): gets ffmpeg, Node.js and
+  its own Python if missing, plus shortcuts. **Getting started** guide (docs/GETTING_STARTED.md).
+- **Where files are saved**: choose the reels and cache folders, open them, and clear the cache (Settings).
+- **Security**: the local server only answers requests addressed to localhost (blocks DNS rebinding).
 
 - **Speech model setup** (System tab, with a reminder on first run): reads memory, disk and NVIDIA GPU,
   asks whether you clip English or Indian streamers, suggests a model for English and one for Hindi,

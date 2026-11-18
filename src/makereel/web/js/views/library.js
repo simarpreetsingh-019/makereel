@@ -65,6 +65,7 @@ export function render(state) {
     ? `<a class="btn small" href="#/library">← All folders</a><h2>${esc(state.folder.info?.title || state.folder.folder)}</h2>
        ${state.folder.info?.url ? `<a class="hint" style="margin:0" href="${esc(state.folder.info.url)}" target="_blank" rel="noopener">original video ↗</a>` : ""}
        <button class="btn small" id="lib-refresh" style="margin-left:auto" title="Look for new reels">↻ Refresh</button>
+       <button class="btn small" id="lib-show" title="Open this folder in Finder / Explorer">Show in folder</button>
        <button class="btn small" id="join-start">Join reels</button>
        <button class="btn small danger" id="delete-folder">Delete folder</button>`
     : `<h2>Folders</h2><button class="btn small" id="lib-refresh" style="margin-left:auto" title="Look for new reels">↻ Refresh</button>`;
@@ -126,6 +127,10 @@ export function mount() {
       await busy(e.target, () => load(inFolder || undefined));
       const after = inFolder ? store.state.folder.reels.length : (store.state.folders || []).reduce((n, f) => n + f.count, 0);
       toast(after > before ? `${after - before} new reel${after - before === 1 ? "" : "s"}` : "No new reels yet");
+      return;
+    }
+    if (e.target.id === "lib-show") {
+      await busy(e.target, () => api.openFolder("reels", store.state.folder.folder));
       return;
     }
     if (e.target.id === "join-start") { joining = joining ? null : []; render(store.state); return; }

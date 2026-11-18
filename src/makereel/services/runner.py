@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from ..config import Settings, env
+from ..config import Settings, work_dir
 from ..core import pipeline, sources
 from ..core.live import LiveSession
 from . import library
@@ -25,7 +25,7 @@ def run_link(url: str, settings: Settings, section: str | None = None) -> LiveSe
     if info.live_status == "is_upcoming":
         log.info("  not started yet; turn on the channel watcher to catch it when it goes live")
         return []
-    work = env().work_dir
+    work = work_dir()
     dl = sources.download(url, work, section, chat=info.live_status in ("was_live", "post_live"),
                           max_height=settings["max_height"])
     try:
@@ -39,7 +39,7 @@ def run_link(url: str, settings: Settings, section: str | None = None) -> LiveSe
 
 
 def live_session(info: sources.SourceInfo, settings: Settings) -> LiveSession:
-    session = LiveSession(info, library.folder_for(info.title, info.id), env().work_dir, settings.clip,
+    session = LiveSession(info, library.folder_for(info.title, info.id), work_dir(), settings.clip,
                           settings.brand, settings["buffer_minutes"], settings["clips_per_hour"],
                           settings["max_height"])
     session.ai = settings.ai
