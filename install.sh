@@ -10,7 +10,7 @@
 # Run it again any time to repair or update.
 set -euo pipefail
 REPO="${MAKEREEL_REPO:-simarpreetsingh-019/makereel}"
-SOURCE="${MAKEREEL_SOURCE:-git+https://github.com/$REPO}"
+SOURCE="${MAKEREEL_SOURCE:-makereel @ https://github.com/$REPO/archive/refs/heads/main.zip}"   # a zip: no git needed
 HOME_DIR="$HOME/makereel"
 export UV_PYTHON_PREFERENCE=only-managed   # always uv's own Python: works with no Python, or an old one
 SUDO=""; [ "$(id -u)" -ne 0 ] && SUDO="sudo"   # already root (e.g. a container): no sudo needed
