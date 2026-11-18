@@ -4,7 +4,7 @@
   makereel run <link>             live stream, past stream, long video or Short (auto-detected)
   makereel local <file.mp4>       a video file you already have
   makereel rerender <folder> <reel> [--transcript TEXT] [--hook TEXT] [--offset S] [--sync]
-  makereel export <folder> <reel> --format 4x5|1x1|16x9|9x16 [--fit blur|crop|pad]
+  makereel export <folder> <reel> --format 4x5|1x1|16x9|9x16 [--fit blur|crop|pad|track|split]
   makereel bench [--video LINK_OR_FILE] [--model base]   speed, CPU, RAM and disk on this device
   makereel daemon                 24/7 without the web UI: watch channels + inbox.txt
 """
@@ -32,11 +32,12 @@ def _clip_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--max-clips", type=int)
     g.add_argument("--min-len", type=float)
     g.add_argument("--max-len", type=float)
-    g.add_argument("--model", help="speech model: tiny, base, small, medium, large-v3")
+    g.add_argument("--model", help="speech model for English: tiny, base, small, medium, distil-large-v3, large-v3")
     g.add_argument("--language", help="e.g. en, hi, pa (auto-detected once per video if omitted)")
     g.add_argument("--fps", type=int, choices=(30, 60), help="60 keeps smooth motion from 60 fps sources")
     g.add_argument("--model-other", dest="model_other", choices=("same", "small", "medium", "large-v3"),
-                   help="speech model for non-English videos when --model is tiny/base (default small)")
+                   help="speech model for Hindi and other languages (used when it's bigger than --model, "
+                        "or --model is English-only)")
     g.add_argument("--layout", choices=["auto", "blur", "crop", "pad", "track", "split"])
     g.add_argument("--trim-silence", action="store_true", help="cut dead air (needs auto-editor)")
 
@@ -146,7 +147,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("folder")
     p.add_argument("reel")
     p.add_argument("--format", required=True, choices=["9x16", "4x5", "1x1", "16x9"])
-    p.add_argument("--fit", choices=["blur", "crop", "pad"])
+    p.add_argument("--fit", choices=["blur", "crop", "pad", "track", "split"])
     p.set_defaults(fn=cmd_export)
 
     p = sub.add_parser("bench", help="benchmark this device")

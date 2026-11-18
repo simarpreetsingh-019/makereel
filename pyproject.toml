@@ -7,7 +7,8 @@ requires-python = ">=3.10"
 dependencies = [
   "yt-dlp[default]>=2025.1.1",
   "faster-whisper>=1.0",
-  "scenedetect[opencv-headless]>=0.6.4",
+  "scenedetect>=0.6.4",
+  "opencv-python>=4.8",   # face detection (YuNet) for follow-the-speaker and split screen
   "numpy",
   "psutil>=5.9",
   "anyascii>=0.3",   # English letters for non-Indian scripts (Indian ones use our own rules)
