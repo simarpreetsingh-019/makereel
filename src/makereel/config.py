@@ -155,7 +155,6 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "speech_device": "auto", # where speech recognition runs: auto (NVIDIA GPU if usable) | gpu | cpu
     "setup_done": False,     # the first-run setup (model suggestions) was finished or skipped
     "watching": False,       # the channel watcher was on when makereel last ran (it starts again)
-    "update_repo": "simarpreetsingh-019/makereel",   # GitHub repo whose releases are offered as updates ("" = off)
     "update_check": True,    # look for a new release when the app starts (one small request)
     "reels_folder": "",      # where reel folders are saved ("" = ./output); MAKEREEL_OUTPUT_DIR wins if set
     "work_folder": "",       # temporary downloads and live buffers ("" = ./downloads); MAKEREEL_WORK_DIR wins
@@ -221,7 +220,6 @@ def validate_clip(clip: dict[str, Any]) -> None:
 
 
 def validate_brand(brand: dict[str, Any]) -> None:
-    import re
     if brand.get("logo_position") not in ("top-left", "top-right", "bottom-left", "bottom-right"):
         raise ConfigError("brand.logo_position must be top-left, top-right, bottom-left or bottom-right")
     if brand.get("creator_badge", "off") not in ("off", "top-left", "top-right", "bottom-left", "bottom-right"):
@@ -388,11 +386,6 @@ def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings
         if changes["speech_device"] not in ("auto", "gpu", "cpu"):
             raise ConfigError("speech_device must be auto, gpu or cpu")
         current["speech_device"] = changes["speech_device"]
-    if "update_repo" in changes:
-        repo = str(changes["update_repo"] or "").strip().removeprefix("https://github.com/").strip("/")
-        if repo and not re.fullmatch(r"[A-Za-z0-9._-]+/[A-Za-z0-9._-]+", repo):
-            raise ConfigError("update_repo must look like owner/repo")
-        current["update_repo"] = repo
     for key in ("keep_source", "watch_uploads", "setup_done", "update_check", "watching"):
         if key in changes:
             current[key] = bool(changes[key])

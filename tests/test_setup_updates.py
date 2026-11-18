@@ -36,10 +36,11 @@ def test_versions():
     assert not updates.newer("0.6.0", "0.6.0") and not updates.newer("0.6.0-beta", "0.6.0")
 
 
-def test_no_repo_means_no_check(tmp_path, monkeypatch):
+def test_update_check_off_means_no_request(tmp_path, monkeypatch):
     called = []
     monkeypatch.setattr(updates, "_fetch_latest", lambda repo: called.append(repo))
     from makereel.config import save_settings
-    save_settings({"update_repo": ""})
-    info = updates.check(force=True)
+    save_settings({"update_check": False})
+    info = updates.check()                          # turned off: no request to GitHub at all
     assert info["available"] is False and called == []
+    assert info["repo"] == "simarpreetsingh-019/makereel"

@@ -7,7 +7,7 @@ but only when no reel is being made or recorded.
 ## One-time setup
 
 1. Put the project on GitHub (public, so the app can read releases without an account).
-2. The app checks `simarpreetsingh-019/makereel` by default (`update_repo` in the settings).
+2. The app always checks `simarpreetsingh-019/makereel`; it isn't a setting, so nobody can redirect updates.
 
 ## Each release
 

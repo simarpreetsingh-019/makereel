@@ -1,6 +1,6 @@
 """Updates from GitHub: tell the user when a new makereel release is out, and install it on request.
 
-Releases are GitHub releases on `update_repo` ("owner/repo") tagged like v0.7.0. Checking is one
+Releases are GitHub releases on the official repository, tagged like v0.7.0. Checking is one
 small request to GitHub's public API (no account, nothing about the user is sent), at most every
 few hours. Installing:
   - a git checkout (installed with `pip install -e .`): fetch the tag, check it out, reinstall;
@@ -28,6 +28,13 @@ from ..errors import Conflict, MakereelError
 log = logging.getLogger(__name__)
 
 CHECK_EVERY = 6 * 3600
+# Updates only ever come from the official repository. It isn't a setting, so nothing in the app (or a
+# web page talking to it) can point updates somewhere else. MAKEREEL_UPDATE_REPO is for testing a fork.
+OFFICIAL_REPO = "simarpreetsingh-019/makereel"
+
+
+def update_repo() -> str:
+    return os.environ.get("MAKEREEL_UPDATE_REPO", OFFICIAL_REPO)
 REPO_ROOT = Path(__file__).resolve().parents[3]       # the checkout, when installed from source
 _state: dict = {"checked": 0.0, "latest": None, "error": None, "installing": False, "installed": None,
                 "log": []}
@@ -88,7 +95,7 @@ def _verified_wheel(latest: dict, folder: Path) -> Path:
 def check(force: bool = False) -> dict:
     """What the app shows: current version, the latest release, and whether to offer an update."""
     settings = load_settings()
-    repo = settings["update_repo"]
+    repo = update_repo()
     with _lock:
         due = force or time.time() - _state["checked"] > CHECK_EVERY
         if repo and (settings["update_check"] or force) and due:

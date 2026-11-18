@@ -86,10 +86,8 @@ async function loadSetup() {
 // ------------------------------------------------------------------ updates
 function drawUpdate() {
   const u = update;
-  $("#up-repo").value = u.repo || "";
   let text = `You have makereel <b>${esc(u.current)}</b>.`;
-  if (!u.repo) text += " Add the GitHub repository that publishes makereel releases to get updates.";
-  else if (u.installed) text += ` Version <b>${esc(u.installed)}</b> is installed. Restart makereel to use it.`;
+  if (u.installed) text += ` Version <b>${esc(u.installed)}</b> is installed. Restart makereel to use it.`;
   else if (u.installing) text += " Installing the update…";
   else if (u.available) text += ` <b>Version ${esc(u.latest.version)} is available.</b>
     ${u.latest.url ? `<a href="${esc(u.latest.url)}" target="_blank" rel="noopener">What's new ↗</a>` : ""}`;
@@ -250,7 +248,6 @@ export function mount() {
   }));
 
   $("#up-check").addEventListener("click", (e) => busy(e.currentTarget, async () => {
-    await api.saveSettings({ update_repo: $("#up-repo").value });
     update = await api.updates(true);
     drawUpdate();
     drawNotices();
