@@ -93,6 +93,8 @@ def install(busy: bool) -> dict:
             return check()
         _state.update(installing=True, log=[], error=None)
     tag, repo = info["latest"]["tag"], info["repo"]
+    if not re.fullmatch(r"v?\d+(\.\d+){0,3}", tag):   # passed to git/pip: plain version tags only
+        raise MakereelError(f"the latest release has an unexpected tag {tag[:40]!r}; not installing it")
 
     def run() -> None:
         try:

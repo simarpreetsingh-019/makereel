@@ -4,6 +4,8 @@ Standard library only, so it runs anywhere Python does (Windows, macOS, Linux, s
 
 Security model
 - Bound to 127.0.0.1 by default: only this computer can reach it.
+- Without a password, only requests addressed to localhost / 127.0.0.1 / [::1] are answered. This blocks
+  DNS rebinding: a web page pointing its own domain at 127.0.0.1 to drive the app from the browser.
 - Any other host requires a password (HTTP Basic; the browser asks for it).
 - Cross-origin requests are refused unless the origin is in MAKEREEL_ALLOWED_ORIGINS. That
   allow-list is how a hosted copy of the web app can drive this local engine
@@ -56,6 +58,14 @@ def _handler(api, password: str | None, origins: tuple[str, ...]):
                 self.send_header("Access-Control-Allow-Origin", origin)
                 self.send_header("Vary", "Origin")
                 self.send_header("Access-Control-Allow-Credentials", "true")
+
+        def _host_allowed(self) -> bool:
+            """Without a password, the Host header must name this computer (stops DNS rebinding)."""
+            if password:
+                return True
+            host = self.headers.get("Host", "").strip().lower()
+            name = host[1:host.index("]")] if host.startswith("[") and "]" in host else host.rsplit(":", 1)[0]
+            return name in LOCAL_HOSTS or name.endswith(".localhost")
 
         def _cross_origin_refused(self) -> bool:
             origin = self.headers.get("Origin", "").rstrip("/")
@@ -147,6 +157,9 @@ def _handler(api, password: str | None, origins: tuple[str, ...]):
         def _dispatch(self) -> None:
             url = urlparse(self.path)
             try:
+                if not self._host_allowed():
+                    raise Forbidden("this address is not allowed",
+                                    "Open makereel at http://localhost, or set a password to reach it by another name.")
                 if self.command == "OPTIONS":
                     return self._preflight()
                 if self._cross_origin_refused():
