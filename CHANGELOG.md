@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Loading spinners**: every save, render and export button shows a spinner while it works, and the editor's
+  status line spins during a re-render.
+- **Camera tab without Follow the speaker**: offers a "Use Follow the speaker" button instead of a dead end,
+  and no longer shows video controls with nothing to play.
 - **One recording per live stream**: a pasted live link and the 24/7 watcher no longer record the same stream
   twice ("already recording this stream"), and a video always reuses its folder even when YouTube changes the
   time in a live title.

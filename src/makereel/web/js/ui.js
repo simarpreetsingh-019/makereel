@@ -20,14 +20,15 @@ export function showError(err) {
 }
 
 /** Run an async action with the button disabled; errors become toasts. */
+// While `fn` runs, the button is disabled and shows a spinner (saves and renders can take a while).
 export async function busy(button, fn) {
-  if (button) button.disabled = true;
+  if (button) { button.disabled = true; button.classList.add("loading"); button.setAttribute("aria-busy", "true"); }
   try {
     return await fn();
   } catch (err) {
     showError(err);
   } finally {
-    if (button) button.disabled = false;
+    if (button) { button.disabled = false; button.classList.remove("loading"); button.removeAttribute("aria-busy"); }
   }
 }
 

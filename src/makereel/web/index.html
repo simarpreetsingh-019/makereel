@@ -380,14 +380,19 @@
         <div class="cam-box" id="cm-box"></div>
         <div class="cam-hit" id="cm-hit" title="Click a person to point the selected shot at them"></div>
       </div>
-      <div class="row" style="justify-content:center;gap:8px;margin-top:8px">
+      <div class="row" id="cm-controls" style="justify-content:center;gap:8px;margin-top:8px">
         <button class="btn small" id="cm-play" type="button">Play</button>
         <span class="hint" style="margin:0"><span id="cm-time">0.0 s</span></span>
         <label class="hint" style="margin:0"><input type="checkbox" id="cm-sound"> sound</label>
       </div>
     </div>
     <div class="stack">
-      <p class="hint" id="cm-off" style="margin:0" hidden>Camera moves can be edited for the <b>Follow the speaker</b> framing. Choose it under Look first.</p>
+      <div id="cm-off" class="stack" hidden>
+        <p class="hint" style="margin:0">This reel doesn't follow the speaker yet, so there are no camera moves to edit.
+          Switch it and makereel finds who is talking and builds the shots; then you can adjust them here.</p>
+        <div><button class="btn primary" id="cm-enable" type="button">Use Follow the speaker</button></div>
+        <p class="hint" id="cm-nosrc" style="margin:0" hidden>The original video for this reel isn't kept, so its framing can't be changed.</p>
+      </div>
       <div id="cm-on" class="stack">
         <p class="hint" style="margin:0">The box shows what the reel shows. Each coloured block below is one shot:
           drag the line between two blocks to move a cut, click a block to pick it, then click a person in the video to point that shot at them.</p>

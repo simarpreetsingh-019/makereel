@@ -261,3 +261,11 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .cam-cut::after { content: ""; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: #111; }
 .cam-head { position: absolute; top: 0; bottom: 0; width: 2px; background: #e11; pointer-events: none; z-index: 3; }
 .editor[data-edpanel="camera"] { grid-template-columns: 1fr; }
+
+/* busy: a small spinner before the label of a button (or message) that is working */
+.loading::before { content: ""; display: inline-block; width: 0.9em; height: 0.9em; margin-right: 0.45em;
+  vertical-align: -0.12em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: spin 0.7s linear infinite; }
+.btn.loading { cursor: progress; opacity: 0.85; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .loading::before { animation-duration: 2s; } }

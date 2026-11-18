@@ -98,6 +98,10 @@ function fillCamera() {
   $("#cm-off").hidden = on;
   $("#cm-on").hidden = !on;
   $("#cm-stage").hidden = !on;
+  $("#cm-controls").hidden = !on;
+  $("#cm-enable").hidden = !r.can_export;
+  $("#cm-nosrc").hidden = !!r.can_export;
+  if (!on) $("#cm-video").pause();
   cur.shots = (r.shots || []).map((s) => ({ ...s }));
   cur.shotSel = 0;
   if (!on) return;
@@ -220,6 +224,12 @@ function mountCamera() {
     const same = (a, b) => (a.wide && b.wide) || (!a.wide && !b.wide && Math.abs(a.x - b.x) < SAME_SPOT);
     const shots = cur.shots.filter((s, i) => i === 0 || !same(s, cur.shots[i - 1]));
     save({ camera: shots }, e.currentTarget, "Camera saved and re-rendered.");
+  });
+  $("#cm-enable").addEventListener("click", async (e) => {
+    $("#ed-msg").textContent = "Finding the speaker and re-rendering…";
+    await save({ fit: "track" }, e.currentTarget, "Now following the speaker.");
+    if (cur.reel.fit !== "track") $("#ed-msg").textContent = "No steady face found in this clip, so it stays on the blurred layout.";
+    showTab("camera");
   });
   $("#cm-auto").addEventListener("click", (e) => {
     $("#ed-msg").textContent = "Finding who is talking and re-rendering…";
@@ -410,13 +420,16 @@ function readCards() {
 
 // ------------------------------------------------------------------ saving
 async function save(changes, button, message = "Saved and re-rendered.") {
-  $("#ed-msg").textContent = "Rendering…";
+  if (!$("#ed-msg").textContent.endsWith("…")) $("#ed-msg").textContent = "Rendering…";
+  $("#ed-msg").classList.add("loading");
   await busy(button, async () => {
     try {
       fill(await api.editReel(cur.folder, cur.name, changes));
+      $("#ed-msg").classList.remove("loading");
       $("#ed-msg").textContent = message;
       cur.onSaved?.();
     } catch (err) {
+      $("#ed-msg").classList.remove("loading");
       $("#ed-msg").textContent = "";
       throw err;
     }
