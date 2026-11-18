@@ -292,3 +292,18 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 
 .job-x { margin-left: auto; font-size: 16px; line-height: 1; padding: 2px 8px; }
 #su-models-box summary { cursor: pointer; font-size: 13px; margin: 6px 0; }
+
+/* live load card on Create */
+.load { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 16px; margin-bottom: 14px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); font-size: 13px; }
+.load > div { display: flex; flex-direction: column; gap: 3px; }
+.load-k { color: var(--muted); font-size: 12px; }
+.load b { font-size: 16px; }
+.load-sub { color: var(--muted); font-size: 12px; }
+.load .bar { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.load .bar i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .4s; }
+.load .bar i.mid { background: var(--warn); }
+.load .bar i.hi { background: var(--accent); }
+.heat-warm { color: var(--warn); font-weight: 600; }
+.heat-hot { color: var(--accent); font-weight: 600; }
+.load-note { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; flex-direction: row !important; }

@@ -65,6 +65,12 @@
       </details>
     </div>
     <div class="card">
+      <div class="load" id="load" hidden>
+        <div><span class="load-k">Computer CPU</span><b id="ld-cpu">–</b><span class="bar"><i id="ld-cpu-bar"></i></span></div>
+        <div><span class="load-k">makereel</span><b id="ld-own">–</b><span class="load-sub" id="ld-mem"></span></div>
+        <div id="ld-temp-box" hidden><span class="load-k">CPU temperature</span><b id="ld-temp">–</b><span class="load-sub" id="ld-heat"></span></div>
+        <div class="load-note" id="ld-note"></div>
+      </div>
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">Jobs</h2>
         <button class="btn small" id="jobs-clear" type="button" title="Remove finished, failed and stopped jobs from this list">Clear finished</button></div>
       <div id="jobs"></div>

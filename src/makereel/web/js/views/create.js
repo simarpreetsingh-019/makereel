@@ -102,6 +102,31 @@ export function render(state) {
   box.querySelectorAll("pre.log").forEach((p) => { if (stick[p.dataset.log] !== false) p.scrollTop = p.scrollHeight; });
 }
 
+// Live load card (CPU, makereel's own use, Mac CPU temperature), refreshed with the jobs.
+export async function refreshLoad(jobs) {
+  let l;
+  try { l = await api.load(); } catch { return; }
+  $("#load").hidden = false;
+  const cpu = Math.round(l.cpu), own = Math.round(l.makereel_cpu / l.cores);
+  $("#ld-cpu").textContent = `${cpu}%`;
+  $("#ld-cpu-bar").style.width = `${Math.min(100, cpu)}%`;
+  $("#ld-cpu-bar").className = cpu > 80 ? "hi" : cpu > 50 ? "mid" : "";
+  $("#ld-own").textContent = `${own}% of the computer`;
+  $("#ld-mem").textContent = `${Math.round(l.makereel_mem / 1e6)} MB memory`;
+  $("#ld-temp-box").hidden = l.temp == null;
+  if (l.temp != null) {
+    $("#ld-temp").textContent = `${Math.round(l.temp)} °C`;
+    $("#ld-heat").textContent = l.heat;
+    $("#ld-heat").className = `load-sub heat-${l.heat}`;
+  }
+  const work = (jobs || []).find((j) => /transcribing|rendering|framing|speech model/i.test(j.last_line || "")
+                                         && ["live", "running"].includes(j.status));
+  $("#ld-note").textContent = work
+    ? `Busy: ${/transcrib|speech/i.test(work.last_line) ? "listening to the audio" : "rendering a reel"} for "${work.title.slice(0, 40)}". Spikes like this are normal and pass in about a minute.`
+    : own > 5 ? "Recording and watching for moments." : "Idle.";
+  if (l.heat === "hot") $("#ld-note").textContent += " Running hot: Settings → Processing → Cool and quiet, or fewer reels per hour.";
+}
+
 export async function refreshLogs() {
   const ids = Object.keys(store.state.openLogs);
   if (!ids.length) return;

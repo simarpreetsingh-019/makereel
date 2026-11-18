@@ -161,6 +161,17 @@ def cmd_status(a) -> None:
         if busy:
             _say(OK, f"{len(busy)} job(s) making reels")
 
+    print("\nThis computer")
+    from .core import sysmon
+    sysmon.snapshot()
+    time.sleep(1)
+    ld = sysmon.snapshot()
+    _say(OK if ld["cpu"] < 80 else WARN, f"CPU {ld['cpu']:.0f}% in use · memory {ld['ram_used']:.0f}%")
+    if ld["temp"] is not None:
+        mark = {"normal": OK, "warm": WARN, "hot": BAD}[ld["heat"]]
+        _say(mark, f"CPU temperature {ld['temp']:.0f} °C ({ld['heat']})",
+             "Settings → Processing → Cool and quiet, or fewer reels per hour" if ld["heat"] == "hot" else None)
+
     print("\nTools")
     check_tools()
 

@@ -36,6 +36,11 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
     def health(req: Request):
         return {"ok": True, "version": __version__}
 
+    @api.get("/system/load")
+    def system_load(req: Request):
+        from ..core import sysmon
+        return sysmon.snapshot()
+
     @api.get("/system")
     def system(req: Request):
         return {**media.system_info(), "version": __version__}

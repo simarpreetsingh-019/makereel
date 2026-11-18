@@ -23,6 +23,7 @@ async function refreshJobs() {
   try {
     store.set({ jobs: (await api.jobs()).jobs });
     setup.botCheck(store.state.jobs);
+    if (store.state.route.view === "create") create.refreshLoad(store.state.jobs);
     await create.refreshLogs();
   } catch (err) { showError(err); }
 }

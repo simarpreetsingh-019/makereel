@@ -70,6 +70,7 @@ export const api = {
   removeJob: (id) => request("DELETE", `/jobs/${id}`),
   clearJobs: () => request("POST", "/jobs/clear"),
   storage: () => request("GET", "/storage"),
+  load: () => request("GET", "/system/load"),
   ytSignIn: () => request("GET", "/youtube/sign-in"),
   ytOpen: (browser) => request("POST", "/youtube/open", { browser }),
   ytRemoveCookies: () => request("DELETE", "/youtube/cookies"),

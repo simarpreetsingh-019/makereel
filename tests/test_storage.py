@@ -45,8 +45,10 @@ def test_clear_cache_keeps_live_recordings(tmp_path):
     assert (work / "live_abc").exists() and not (work / "live_old").exists() and not (work / "uploads").exists()
 
 
-def test_status_and_help_run(capsys):
-    from makereel import cli
+def test_status_and_help_run(capsys, monkeypatch):
+    from makereel import cli, config
+    monkeypatch.setenv("MAKEREEL_PORT", "8899")          # a port nothing listens on: "not running"
+    config._env_cache = None
     cli.main(["help"])
     assert "makereel start" in capsys.readouterr().out
     cli.main(["status"])
