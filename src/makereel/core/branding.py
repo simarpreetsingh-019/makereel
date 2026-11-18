@@ -1,10 +1,11 @@
 """Turn the brand kit (settings["brand"] + files in <data>/brand/) into render options."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from ..config import env
-from . import language, safezone
+from . import badge, language, safezone
 from .captions import TEMPLATES, Style
 from .render import FORMATS, Logo
 
@@ -93,6 +94,43 @@ def clean_look(look: dict) -> dict:
             raise ValueError(f"caption script must be one of {', '.join(language.SCRIPT_MODES)}")
         out["script"] = look["script"]
     return out
+
+
+BADGE_HEIGHT = 0.045      # badge height as a share of the reel's height
+
+
+def badge_for(brand: dict, folder: Path, fmt: str = "9x16") -> Logo | None:
+    """The creator badge (picture + @handle) for reels in `folder`, or None (off, or it can't be made)."""
+    position = brand.get("creator_badge", "off")
+    if position == "off":
+        return None
+    try:
+        info = json.loads((folder / "folder.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    path = badge.ensure(folder, info.get("channel_url"), info.get("channel"), fonts_dir())
+    if path is None:
+        return None
+    if logo_file() and brand["logo_enabled"] and brand["logo_position"] == position:
+        side = "right" if position.endswith("left") else "left"      # never on top of the logo
+        position = f"{position.split('-')[0]}-{side}"
+    w, h = FORMATS[fmt]
+    bw, bh = _image_size(path)
+    zone = safezone.zone_for(brand.get("safe_zone", "all"), w, h)
+    return Logo(path.resolve(), position, min(BADGE_HEIGHT * h * bw / bh / w, 0.6), 0.95,
+                clear_top=zone.top if zone else 0.0, clear_bottom=zone.bottom if zone else 0.0)
+
+
+def _image_size(path: Path) -> tuple[int, int]:
+    import struct
+    with path.open("rb") as f:                          # PNG: width and height sit in the IHDR chunk
+        head = f.read(24)
+    return struct.unpack(">II", head[16:24]) if head[:8] == b"\x89PNG\r\n\x1a\n" else (4, 1)
+
+
+def overlays_for(brand: dict, folder: Path, enabled_on_reel: bool = True, fmt: str = "9x16") -> list[Logo]:
+    """Everything stamped on a reel besides captions: the user's logo, then the creator badge."""
+    return [o for o in (logo_for(brand, enabled_on_reel, fmt), badge_for(brand, folder, fmt)) if o is not None]
 
 
 def logo_for(brand: dict, enabled_on_reel: bool = True, fmt: str = "9x16") -> Logo | None:

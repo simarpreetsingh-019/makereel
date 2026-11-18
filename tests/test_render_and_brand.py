@@ -90,3 +90,20 @@ def test_reel_look_overrides_brand():
     b = config.load_settings().brand
     s = branding.style_for("1x1", b, {"vertical": 0.5, "box": True})
     assert s.vertical == 0.5 and s.box and s.width == s.height == 1080
+
+
+def test_logo_and_badge_both_overlaid():
+    from pathlib import Path
+
+    from makereel.core import render
+    a = render.Logo(Path("logo.png"), "top-right", 0.1, 0.9)
+    b = render.Logo(Path("creator_badge.png"), "top-left", 0.3, 0.95)
+    graph, label = render._overlay_filters("0:v", None, None, [a, b], 1080, 1)
+    assert "[1:v]" in graph and "[2:v]" in graph and label == "o1"
+    assert render._overlay_filters("0:v", None, None, None, 1080, 1) == ("", "0:v")
+
+
+def test_badge_handle_is_safe_for_ffmpeg():
+    from makereel.core import badge
+    assert badge.clean_handle("@Carry's:Live!") == "@CarrysLive"
+    assert badge.clean_handle(None) == ""

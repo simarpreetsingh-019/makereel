@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Creator badge**: the creator's profile picture and @handle in a corner of every reel (Brand → Creator
+  credit; top left by default, moves aside if it would cover your logo, keeps clear of app buttons).
 - **Caption language moved to the Text tab** (first thing you see when editing): original script, English
   letters or Translate to English, with the detected language shown. It applies right away, and asks first
   when unsaved word edits would be lost.

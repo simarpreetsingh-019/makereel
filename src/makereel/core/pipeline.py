@@ -118,7 +118,7 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
                                       branding.template_for(brand)), encoding="utf-8")
     with stage("render"):
         render.make_raw(src, raw, render.MAIN_FORMAT, plan[0], section, plan)
-        render.burn(raw, ass, out, branding.logo_for(brand), branding.fonts_dir())
+        render.burn(raw, ass, out, branding.overlays_for(brand, out_dir), branding.fonts_dir())
     if clip.get("silence"):
         render.trim_silence(out)
 

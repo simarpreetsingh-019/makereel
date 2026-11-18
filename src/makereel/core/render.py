@@ -98,9 +98,14 @@ def reframe_filter(fmt: str, fit: str, track=None, fps: int = 30) -> str:
             f"[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1,fps={fps}[v]")
 
 
-def _overlay_filters(label: str, ass: Path | None, fonts_dir: Path | None, logo: Logo | None,
+def _overlays(logo) -> list[Logo]:
+    """`logo` may be one Logo, a list of them (logo + creator badge), or None."""
+    return [] if logo is None else list(logo) if isinstance(logo, (list, tuple)) else [logo]
+
+
+def _overlay_filters(label: str, ass: Path | None, fonts_dir: Path | None, logo,
                      width: int, logo_input: int) -> tuple[str, str]:
-    """Append captions and logo after `label`; returns (filter text, final label)."""
+    """Append captions and overlay images after `label`; returns (filter text, final label)."""
     parts, cur = [], label
     if ass is not None:
         # quoted with \\: so a Windows drive letter (C:/...) isn't read as an option separator
@@ -108,14 +113,14 @@ def _overlay_filters(label: str, ass: Path | None, fonts_dir: Path | None, logo:
                  if fonts_dir and fonts_dir.is_dir() else "")
         parts.append(f"[{cur}]ass={ass.name}{fonts}[c]")
         cur = "c"
-    if logo is not None:
-        m = round(width * 0.04)
-        x = str(m) if "left" in logo.position else f"W-w-{m}"
-        y = (f"max({m}\\,H*{logo.clear_top:.3f})" if "top" in logo.position
-             else f"H-h-max({m}\\,H*{logo.clear_bottom:.3f})")
-        parts.append(f"[{logo_input}:v]scale={round(width * logo.scale)}:-2,format=rgba,"
-                     f"colorchannelmixer=aa={logo.opacity:.2f}[lg];[{cur}][lg]overlay={x}:{y}[o]")
-        cur = "o"
+    m = round(width * 0.04)
+    for i, item in enumerate(_overlays(logo)):
+        x = str(m) if "left" in item.position else f"W-w-{m}"
+        y = (f"max({m}\\,H*{item.clear_top:.3f})" if "top" in item.position
+             else f"H-h-max({m}\\,H*{item.clear_bottom:.3f})")
+        parts.append(f"[{logo_input + i}:v]scale={round(width * item.scale)}:-2,format=rgba,"
+                     f"colorchannelmixer=aa={item.opacity:.2f}[lg{i}];[{cur}][lg{i}]overlay={x}:{y}[o{i}]")
+        cur = f"o{i}"
     return ";".join(parts), cur
 
 
@@ -205,7 +210,7 @@ def burn(raw: Path, ass: Path, out: Path, logo: Logo | None = None, fonts_dir: P
     """Captions (+ logo) on top of an already-reframed video."""
     media.require_libass()
     width = int(_probe_width(raw))
-    inputs = [raw] + ([logo.path] if logo else [])
+    inputs = [raw] + [o.path for o in _overlays(logo)]
     graph, label = _overlay_filters("0:v", ass, fonts_dir, logo, width, 1)
     _encode(inputs, graph, label, out, out.parent)
 
@@ -216,7 +221,7 @@ def export(source: Path, ass: Path, out: Path, fmt: str, fit: str, logo: Logo | 
     """One pass: the reel's part of the master → any format, with captions and logo."""
     media.require_libass()
     w, _ = _check_format(fmt, fit)
-    inputs = [source] + ([logo.path] if logo else [])
+    inputs = [source] + [o.path for o in _overlays(logo)]
     graph, label = _overlay_filters("v", ass, fonts_dir, logo, w, 1)
     track = track_for(source, fmt, fit, section, shots)
     _encode(inputs, reframe_filter(fmt, fit, track, media.output_fps(source)) + ";" + graph, label, out,

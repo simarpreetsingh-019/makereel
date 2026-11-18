@@ -242,7 +242,7 @@ def _write_and_render(d: Path, meta_file: Path, post: dict, ass_text: str, brand
             post["shots"] = plan[1].shots                  # remember the camera moves, for the editor
         render.make_raw(d / post["source_clip"], d / post["raw"], render.MAIN_FORMAT, fit, section, plan)
     render.burn(d / post["raw"], d / post["captions"], d / post["file"],
-                branding.logo_for(brand, post.get("logo", True)), branding.fonts_dir())
+                branding.overlays_for(brand, d, post.get("logo", True)), branding.fonts_dir())
     meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
     for fmt, item in list((post.get("exports") or {}).items()):   # keep exports in step with edits
         if (d / item["file"]).exists():
@@ -606,7 +606,8 @@ def export_reel(folder: str, name: str, fmt: str, fit: str | None = None) -> dic
                             branding.template_for(brand, post.get("look")), section[1])
     ass.write_text(captions.set_cards(text, post.get("cards"), section[1]), encoding="utf-8")
     out = d / f"{name}.{fmt}.mp4"
-    render.export(d / post["source_clip"], ass, out, fmt, fit, branding.logo_for(brand, post.get("logo", True), fmt),
+    overlays = branding.overlays_for(brand, d, post.get("logo", True), fmt)
+    render.export(d / post["source_clip"], ass, out, fmt, fit, overlays,
                   branding.fonts_dir(), section, post.get("shots") if fit == "track" else None)
     post.setdefault("exports", {})[fmt] = {"file": out.name, "fit": fit, "captions": ass.name}
     meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
