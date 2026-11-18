@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **One recording per live stream**: a pasted live link and the 24/7 watcher no longer record the same stream
+  twice ("already recording this stream"), and a video always reuses its folder even when YouTube changes the
+  time in a live title.
+- **Refresh button in Reels** (folder list and inside a folder): shows how many new reels arrived.
 - **24/7 watches new uploads too** (YouTube): new videos and premieres that have aired are clipped as
   they appear, not only live streams. A channel's older videos are skipped the first time it's checked.
   Switch: Settings → "Also clip new uploads and premieres" (`watch_uploads`, on by default).

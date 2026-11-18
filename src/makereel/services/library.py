@@ -44,7 +44,17 @@ def safe_name(title: str, limit: int = 80) -> str:
 
 
 def folder_for(title: str, video_id: str) -> Path:
-    """Folder named after the video. Two different videos with the same title get the id appended."""
+    """Folder named after the video. Two different videos with the same title get the id appended.
+
+    The same video always lands in the same folder, even when its title changed (YouTube adds the
+    current time to live-stream titles, so a restarted recording would otherwise get a new folder).
+    """
+    for meta in root().glob(f"*/{FOLDER_FILE}") if root().is_dir() else []:
+        try:
+            if json.loads(meta.read_text(encoding="utf-8")).get("id") == video_id:
+                return meta.parent
+        except (OSError, ValueError):
+            continue
     base = root() / safe_name(title)
     info = base / FOLDER_FILE
     if base.exists() and info.exists():

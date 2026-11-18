@@ -64,9 +64,10 @@ export function render(state) {
   $("#library-crumbs").innerHTML = inFolder
     ? `<a class="btn small" href="#/library">← All folders</a><h2>${esc(state.folder.info?.title || state.folder.folder)}</h2>
        ${state.folder.info?.url ? `<a class="hint" style="margin:0" href="${esc(state.folder.info.url)}" target="_blank" rel="noopener">original video ↗</a>` : ""}
-       <button class="btn small" id="join-start" style="margin-left:auto">Join reels</button>
+       <button class="btn small" id="lib-refresh" style="margin-left:auto" title="Look for new reels">↻ Refresh</button>
+       <button class="btn small" id="join-start">Join reels</button>
        <button class="btn small danger" id="delete-folder">Delete folder</button>`
-    : `<h2>Folders</h2>`;
+    : `<h2>Folders</h2><button class="btn small" id="lib-refresh" style="margin-left:auto" title="Look for new reels">↻ Refresh</button>`;
   $("#library-body").innerHTML = inFolder ? reelsHTML(state.folder) : foldersHTML(state.folders, query);
 }
 
@@ -119,6 +120,14 @@ export function mount() {
   });
 
   $("#library-crumbs").addEventListener("click", async (e) => {
+    if (e.target.id === "lib-refresh") {
+      const inFolder = store.state.route.view === "folder" ? store.state.folder?.folder : null;
+      const before = inFolder ? store.state.folder.reels.length : (store.state.folders || []).reduce((n, f) => n + f.count, 0);
+      await busy(e.target, () => load(inFolder || undefined));
+      const after = inFolder ? store.state.folder.reels.length : (store.state.folders || []).reduce((n, f) => n + f.count, 0);
+      toast(after > before ? `${after - before} new reel${after - before === 1 ? "" : "s"}` : "No new reels yet");
+      return;
+    }
     if (e.target.id === "join-start") { joining = joining ? null : []; render(store.state); return; }
     if (e.target.id !== "delete-folder") return;
     const { folder, reels } = store.state.folder;

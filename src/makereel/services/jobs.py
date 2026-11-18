@@ -103,6 +103,18 @@ class JobManager:
         with self._lock:
             return sum(1 for j in self._jobs.values() if j.status is Status.LIVE and j.kind != "watcher")
 
+    def recording(self, video_id: str) -> Job | None:
+        """The live job already recording this stream, if any (the watcher and pasted links share it)."""
+        with self._lock:
+            return next((j for j in self._jobs.values() if j.session is not None and j.status is Status.LIVE
+                         and j.session.info.id == video_id), None)
+
+    def _check_not_recording(self, session: LiveSession) -> None:
+        other = self.recording(session.info.id)
+        if other is not None:
+            raise Conflict(f"already recording this stream: '{other.title}'",
+                           "Its reels go into the folder that's already open under Reels.")
+
     # -------------------------------------------------------------- commands
     def submit_link(self, url: str, options: dict[str, Any]) -> Job:
         return self._add(Job("link", url, options, title=url))
@@ -125,8 +137,10 @@ class JobManager:
             raise Conflict("already recording the maximum number of live streams",
                            "Stop one, or raise 'Live streams at once' in the 24/7 tab.")
         job = Job("link", session.info.url, title=session.info.title)
-        self._add(job, enqueue=False)
-        self._start_live(job, session)
+        with self._lock:                      # check and start together, so two starts can't both pass
+            self._check_not_recording(session)
+            self._add(job, enqueue=False)
+            self._start_live(job, session)
         return job
 
     def stop(self, job_id: str) -> Job:
@@ -207,9 +221,11 @@ class JobManager:
         else:
             result = runner.run_link(job.target, settings, job.options.get("section") or None)
             if isinstance(result, LiveSession):
-                if self.live_count() >= settings["max_parallel_live"]:
-                    raise Conflict("already recording the maximum number of live streams")
-                self._start_live(job, result)
+                with self._lock:
+                    if self.live_count() >= settings["max_parallel_live"]:
+                        raise Conflict("already recording the maximum number of live streams")
+                    self._check_not_recording(result)
+                    self._start_live(job, result)
                 return
             reels = result
         job.reels = len(reels)

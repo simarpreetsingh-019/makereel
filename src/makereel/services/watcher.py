@@ -113,6 +113,10 @@ class Watcher:
                 continue  # offline / not live: yt-dlp raises, that's normal
             if info.live_status != "is_live" or info.id in self._watching:
                 continue
+            already = self.jobs.recording(info.id)
+            if already is not None:                         # e.g. its link was pasted by hand
+                self._watching[info.id] = already.id
+                continue
             log.info("%s is live: %s", channel, info.title)
             try:
                 job = self.jobs.adopt_live(runner.live_session(info, settings))
