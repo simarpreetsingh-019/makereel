@@ -225,7 +225,11 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
 
     @api.put("/settings")
     def put_settings(req: Request):
-        return save_settings(req.json()).data
+        body = req.json()
+        settings = save_settings(body)
+        if "cpu_mode" in body:
+            media.apply_priority()
+        return settings.data
 
     @api.get("/watcher")
     def get_watcher(req: Request):

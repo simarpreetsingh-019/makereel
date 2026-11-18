@@ -152,6 +152,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "clips_per_hour": 6,     # per live stream
     "max_height": 720,       # source resolution to download
     "cookies_browser": "",   # use this browser's YouTube sign-in (chrome, firefox, edge, safari...): avoids bot checks
+    "cpu_mode": "balanced",  # quiet (1 core, low priority: cooler) | balanced | fast (most cores)
     "speech_device": "auto", # where speech recognition runs: auto (NVIDIA GPU if usable) | gpu | cpu
     "setup_done": False,     # the first-run setup (model suggestions) was finished or skipped
     "watching": False,       # the channel watcher was on when makereel last ran (it starts again)
@@ -382,6 +383,10 @@ def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings
     for key in ("reels_folder", "work_folder"):
         if key in changes:
             current[key] = validate_folder(changes[key])
+    if "cpu_mode" in changes:
+        if changes["cpu_mode"] not in ("quiet", "balanced", "fast"):
+            raise ConfigError("cpu_mode must be quiet, balanced or fast")
+        current["cpu_mode"] = changes["cpu_mode"]
     if "speech_device" in changes:
         if changes["speech_device"] not in ("auto", "gpu", "cpu"):
             raise ConfigError("speech_device must be auto, gpu or cpu")

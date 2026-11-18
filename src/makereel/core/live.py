@@ -22,8 +22,8 @@ from pathlib import Path
 import numpy as np
 
 from .. import logs
-from ..errors import MakereelError
-from . import media, pipeline, signals, sources
+from ..errors import MakereelError, SourceError
+from . import media, pipeline, signals, sources, transcribe
 
 log = logging.getLogger(__name__)
 
@@ -34,6 +34,9 @@ CALM = 8                         # seconds back to normal that end a moment (it 
 JUMP = 0.6                       # 60% above the 3-minute baseline counts as a spike
 MIN_GAP = 75                     # seconds between spikes
 WARMUP = 90                      # seconds of baseline before spikes can fire
+PROBE_TIMEOUT = 90               # one "is it still live?" check may take this long before it counts as failed
+STALL = 300                      # no new video for this long: finish with what we have and end the session
+LANG_SURE = 0.6                  # detect a stream's language once, when at least this sure
 RETRY_FOR = 600                  # keep retrying a failing live check this long before giving up
 CHAT_BACKLOG_SECS = 45           # ignore chat for this long: yt-dlp replays old messages first
 
@@ -59,6 +62,7 @@ class LiveSession:
         self.made: list[float] = []
         self.last_spike = -MIN_GAP
         self.stop = threading.Event()
+        self.language: str | None = None
         self.proc: subprocess.Popen | None = None
 
     # ------------------------------------------------------------------ stats (read by the web app)
@@ -73,7 +77,7 @@ class LiveSession:
         tries, empty, failing_since = 0, 0, None
         while not self.stop.is_set():
             try:
-                info = sources.probe(self.info.url, self.max_height)
+                info = self._probe()
                 tries, failing_since = 0, None
             except MakereelError as e:
                 failing_since = failing_since or time.time()
@@ -148,6 +152,10 @@ class LiveSession:
                 self.stop.wait(2)
         finally:
             proc.terminate()
+            try:
+                proc.wait(10)                  # reap it (no zombie left behind)
+            except subprocess.TimeoutExpired:
+                proc.kill()
 
     # ------------------------------------------------------------------ buffer
     def _scan(self) -> None:
@@ -222,11 +230,49 @@ class LiveSession:
         try:
             chat = np.array([self.chat.get(win_start + i, 0) for i in range(int(media.duration(win)) + 1)])
             meta = {**self.info.to_meta(), "offset": float(win_start)}
-            pipeline.process(win, meta, self.out, {**self.clip, "max_clips": 1}, self.brand, chat_counts=chat,
-                             ai=self.ai)
+            clip = {**self.clip, "max_clips": 1, "language": self._language(win) or self.clip.get("language")}
+            pipeline.process(win, meta, self.out, clip, self.brand, chat_counts=chat, ai=self.ai)
             self.made.append(time.time())
         finally:
             win.unlink(missing_ok=True)
+
+    def _probe(self) -> sources.SourceInfo:
+        """sources.probe with a time limit: a request YouTube leaves hanging must not freeze the session."""
+        box: dict = {}
+
+        def call() -> None:
+            try:
+                box["info"] = sources.probe(self.info.url, self.max_height)
+            except Exception as e:  # noqa: BLE001
+                box["error"] = e
+        t = threading.Thread(target=call, name="live-probe", daemon=True)
+        t.start()
+        t.join(PROBE_TIMEOUT)
+        if t.is_alive():
+            raise SourceError(f"YouTube didn't answer within {PROBE_TIMEOUT}s")
+        if "error" in box:
+            e = box["error"]
+            raise e if isinstance(e, MakereelError) else SourceError(str(e)[:200])
+        return box["info"]
+
+    def _language(self, win: Path) -> str | None:
+        """The stream's language, decided once: from its folder if a past session knew it, else detected
+        on the first reel when sure. Guessing per reel from gameplay noise flips between languages."""
+        if self.language is None:
+            self.language = pipeline.folder_language(self.out) or None
+        if self.language is None and self.clip.get("language"):
+            self.language = self.clip["language"]
+        if self.language is None:
+            try:
+                n = media.duration(win)
+                windows = [(s, min(n, s + 30)) for s in (0, n / 3, 2 * n / 3)]
+                lang, prob = transcribe.detect_language(win, windows, self.clip["model"])
+                if lang and prob >= LANG_SURE:
+                    self.language = lang
+                    log.info("  stream language: %s (%.0f%% sure); used for every reel", lang, prob * 100)
+            except MakereelError as e:
+                log.warning("  language detection skipped: %s", e.message)
+        return self.language
 
     def _clear_leftovers(self) -> None:
         """Pieces left by an earlier session of this stream that didn't end cleanly (makereel was closed
@@ -243,8 +289,14 @@ class LiveSession:
         logs.spawn(self._record, "live-record")
         logs.spawn(self._follow_chat, "live-chat")
         try:
+            last_growth, last_clock = time.time(), self.clock
             while not self.stop.is_set() or self.pending:
                 self._scan()
+                if self.clock > last_clock:
+                    last_growth, last_clock = time.time(), self.clock
+                elif not self.stop.is_set() and time.time() - last_growth > STALL:
+                    log.warning("  no new video for %d min; finishing with what was recorded", STALL // 60)
+                    self.stop.set()             # pending moments are made from what's there, then we end
                 self._spike()
                 ready = [p for p in self.pending if self._moment_over(p)]
                 for p in ready:
@@ -259,5 +311,9 @@ class LiveSession:
         finally:
             if self.proc and self.proc.poll() is None:
                 self.proc.terminate()  # don't leave ffmpeg behind, however we stopped
+                try:
+                    self.proc.wait(10)
+                except subprocess.TimeoutExpired:
+                    self.proc.kill()
             shutil.rmtree(self.buf, ignore_errors=True)
             log.info("LIVE: '%s' ended", self.info.title)

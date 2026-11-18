@@ -137,6 +137,12 @@
           <label class="field">Buffer (min)<input id="buffer_minutes" type="number" min="1"></label>
           <label class="field">Delete reels after (days)<input id="keep_days" type="number" min="1"></label>
         </div>
+        <label class="field" style="margin-top:10px">Processing<select id="cpu_mode">
+          <option value="quiet">Cool and quiet: 1 core, low priority (slower reels, less heat and fan)</option>
+          <option value="balanced">Balanced: 2 cores, below-normal priority (default)</option>
+          <option value="fast">Fast: most cores (quickest reels, most heat)</option></select></label>
+        <p class="hint" style="margin-top:-6px">Every reel is a burst of work (listening to the audio, then rendering).
+          Fewer "Reels per hour" means fewer bursts; "Cool and quiet" makes each burst gentler.</p>
       </div>
     </div>
     <div><button class="btn primary" id="save-settings">Save</button></div>

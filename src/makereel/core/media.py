@@ -32,8 +32,50 @@ def binary(name: str) -> str:
     return found
 
 
+def cpu_mode() -> str:
+    from ..config import load_settings
+    try:
+        return load_settings()["cpu_mode"]
+    except Exception:  # noqa: BLE001 - a broken settings file mustn't stop rendering
+        return "balanced"
+
+
+def cpu_threads() -> int:
+    """Threads for speech recognition: quiet 1, balanced MAKEREEL_THREADS (2), fast most cores."""
+    import os
+    mode = cpu_mode()
+    if mode == "quiet":
+        return 1
+    if mode == "fast":
+        return max(2, (os.cpu_count() or 4) - 2)
+    return env().threads
+
+
+def apply_priority() -> None:
+    """Run makereel below normal priority (quiet: well below), so the rest of the computer stays smooth.
+    Children (ffmpeg) inherit it. Priority can only be lowered without admin rights, never raised."""
+    import psutil
+    mode = cpu_mode()
+    try:
+        p = psutil.Process()
+        if hasattr(psutil, "BELOW_NORMAL_PRIORITY_CLASS"):          # Windows
+            if mode == "quiet":
+                p.nice(psutil.IDLE_PRIORITY_CLASS)
+            elif mode == "balanced":
+                p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+        else:
+            want = {"quiet": 15, "balanced": 5}.get(mode, 0)
+            if want > p.nice():
+                p.nice(want)
+    except (psutil.Error, OSError, ValueError):
+        pass
+
+
 def run(cmd: Sequence[str], *, cwd: Path | None = None, capture: bool = False) -> bytes:
     """Run a media command; raise MediaError with the tool's own message on failure."""
+    cmd = list(cmd)
+    if cmd and Path(cmd[0]).stem == "ffmpeg" and cpu_mode() == "quiet":
+        cmd[1:1] = ["-filter_threads", "1", "-filter_complex_threads", "1"]   # cooler: fewer cores at once
     try:
         proc = subprocess.run(list(cmd), cwd=cwd, capture_output=True)
     except FileNotFoundError as e:
@@ -80,7 +122,7 @@ def _encoder_options(rate: str) -> dict[str, list[str]]:
         "h264_nvenc": ["-c:v", "h264_nvenc", "-preset", "p4", "-b:v", rate],
         "h264_qsv": ["-c:v", "h264_qsv", "-b:v", rate],
         "h264_amf": ["-c:v", "h264_amf", "-b:v", rate],
-        "libx264": ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-threads", str(env().threads)],
+        "libx264": ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-threads", str(cpu_threads())],
     }
 
 

@@ -68,6 +68,7 @@ export function render(state) {
     $("#uploads_date").value = /^\d{4}-/.test(since) ? since : new Date(Date.now() - 864e5).toISOString().slice(0, 10);
     $("#uploads_every").value = state.settings.uploads_every || "5";
     $("#cookies_browser").value = state.settings.cookies_browser || "";
+    $("#cpu_mode").value = state.settings.cpu_mode || "balanced";
     drawUploads();
     const ai = state.settings.ai || {};
     $("#ai-provider").value = ai.provider || "off";
@@ -98,6 +99,13 @@ export function mount() {
     }
   });
 
+  $("#cpu_mode").addEventListener("change", async (e) => {
+    try {
+      store.set({ settings: await api.saveSettings({ cpu_mode: e.target.value }) });
+      toast({ quiet: "Cool and quiet: gentler on the CPU from the next reel", balanced: "Balanced processing",
+              fast: "Fast processing: uses most cores" }[e.target.value]);
+    } catch (err) { showError(err); }
+  });
   $("#cookies_browser").addEventListener("change", async (e) => {
     try {
       store.set({ settings: await api.saveSettings({ cookies_browser: e.target.value }) });

@@ -14,7 +14,6 @@ from pathlib import Path
 
 import numpy as np
 
-from ..config import env
 from ..errors import MediaError
 from . import media
 
@@ -22,7 +21,7 @@ log = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _model = None
-_model_name: str | None = None
+_model_name: str | None = None      # size + threads, so changing the processing mode reloads it
 _last_used = 0.0
 
 
@@ -36,7 +35,8 @@ def _device() -> str:
 
 def _get(size: str):
     global _model, _model_name, _last_used
-    if _model is None or _model_name != size:
+    key = f"{size}@{media.cpu_threads()}"
+    if _model is None or _model_name != key:
         from faster_whisper import WhisperModel
         device = _device()
         log.info("loading speech model '%s' on the %s (first use downloads it)", size,
@@ -49,10 +49,10 @@ def _get(size: str):
                     log.warning("GPU unavailable for speech (%s); using the CPU", str(e).split("\n")[0][:120])
                     device = "cpu"
             if device == "cpu":
-                _model = WhisperModel(size, device="cpu", compute_type="int8", cpu_threads=env().threads)
+                _model = WhisperModel(size, device="cpu", compute_type="int8", cpu_threads=media.cpu_threads())
         except Exception as e:  # noqa: BLE001 - network / disk / bad name
             raise MediaError(f"could not load speech model '{size}': {e}") from e
-        _model_name = size
+        _model_name = key
     _last_used = time.time()
     return _model
 

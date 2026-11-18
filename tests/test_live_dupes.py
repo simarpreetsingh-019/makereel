@@ -51,3 +51,34 @@ def test_clear_finished_jobs_keeps_running_ones(tmp_path):
     assert jobs.clear_finished() == 1
     assert [j["id"] for j in jobs.list()] == [live.id]
     jobs.stop_all_live()
+
+
+def test_live_check_has_a_time_limit_and_language_is_decided_once(tmp_path, monkeypatch):
+    import time as _t
+
+    from makereel.core import live, sources
+    from makereel.errors import SourceError
+    monkeypatch.setattr(live, "PROBE_TIMEOUT", 1)
+    monkeypatch.setattr(sources, "probe", lambda url, h=720: _t.sleep(5))
+    info = sources.SourceInfo(id="v", title="t", channel="c", channel_url=None, url="u", duration=None,
+                              live_status="is_live")
+    s = live.LiveSession(info, tmp_path / "out", tmp_path / "work", {"model": "base"}, {})
+    t0 = _t.time()
+    with pytest.raises(SourceError, match="didn't answer"):
+        s._probe()
+    assert _t.time() - t0 < 3
+
+    calls = []
+    monkeypatch.setattr(live.media, "duration", lambda p: 60.0)
+    monkeypatch.setattr(live.transcribe, "detect_language", lambda *a: calls.append(1) or ("en", 0.9))
+    assert s._language(tmp_path / "w.mp4") == "en" and s._language(tmp_path / "w.mp4") == "en"
+    assert len(calls) == 1                     # detected once, then reused for every reel
+
+
+def test_cpu_modes():
+    from makereel.config import save_settings
+    from makereel.core import media
+    save_settings({"cpu_mode": "quiet"})
+    assert media.cpu_threads() == 1
+    save_settings({"cpu_mode": "fast"})
+    assert media.cpu_threads() >= 2

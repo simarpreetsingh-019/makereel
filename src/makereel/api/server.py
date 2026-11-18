@@ -236,6 +236,8 @@ def serve(host: str | None = None, port: int | None = None, password: str | None
         raise MakereelError("refusing to listen on the network without a password",
                             "Pass --password or set MAKEREEL_WEB_PASSWORD.")
 
+    from ..core import media
+    media.apply_priority()
     jobs = JobManager()
     watcher = Watcher(jobs)
     api = routes.build(jobs, watcher)
