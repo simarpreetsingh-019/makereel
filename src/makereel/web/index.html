@@ -36,17 +36,19 @@
       <p class="hint">Live streams are recorded and clipped as big moments happen. Past streams use the chat replay. Each video gets its own folder under Reels.</p>
       <div class="opts" id="create-layout">
         <label class="field">Layout (for links and uploads)<select name="layout"><option value="">Auto: picked from what's on screen</option><option value="blur">Full frame + blur</option><option value="crop">Crop to fill</option><option value="track">Follow the speaker</option><option value="split">Split screen (2 people, or webcam + game)</option></select></label>
+        <label class="field">Spoken language<select name="language"><option value="">Auto-detect (once per video)</option><option value="en">English</option><option value="hi">Hindi / Hinglish</option><option value="pa">Punjabi</option><option value="ur">Urdu</option><option value="bn">Bengali</option><option value="mr">Marathi</option><option value="gu">Gujarati</option><option value="ta">Tamil</option><option value="te">Telugu</option><option value="kn">Kannada</option><option value="ml">Malayalam</option><option value="es">Spanish</option><option value="pt">Portuguese</option><option value="fr">French</option><option value="de">German</option><option value="ar">Arabic</option><option value="id">Indonesian</option><option value="ja">Japanese</option><option value="ko">Korean</option></select></label>
       </div>
+      <p class="hint" style="margin:-4px 0 8px">Picking the language saves time and keeps every reel's captions in the same
+        language. Auto-detect listens once per video (once per live stream) and uses that for every reel.</p>
       <details>
         <summary>More options</summary>
         <div class="opts" id="create-options">
           <label class="field">Type<select name="profile"><option value="">Gameplay (default)</option><option value="talk">Talk / podcast</option></select></label>
           <label class="field">Max reels<input name="max_clips" type="number" min="1" max="50" placeholder="8"></label>
-          <label class="field">Min length (s)<input name="min_len" type="number" min="3" placeholder="15"></label>
-          <label class="field">Max length (s)<input name="max_len" type="number" min="5" placeholder="45"></label>
-          <label class="field">Language<input name="language" placeholder="auto-detect (or en, hi, pa…)"></label>
-          <label class="field">Speech model<select name="model"><option value="">base (default)</option><option>tiny</option><option>small</option><option>medium</option></select></label>
-          <label class="field">Model if not English<select name="model_other"><option value="">small (default)</option><option value="medium">medium (best, slower)</option><option value="same">same as above</option></select></label>
+          <label class="field">Shortest reel (s)<input name="min_len" type="number" min="3" placeholder="15"></label>
+          <label class="field">Longest reel (s)<input name="max_len" type="number" min="5" max="300" placeholder="180"></label>
+          <label class="field">Speech model<select name="model"><option value="">from System setup</option><option>base</option><option>small</option><option>medium</option><option value="distil-large-v3">distil-large-v3 (English)</option><option value="large-v3">large-v3</option></select></label>
+          <label class="field">Model if not English<select name="model_other"><option value="">from System setup</option><option value="small">small</option><option value="medium">medium</option><option value="large-v3">large-v3 (best, slowest)</option><option value="same">same as above</option></select></label>
           <label class="field">Frame rate<select name="fps"><option value="">30 fps</option><option value="60">60 fps (smooth gameplay; only if the video is 60)</option></select></label>
           <label class="field">Only this part<input name="section" placeholder="1:00:00-2:30:00"></label>
         </div>
@@ -99,9 +101,21 @@
         <option value="">Nothing (not signed in)</option>
         <option value="chrome">Chrome</option><option value="safari">Safari</option><option value="firefox">Firefox</option>
         <option value="edge">Edge</option><option value="brave">Brave</option></select></label>
-      <p class="hint" style="margin-top:-6px">If jobs say "Sign in to confirm you're not a bot", pick the browser you're signed in to
-        YouTube with. makereel then reads that browser's YouTube cookies on this computer and sends them only to YouTube.
-        Your computer may ask for permission the first time.</p>
+      <p class="hint" style="margin-top:-6px">Only needed if YouTube says "Sign in to confirm you're not a bot". makereel first tries
+        other ways in by itself; if YouTube still refuses, it uses your sign-in, read on this computer and sent only to YouTube.</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap">
+        <button class="btn small" id="yt-open" type="button">Open YouTube in this browser</button>
+        <button class="btn small" id="yt-test" type="button">Test sign-in</button>
+        <label class="btn small">Upload sign-in file<input type="file" id="yt-file" accept=".txt,text/plain" hidden></label>
+        <button class="btn small danger" id="yt-remove" type="button" hidden>Remove sign-in file</button>
+      </div>
+      <p class="hint" id="yt-status"></p>
+      <details><summary class="hint" style="cursor:pointer">How to make a sign-in file (works even when your computer blocks browser access)</summary>
+        <ol class="hint">
+          <li>In your browser, install a "Get cookies.txt LOCALLY" extension (Chrome Web Store or Firefox Add-ons).</li>
+          <li>Open youtube.com, make sure you're signed in, click the extension, and export <b>cookies.txt</b>.</li>
+          <li>Press <b>Upload sign-in file</b> here. makereel keeps only the YouTube and Google lines, on this computer.</li>
+        </ol></details>
       <p class="hint">Checks each channel every few minutes and uses almost no CPU while nobody is live.
         Keep makereel running (or start it with <code>makereel web --watch</code> on a machine that stays on).</p>
     </div>
@@ -126,7 +140,9 @@
       <div class="card">
         <h2>Channels</h2>
         <textarea id="channels" rows="9" placeholder="@streamer&#10;https://www.youtube.com/@another&#10;twitch.tv/name&#10;kick.com/name"></textarea>
-        <p class="hint">One per line: YouTube @handles or channel links, Twitch or Kick.</p>
+        <p class="hint">One per line: YouTube @handles or channel links, Twitch or Kick. Add <code>| hi</code> (or <code>| en</code>…)
+          after a channel to set its language, e.g. <code>@CarryisLive | hi</code>.</p>
+        <label class="field">Language of watched channels<select id="watch_language"><option value="">Auto-detect (once per video)</option><option value="en">English</option><option value="hi">Hindi / Hinglish</option><option value="pa">Punjabi</option><option value="ur">Urdu</option><option value="bn">Bengali</option><option value="mr">Marathi</option><option value="gu">Gujarati</option><option value="ta">Tamil</option><option value="te">Telugu</option><option value="kn">Kannada</option><option value="ml">Malayalam</option><option value="es">Spanish</option><option value="pt">Portuguese</option><option value="fr">French</option><option value="de">German</option><option value="ar">Arabic</option><option value="id">Indonesian</option><option value="ja">Japanese</option><option value="ko">Korean</option></select></label>
       </div>
       <div class="card">
         <h2>Limits</h2>

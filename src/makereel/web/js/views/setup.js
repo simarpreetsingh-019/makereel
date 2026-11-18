@@ -153,17 +153,20 @@ export function botCheck(jobs) {
   botShown = Date.now();
   card({ icon: "🛑", title: "YouTube stopped makereel",
     subtitle: `It wants to know you're not a bot, so "${(hit.title || "").slice(0, 40)}" is paused and retrying.`,
-    items: ["Open YouTube and make sure you're signed in (solve the check if it shows one)",
-            "Pick that browser below, then Continue"],
+    items: ["Open YouTube in your browser and make sure you're signed in",
+            "Pick that browser below and press Continue: makereel checks the sign-in works",
+            "If your computer blocks it, Settings has a sign-in file option that always works"],
     extra: `<label class="field" style="margin:8px 0 0 40px">Browser I'm signed in with<select id="nc-browser">
       <option value="chrome">Chrome</option><option value="safari">Safari</option><option value="firefox">Firefox</option>
       <option value="edge">Edge</option><option value="brave">Brave</option></select></label>`,
     actions: [
-      { title: "Open YouTube", keep: true, run: () => window.open("https://www.youtube.com/", "_blank", "noopener") },
+      { title: "Open YouTube", keep: true, run: () => api.ytOpen($("#nc-browser").value).catch((e) => toast(e.message)) },
       { title: "Continue", primary: true, run: async () => {
         const browser = $("#nc-browser").value;
         await api.saveSettings({ cookies_browser: browser });
-        toast(`Using your ${browser} YouTube sign-in. Paused recordings retry within 2 minutes.`);
+        const st = await api.ytSignIn();
+        if (st.ok) toast(`Signed in through ${browser}. Paused recordings retry within 2 minutes.`);
+        else { toast(st.message); location.hash = "#/auto"; }
       } },
     ] });
 }

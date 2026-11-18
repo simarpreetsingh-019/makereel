@@ -1,7 +1,7 @@
 // "24/7" tab: channel list, limits, and the watcher switch.
 import { api } from "../api.js";
 import { store } from "../store.js";
-import { $, busy, showError, toast } from "../ui.js";
+import { $, busy, esc, showError, toast } from "../ui.js";
 
 const LIMITS = ["poll_minutes", "clips_per_hour", "max_parallel_live", "buffer_minutes", "keep_days"];
 let filled = false;
@@ -51,16 +51,23 @@ function drawStorage(st) {
   $("#st-work").disabled = $("#st-work-save").disabled = st.fixed_by_env.work;
 }
 
+function drawSignIn(st) {
+  $("#yt-status").innerHTML = `${st.ok ? "✅" : st.blocked ? "⛔" : "ℹ️"} ${esc(st.message)}`;
+  $("#yt-remove").hidden = st.source !== "file";
+}
+
 export async function load() {
   const [settings, watcher, st] = await Promise.all([api.settings(), api.watcher(), api.storage()]);
   store.set({ settings, watcher: watcher.running });
   drawStorage(st);
+  api.ytSignIn().then(drawSignIn).catch(() => {});
 }
 
 export function render(state) {
   if (document.activeElement !== $("#watch")) $("#watch").checked = state.watcher;
   if (!filled && state.settings) {   // fill the form once; don't overwrite what the user is typing
     $("#channels").value = state.settings.channels.join("\n");
+    $("#watch_language").value = state.settings.watch_language || "";
     LIMITS.forEach((k) => ($(`#${k}`).value = state.settings[k]));
     $("#watch_uploads").checked = state.settings.watch_uploads !== false;
     const since = state.settings.uploads_since || "new";
@@ -99,6 +106,19 @@ export function mount() {
     }
   });
 
+  $("#yt-open").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+    const browser = $("#cookies_browser").value || "chrome";
+    await api.ytOpen(browser);
+    toast(`Opened YouTube in ${$("#cookies_browser").selectedOptions[0]?.text || browser}. Sign in there, then press Test sign-in.`);
+  }));
+  $("#yt-test").addEventListener("click", (e) => busy(e.currentTarget, async () => drawSignIn(await api.ytSignIn())));
+  $("#yt-file").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    busy(null, async () => { drawSignIn(await api.putFile("/youtube/cookies", file)); toast("Sign-in file saved"); });
+    e.target.value = "";
+  });
+  $("#yt-remove").addEventListener("click", (e) => busy(e.currentTarget, async () => drawSignIn(await api.ytRemoveCookies())));
   $("#cpu_mode").addEventListener("change", async (e) => {
     try {
       store.set({ settings: await api.saveSettings({ cpu_mode: e.target.value }) });
@@ -146,7 +166,7 @@ export function mount() {
   }));
 
   $("#save-settings").addEventListener("click", (e) => {
-    const body = { channels: $("#channels").value.split("\n") };
+    const body = { channels: $("#channels").value.split("\n"), watch_language: $("#watch_language").value };
     LIMITS.forEach((k) => (body[k] = $(`#${k}`).value));
     busy(e.currentTarget, async () => {
       store.set({ settings: await api.saveSettings(body) });

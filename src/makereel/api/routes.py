@@ -12,7 +12,7 @@ from .. import __version__
 from ..config import load_settings, save_settings, work_dir
 from ..core import media, models, sources
 from ..errors import InvalidInput
-from ..services import bench, brand, library, storage, updates
+from ..services import bench, brand, library, storage, updates, youtube
 from ..services.jobs import JobManager
 from ..services.watcher import Watcher
 from .router import Request, Response, Router
@@ -244,6 +244,23 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
             watcher.stop()
         save_settings({"watching": on})          # remembered: it comes back on when makereel restarts
         return {"running": watcher.running}
+
+    # ------------------------------------------------------------ YouTube's "are you a bot?" check
+    @api.get("/youtube/sign-in")
+    def youtube_sign_in(req: Request):
+        return sources.check_sign_in()
+
+    @api.post("/youtube/open")
+    def youtube_open(req: Request):
+        return youtube.open_youtube(str(req.json().get("browser", "")))
+
+    @api.put("/youtube/cookies")
+    def youtube_cookies(req: Request):
+        return youtube.save_cookies(req.body)
+
+    @api.delete("/youtube/cookies")
+    def youtube_cookies_remove(req: Request):
+        return youtube.remove_cookies()
 
     # ------------------------------------------------------------ first-run setup: speech models
     @api.get("/setup")

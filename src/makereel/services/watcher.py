@@ -21,6 +21,20 @@ from .jobs import JobManager, Status
 
 log = logging.getLogger(__name__)
 SEEN_KEEP = 100  # upload ids remembered per channel (only the newest few are ever listed)
+def channel_and_language(line: str, default: str = "") -> tuple[str, str | None]:
+    """'@name | hi' -> ('@name', 'hi'). Without '| xx' the watched-channels default (or auto) applies."""
+    name, _, lang = line.partition("|")
+    lang = lang.strip().lower() or default
+    return name.strip(), (lang or None)
+
+
+def _default_language(settings) -> str:
+    try:
+        return settings["watch_language"] or ""
+    except KeyError:
+        return ""
+
+
 RANDOM_EVERY = (4, 30)   # "random": each wait between uploads checks is anything in this range (minutes)
 
 
@@ -107,7 +121,8 @@ class Watcher:
 
         active = {j["id"] for j in self.jobs.list() if j["status"] == Status.LIVE.value}
         self._watching = {vid: jid for vid, jid in self._watching.items() if jid in active}
-        for channel in settings["channels"]:
+        for line in settings["channels"]:
+            channel, lang = channel_and_language(line, _default_language(settings))
             if self.jobs.live_count() >= settings["max_parallel_live"]:
                 break
             try:
@@ -122,7 +137,7 @@ class Watcher:
                 continue
             log.info("%s is live: %s", channel, info.title)
             try:
-                job = self.jobs.adopt_live(runner.live_session(info, settings))
+                job = self.jobs.adopt_live(runner.live_session(info, settings.with_clip(language=lang)))
                 self._watching[info.id] = job.id
             except MakereelError as e:
                 log.warning("could not start recording %s: %s", channel, e.message)
@@ -149,7 +164,8 @@ class Watcher:
         except (OSError, ValueError):
             seen = {}
         since, now, changed = settings["uploads_since"], time.time(), False
-        for channel in settings["channels"]:
+        for line in settings["channels"]:
+            channel, lang = channel_and_language(line, _default_language(settings))
             try:
                 uploads = sources.recent_uploads(channel)
             except MakereelError as e:
@@ -168,7 +184,7 @@ class Watcher:
             cutoff = since_cutoff(since, now)
             picked = self._pick_uploads(uploads, state, first, cutoff)
             for up in reversed(picked):                     # oldest first
-                self.jobs.submit_link(up.url, {})
+                self.jobs.submit_link(up.url, {"language": lang} if lang else {})
                 state["done"].append(up.id)
                 log.info("%s uploaded: %s", channel, up.title)
             if first:

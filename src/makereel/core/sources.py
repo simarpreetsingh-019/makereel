@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import sys
 from dataclasses import asdict, dataclass, field
@@ -13,6 +14,7 @@ from yt_dlp.utils import DownloadError
 from ..errors import InvalidInput, SourceError
 
 # YouTube needs a JavaScript runtime for its player checks; yt-dlp only tries deno by default.
+log = logging.getLogger(__name__)
 JS_RUNTIMES = {r: {} for r in ("deno", "node", "bun") if shutil.which(r)}
 LIVE_STATUSES = ("is_live", "was_live", "not_live", "post_live", "is_upcoming")
 
@@ -35,11 +37,67 @@ def cookies_browser() -> str | None:
     return name if name in COOKIE_BROWSERS else None
 
 
+def cookies_file() -> Path:
+    """A YouTube sign-in exported from the user's browser (cookies.txt). Kept only on this computer."""
+    from ..config import env
+    return env().data_dir / "youtube_cookies.txt"
+
+
 def ydl_opts() -> dict:
-    """yt-dlp options for every request. With cookies_browser set, YouTube sees a signed-in viewer,
-    which avoids its "confirm you're not a bot" check when several streams are followed at once."""
+    """yt-dlp options for every request. A sign-in (an uploaded cookies file, else a browser's) makes
+    YouTube see a signed-in viewer, which avoids its "confirm you're not a bot" check."""
+    if cookies_file().is_file():
+        return {**BASE_OPTS, "cookiefile": str(cookies_file())}
     browser = cookies_browser()
     return {**BASE_OPTS, **({"cookiesfrombrowser": (browser,)} if browser else {})}
+
+
+# Other YouTube clients that are often not asked to prove they aren't a bot. Tried, in turn, when the
+# normal request is refused, before asking the user to sign in.
+FALLBACK_CLIENTS = (["mweb"], ["tv", "web_safari"])
+
+
+def _is_bot_check(e: Exception) -> bool:
+    low = str(e).lower()
+    return "not a bot" in low or "confirm you" in low
+
+
+def check_sign_in() -> dict:
+    """What makereel can use to look signed in to YouTube, in words the user can act on."""
+    if cookies_file().is_file():
+        try:
+            from http.cookiejar import MozillaCookieJar
+            jar = MozillaCookieJar(str(cookies_file()))
+            jar.load(ignore_discard=True, ignore_expires=True)
+            yt = [c for c in jar if "youtube.com" in c.domain]
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "source": "file",
+                    "message": f"The sign-in file can't be read ({str(e)[:120]})."}
+        signed = any(c.name in ("SID", "__Secure-3PSID", "LOGIN_INFO", "SAPISID") for c in yt)
+        return {"ok": signed, "source": "file", "message": "Using your uploaded YouTube sign-in."
+                if signed else "The uploaded file has no YouTube sign-in in it. Export it while signed in to YouTube."}
+    browser = cookies_browser()
+    if not browser:
+        return {"ok": False, "source": None,
+                "message": "No sign-in set. makereel works without one until YouTube asks."}
+    try:
+        with yt_dlp.YoutubeDL({**BASE_OPTS, "cookiesfrombrowser": (browser,)}) as ydl:
+            yt = [c for c in ydl.cookiejar if "youtube.com" in c.domain]
+    except Exception as e:  # noqa: BLE001
+        msg = str(e)
+        if "Operation not permitted" in msg or "could not find" in msg:
+            import platform
+            where = ("System Settings → Privacy & Security → Full Disk Access, and turn it on for the app that runs "
+                     "makereel (Terminal, or the makereel launcher), then restart makereel"
+                     if platform.system() == "Darwin" else "your browser's profile folder permissions")
+            return {"ok": False, "source": browser, "blocked": True,
+                    "message": f"Your computer isn't letting makereel read {browser.title()}'s sign-in. "
+                               f"Allow it in {where}. Or upload a sign-in file instead (below)."}
+        return {"ok": False, "source": browser, "message": f"Couldn't read {browser.title()}'s sign-in: {msg[:160]}"}
+    signed = any(c.name in ("SID", "__Secure-3PSID", "LOGIN_INFO", "SAPISID") for c in yt)
+    return {"ok": signed, "source": browser,
+            "message": f"Using your {browser.title()} sign-in." if signed
+            else f"{browser.title()} isn't signed in to YouTube. Open YouTube in {browser.title()} and sign in."}
 
 
 @dataclass
@@ -132,7 +190,20 @@ def probe(url: str, max_height: int = 720) -> SourceInfo:
         with yt_dlp.YoutubeDL(opts) as ydl:
             return _info(ydl.extract_info(validate_url(url), download=False), url)
     except DownloadError as e:
-        raise _friendly(e) from e
+        if not _is_bot_check(e):
+            raise _friendly(e) from e
+        first = e
+    for clients in FALLBACK_CLIENTS:          # "not a bot?": try clients YouTube usually doesn't challenge
+        try:
+            with yt_dlp.YoutubeDL({**opts, "extractor_args": {"youtube": {"player_client": clients}}}) as ydl:
+                info = _info(ydl.extract_info(url, download=False), url)
+            log.info("YouTube asked for a bot check; continuing as its %s client", "/".join(clients))
+            return info
+        except DownloadError:
+            continue
+    from . import notify
+    notify.bot_check(url)
+    raise _friendly(first) from first
 
 
 def download(url: str, out_dir: Path, section: str | None = None, chat: bool = True,

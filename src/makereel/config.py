@@ -152,6 +152,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "clips_per_hour": 6,     # per live stream
     "max_height": 720,       # source resolution to download
     "cookies_browser": "",   # use this browser's YouTube sign-in (chrome, firefox, edge, safari...): avoids bot checks
+    "watch_language": "",    # spoken language of watched channels ("" = detect once per stream); "| xx" per channel
     "cpu_mode": "balanced",  # quiet (1 core, low priority: cooler) | balanced | fast (most cores)
     "speech_device": "auto", # where speech recognition runs: auto (NVIDIA GPU if usable) | gpu | cpu
     "setup_done": False,     # the first-run setup (model suggestions) was finished or skipped
@@ -359,6 +360,10 @@ def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings
         if not isinstance(changes["channels"], list):
             raise ConfigError("channels must be a list")
         current["channels"] = [str(c).strip() for c in changes["channels"] if str(c).strip()]
+        for c in current["channels"]:
+            lang = c.partition("|")[2].strip()
+            if lang and not re.fullmatch(r"[A-Za-z]{2,3}", lang):
+                raise ConfigError(f"after '|' put a language code like hi or en: {c!r}")
     for key in INT_SETTINGS:
         if changes.get(key) not in (None, ""):
             try:
@@ -383,6 +388,11 @@ def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings
     for key in ("reels_folder", "work_folder"):
         if key in changes:
             current[key] = validate_folder(changes[key])
+    if "watch_language" in changes:
+        lang = str(changes["watch_language"] or "").strip().lower()
+        if lang and not re.fullmatch(r"[a-z]{2,3}", lang):
+            raise ConfigError("watch_language must be a language code like en or hi, or empty for auto")
+        current["watch_language"] = lang
     if "cpu_mode" in changes:
         if changes["cpu_mode"] not in ("quiet", "balanced", "fast"):
             raise ConfigError("cpu_mode must be quiet, balanced or fast")

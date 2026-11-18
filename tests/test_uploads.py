@@ -103,3 +103,32 @@ def test_ydl_opts_with_and_without_browser_sign_in(monkeypatch):
     monkeypatch.setattr(config, "load_settings", lambda *a: signed_in)
     assert sources.ydl_opts()["cookiesfrombrowser"] == ("chrome",)
     assert "--cookies-from-browser" in sources.live_chat_command("https://youtu.be/x", __import__("pathlib").Path("c"))
+
+
+def test_channel_language_suffix():
+    from makereel.services.watcher import channel_and_language
+    assert channel_and_language("@CarryisLive | hi") == ("@CarryisLive", "hi")
+    assert channel_and_language("@name") == ("@name", None)
+    assert channel_and_language("@name", "en") == ("@name", "en")
+    assert channel_and_language("@name | HI", "en") == ("@name", "hi")
+    import pytest
+
+    from makereel.config import ConfigError, save_settings
+    with pytest.raises(ConfigError):
+        save_settings({"channels": ["@name | hindi language"]})
+
+
+def test_sign_in_file_keeps_only_youtube_and_google(tmp_path):
+    from makereel.core import sources
+    from makereel.services import youtube
+    text = "# Netscape HTTP Cookie File\n" + "\n".join([
+        ".youtube.com\tTRUE\t/\tTRUE\t0\tSID\tabc",
+        ".google.com\tTRUE\t/\tTRUE\t0\tSAPISID\tdef",
+        ".bank.example\tTRUE\t/\tTRUE\t0\tsession\tsecret"])
+    st = youtube.save_cookies(text.encode())
+    kept = sources.cookies_file().read_text()
+    assert st["ok"] and st["source"] == "file"
+    assert "bank.example" not in kept and "SID" in kept
+    assert "cookiefile" in sources.ydl_opts()
+    youtube.remove_cookies()
+    assert not sources.cookies_file().exists()
