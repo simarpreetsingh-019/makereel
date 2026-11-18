@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Caption language moved to the Text tab** (first thing you see when editing): original script, English
+  letters or Translate to English, with the detected language shown. It applies right away, and asks first
+  when unsaved word edits would be lost.
 - **Loading spinners**: every save, render and export button shows a spinner while it works, and the editor's
   status line spins during a re-render.
 - **Camera tab without Follow the speaker**: offers a "Use Follow the speaker" button instead of a dead end,

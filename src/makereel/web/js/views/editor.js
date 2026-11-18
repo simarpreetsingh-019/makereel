@@ -17,7 +17,7 @@ const FORMATS = [
 ];
 
 let cur = null;   // { folder, name, onSaved, reel, words, offset, tapIndex, look }
-const LOOK_FIELDS = ["vertical", "size", "box", "box_colour", "box_opacity", "script"];
+const LOOK_FIELDS = ["vertical", "size", "box", "box_colour", "box_opacity"];   // caption language is on the Text tab
 
 // ------------------------------------------------------------------ open / fill
 export async function openEditor(folder, name, onSaved, tab = "text") {
@@ -56,6 +56,7 @@ function fill(reel) {
   cur.cards = (reel.cards || []).map((c) => ({ ...c }));
   drawCards();
   fillCamera();
+  fillScript();
   drawWordList();
   drawExports();
 }
@@ -285,6 +286,7 @@ function readLook() {
     const el = $(`#lk-${k}`);
     out[k] = el.type === "checkbox" ? el.checked : el.type === "range" ? Number(el.value) : el.value;
   });
+  out.script = cur.reel.look.script;
   return out;
 }
 
@@ -337,12 +339,13 @@ function drawLook() {
   $("#lk-size-v").textContent = `${Math.round(look.size * 100)}%`;
   $("#lk-box_opacity-v").textContent = `${Math.round(look.box_opacity * 100)}%`;
   $("#lk-box-opts").style.opacity = look.box ? 1 : 0.45;
+}
+
+// Text tab: caption language (original script, English letters, or an English translation)
+function fillScript() {
   const lang = cur.reel.language;
-  $("#lk-lang").textContent = lang ? `(spoken: ${LANGS[lang] || lang})` : "";
-  const was = cur.reel.look.script, now = look.script;
-  $("#lk-script-hint").textContent = now === was ? ""
-    : now === "roman" && was === "original" ? "Your caption words are kept, just written in English letters."
-    : "Saving listens to the reel again (a few seconds). Word edits you made are replaced.";
+  $("#ed-lang").textContent = lang ? `(detected: ${LANGS[lang] || lang})` : "";
+  $("#ed-script").value = cur.reel.look.script || "original";
 }
 
 const LANGS = { en: "English", hi: "Hindi", pa: "Punjabi", ur: "Urdu", bn: "Bengali", gu: "Gujarati", mr: "Marathi",
@@ -552,6 +555,26 @@ export function mount() {
   });
 
   // Text tab
+  $("#ed-script").addEventListener("change", async (e) => {
+    const was = cur.reel.look.script || "original", now = e.target.value;
+    if (now === was) return;
+    // original -> English letters keeps the words; anything else listens again and replaces them
+    const keepsWords = was === "original" && now === "roman";
+    const edited = Object.keys(textChanges()).includes("transcript");   // unsaved word edits
+    if (!keepsWords && edited && !(await confirmDialog(
+      "Switching rewrites the captions from the audio. Word edits you made will be lost.", { ok: "Switch", danger: false }))) {
+      e.target.value = was;
+      return;
+    }
+    $("#ed-msg").textContent = now === "english" ? "Translating and re-rendering…" : "Rewriting captions and re-rendering…";
+    e.target.disabled = true;
+    try {
+      await save({ look: { ...cur.reel.look, script: now } }, null, "Captions rewritten and re-rendered.");
+    } finally {
+      e.target.disabled = false;
+      fillScript();
+    }
+  });
   $("#ed-save").addEventListener("click", (e) => {
     const c = textChanges();
     if (!Object.keys(c).length) return toast("Nothing changed");

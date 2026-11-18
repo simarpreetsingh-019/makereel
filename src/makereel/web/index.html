@@ -243,6 +243,9 @@
       </div>
     </div>
     <div class="stack">
+      <label class="field">Caption language <span class="hint" id="ed-lang" style="margin:0"></span>
+        <select id="ed-script"><option value="original">Original script (हिंदी, ਪੰਜਾਬੀ…)</option><option value="roman">English letters (kya baat hai)</option><option value="english">Translate to English</option></select></label>
+      <p class="hint" id="ed-script-hint" style="margin:-6px 0 0">Changing this re-renders the reel. Going to English letters keeps your word edits; other switches write the captions again from the audio.</p>
       <label class="field">On-screen title<input id="ed-hook"></label>
       <label class="field">
         <span>Captions <span id="ed-words"></span></span>
@@ -313,9 +316,6 @@
       <div class="field">Caption style
         <div class="chips" id="lk-templates"></div>
       </div>
-      <label class="field">Caption letters <span class="hint" id="lk-lang" style="margin:0"></span>
-        <select id="lk-script"><option value="original">Original script (हिंदी, ਪੰਜਾਬੀ…)</option><option value="roman">English letters (kya baat hai)</option><option value="english">Translate to English</option></select></label>
-      <p class="hint" id="lk-script-hint" style="margin:-6px 0 0"></p>
       <label class="field">Framing
         <select id="lk-fit">
           <option value="auto">Auto: choose again from what's on screen</option>
