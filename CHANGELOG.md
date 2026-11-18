@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Speech model setup** (System tab, with a reminder on first run): reads memory, disk and NVIDIA GPU,
+  asks whether you clip English or Indian streamers, suggests a model for English and one for Hindi,
+  downloads them with progress. New English-only model: distil-large-v3.
+- **NVIDIA GPU for speech**: used automatically when available (`speech_device`), falling back to the CPU.
+- **Updates from GitHub**: a banner when a new release is out, one-click install and restart
+  (System → Updates; see docs/RELEASING.md).
 - **Creator badge**: the creator's profile picture and @handle in a corner of every reel (Brand → Creator
   credit; top left by default, moves aside if it would cover your logo, keeps clear of app buttons).
 - **Caption language moved to the Text tab** (first thing you see when editing): original script, English

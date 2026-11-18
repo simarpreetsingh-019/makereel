@@ -22,6 +22,7 @@
 
 <main>
   <div id="banner"></div>
+  <div id="notices"></div>
 
   <!-- Create: new jobs + job list -->
   <section id="tab-create" class="stack">
@@ -207,6 +208,43 @@
 
   <!-- System + benchmarks -->
   <section id="tab-system" class="stack" hidden>
+    <div class="card" id="setup-card">
+      <h2>Speech models for this computer</h2>
+      <p class="hint" style="margin-top:0">makereel uses one speech model for English streams and one for Hindi and other
+        Indian languages. Pick who you clip and it suggests the pair that suits this computer.</p>
+      <div id="su-pc" class="hint">Checking this computer…</div>
+      <div class="opts" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))">
+        <label class="field">I clip<select id="su-focus">
+          <option value="both">English and Indian streamers</option>
+          <option value="english">English streamers</option>
+          <option value="indian">Indian streamers (Hindi, Hinglish…)</option></select></label>
+        <label class="field">Model for English<select id="su-model"></select></label>
+        <label class="field">Model for Hindi and others<select id="su-model_other"></select></label>
+        <label class="field">Run speech on<select id="su-device">
+          <option value="auto">Auto (NVIDIA GPU if it works)</option><option value="gpu">NVIDIA GPU</option>
+          <option value="cpu">Processor (CPU)</option></select></label>
+      </div>
+      <p class="hint" id="su-why"></p>
+      <div id="su-progress" class="hint"></div>
+      <div class="row" style="gap:8px">
+        <button class="btn primary" id="su-apply" type="button">Download and use these</button>
+        <button class="btn" id="su-skip" type="button">Keep current models</button>
+      </div>
+    </div>
+    <div class="card" id="update-card">
+      <h2>Updates</h2>
+      <div id="up-status" class="hint" style="margin-top:0">Checking…</div>
+      <div class="opts" style="grid-template-columns:1fr auto;align-items:end">
+        <label class="field">Get updates from (GitHub owner/repo)<input id="up-repo" placeholder="owner/makereel"></label>
+        <button class="btn" id="up-check" type="button">Check now</button>
+      </div>
+      <label class="switch" style="font-weight:400"><input type="checkbox" id="up-auto"> Check for updates when makereel starts</label>
+      <div class="row" style="gap:8px">
+        <button class="btn primary" id="up-install" type="button" hidden>Install update</button>
+        <button class="btn" id="up-restart" type="button" hidden>Restart now</button>
+      </div>
+      <pre class="log" id="up-log" hidden></pre>
+    </div>
     <div class="grid2">
       <div class="card"><h2>This device</h2><div id="sys-device">Loading…</div></div>
       <div class="card">

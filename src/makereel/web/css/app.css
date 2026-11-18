@@ -269,3 +269,7 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .btn.loading { cursor: progress; opacity: 0.85; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .loading::before { animation-duration: 2s; } }
+
+.banner.notice { background: color-mix(in srgb, var(--accent, #e5484d) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #e5484d) 35%, transparent); }
+.banner.notice a { font-weight: 600; margin-left: 6px; }

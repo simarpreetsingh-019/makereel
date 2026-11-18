@@ -10,9 +10,9 @@ from pathlib import Path
 
 from .. import __version__
 from ..config import env, load_settings, save_settings
-from ..core import media, sources
+from ..core import media, models, sources
 from ..errors import InvalidInput
-from ..services import bench, brand, library
+from ..services import bench, brand, library, updates
 from ..services.jobs import JobManager
 from ..services.watcher import Watcher
 from .router import Request, Response, Router
@@ -220,5 +220,42 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
         else:
             watcher.stop()
         return {"running": watcher.running}
+
+    # ------------------------------------------------------------ first-run setup: speech models
+    @api.get("/setup")
+    def get_setup(req: Request):
+        focus = req.query.get("focus") or "both"
+        if focus not in models.FOCUS:
+            raise InvalidInput("focus must be english, indian or both")
+        pc = models.computer()
+        settings = load_settings()
+        return {"computer": pc, "recommended": models.recommend(pc, focus), "models": models.catalog(),
+                "current": {"model": settings.clip["model"], "model_other": settings.clip["model_other"],
+                            "device": settings["speech_device"]}, "setup_done": settings["setup_done"]}
+
+    @api.post("/setup/models/{name}")
+    def download_model(req: Request):
+        if req.params["name"] not in models.CATALOG:
+            raise InvalidInput("unknown speech model")
+        return models.download(req.params["name"])
+
+    # ------------------------------------------------------------ updates from GitHub releases
+    def busy() -> bool:
+        return any(j["status"] in ("queued", "running", "live") and j["kind"] != "watcher" for j in jobs.list())
+
+    @api.get("/updates")
+    def get_updates(req: Request):
+        return updates.check(force=req.query.get("force") == "1")
+
+    @api.post("/updates/install")
+    def install_update(req: Request):
+        return updates.install(busy())
+
+    @api.post("/updates/restart")
+    def restart(req: Request):
+        if busy():
+            raise InvalidInput("reels are being made or recorded; restart when they're done")
+        updates.restart()
+        return {"restarting": True}
 
     return api

@@ -13,6 +13,7 @@ import copy
 import datetime
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -149,6 +150,10 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "buffer_minutes": 10,    # live rolling buffer
     "clips_per_hour": 6,     # per live stream
     "max_height": 720,       # source resolution to download
+    "speech_device": "auto", # where speech recognition runs: auto (NVIDIA GPU if usable) | gpu | cpu
+    "setup_done": False,     # the first-run setup (model suggestions) was finished or skipped
+    "update_repo": "",       # GitHub "owner/repo" that publishes makereel releases ("" = don't check)
+    "update_check": True,    # look for a new release when the app starts (one small request)
     "clip": CLIP_DEFAULTS,
     "brand": BRAND_DEFAULTS,
     "ai": AI_DEFAULTS,
@@ -157,7 +162,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
 INT_SETTINGS = ("poll_minutes", "max_parallel_live", "keep_days", "buffer_minutes",
                 "clips_per_hour", "max_height")
 CLIP_CHOICES = {"profile": ("gameplay", "talk"), "layout": ("auto", "blur", "crop", "pad", "track", "split"),
-                "model": ("tiny", "base", "small", "medium", "large-v3"),
+                "model": ("tiny", "base", "small", "medium", "distil-large-v3", "large-v3"),
                 "model_other": ("same", "small", "medium", "large-v3")}
 
 
@@ -332,7 +337,16 @@ def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings
         if every not in UPLOADS_EVERY:
             raise ConfigError(f"uploads_every must be one of {', '.join(UPLOADS_EVERY)}")
         current["uploads_every"] = every
-    for key in ("keep_source", "watch_uploads"):
+    if "speech_device" in changes:
+        if changes["speech_device"] not in ("auto", "gpu", "cpu"):
+            raise ConfigError("speech_device must be auto, gpu or cpu")
+        current["speech_device"] = changes["speech_device"]
+    if "update_repo" in changes:
+        repo = str(changes["update_repo"] or "").strip().removeprefix("https://github.com/").strip("/")
+        if repo and not re.fullmatch(r"[A-Za-z0-9._-]+/[A-Za-z0-9._-]+", repo):
+            raise ConfigError("update_repo must look like owner/repo")
+        current["update_repo"] = repo
+    for key in ("keep_source", "watch_uploads", "setup_done", "update_check"):
         if key in changes:
             current[key] = bool(changes[key])
     if isinstance(changes.get("clip"), dict):

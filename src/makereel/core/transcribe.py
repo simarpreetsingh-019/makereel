@@ -26,13 +26,30 @@ _model_name: str | None = None
 _last_used = 0.0
 
 
+def _device() -> str:
+    """'cuda' when speech should run on the NVIDIA GPU, else 'cpu' (setting: speech_device)."""
+    from ..config import load_settings
+    from . import models
+    want = load_settings()["speech_device"]
+    return "cuda" if want != "cpu" and models.cuda_ready() else "cpu"
+
+
 def _get(size: str):
     global _model, _model_name, _last_used
     if _model is None or _model_name != size:
         from faster_whisper import WhisperModel
-        log.info("loading speech model '%s' (first use downloads it)", size)
+        device = _device()
+        log.info("loading speech model '%s' on the %s (first use downloads it)", size,
+                 "GPU" if device == "cuda" else "CPU")
         try:
-            _model = WhisperModel(size, device="cpu", compute_type="int8", cpu_threads=env().threads)
+            if device == "cuda":
+                try:
+                    _model = WhisperModel(size, device="cuda", compute_type="float16")
+                except Exception as e:  # noqa: BLE001 - driver / CUDA libraries / GPU memory: use the CPU
+                    log.warning("GPU unavailable for speech (%s); using the CPU", str(e).split("\n")[0][:120])
+                    device = "cpu"
+            if device == "cpu":
+                _model = WhisperModel(size, device="cpu", compute_type="int8", cpu_threads=env().threads)
         except Exception as e:  # noqa: BLE001 - network / disk / bad name
             raise MediaError(f"could not load speech model '{size}': {e}") from e
         _model_name = size
@@ -61,6 +78,8 @@ def detect_language(video: Path, windows: list[tuple[float, float]], size: str =
     Detecting once per video (instead of per clip) keeps every reel of a video in the same
     language and script, which matters for mixed speech like Hinglish.
     """
+    if size in ENGLISH_ONLY:            # an English-only model always "hears" English
+        size = "small"
     audio = np.concatenate([_pcm(video, s, min(e, s + 30)) for s, e in windows[:3]] or [np.zeros(0, np.float32)])
     if len(audio) < 16000 * 2:
         return None, 0.0
@@ -98,8 +117,18 @@ def words_in_file(video: Path, size: str = "base", language: str | None = None,
     return words_in(video, 0.0, media.duration(video), size, language, precise=True, task=task)
 
 
+RANK = ("tiny", "base", "small", "medium", "distil-large-v3", "large-v3")
+ENGLISH_ONLY = ("distil-large-v3",)
+
+
 def model_for(size: str, language: str | None, other: str) -> str:
-    """The speech model to use: small English-tuned sizes are weak elsewhere, so bump them up."""
-    if language and language != "en" and other != "same" and size in ("tiny", "base"):
+    """The speech model for this language: `size` for English, `other` for Hindi and the rest.
+
+    An English-only model can't hear Hindi at all, and small sizes are weak outside English, so for
+    non-English speech the other model is used unless the main one is the bigger multilingual one.
+    """
+    if not language or language == "en" or other == "same":
+        return size if size not in ENGLISH_ONLY or not language or language == "en" else "small"
+    if size in ENGLISH_ONLY or RANK.index(other) > RANK.index(size):
         return other
     return size

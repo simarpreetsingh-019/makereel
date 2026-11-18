@@ -8,6 +8,7 @@ import * as brand from "./views/brand.js";
 import * as create from "./views/create.js";
 import * as editor from "./views/editor.js";
 import * as library from "./views/library.js";
+import * as setup from "./views/setup.js";
 import * as system from "./views/system.js";
 
 const POLL_MS = 2500;
@@ -32,7 +33,7 @@ async function refreshView() {
     if (route.view === "folder") await library.load(route.folder);
     if (route.view === "auto") await auto.load();
     if (route.view === "brand") await brand.load();
-    if (route.view === "system") await system.load();
+    if (route.view === "system") await Promise.all([system.load(), setup.load()]);
   } catch (err) {
     showError(err);
     if (route.view === "folder") location.hash = "#/library";
@@ -62,6 +63,7 @@ async function start() {
   auto.mount();
   brand.mount();
   system.mount();
+  setup.mount();
   store.subscribe(render);
 
   window.addEventListener("hashchange", () => { store.set({ route: parseRoute() }); refreshView(); });
@@ -71,6 +73,7 @@ async function start() {
   catch (err) { $("#banner").innerHTML = `<div class="banner">${esc(err.message)}</div>`; }
 
   await Promise.all([refreshJobs(), refreshView()]);
+  api.settings().then((s) => setup.drawNotices(s)).catch(() => {});
   setInterval(() => {
     if (document.hidden) return;              // save power when the tab is in the background
     refreshJobs();

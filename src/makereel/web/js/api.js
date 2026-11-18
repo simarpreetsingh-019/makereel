@@ -62,6 +62,11 @@ export const api = {
   saveSettings: (body) => request("PUT", "/settings", body),
   watcher: () => request("GET", "/watcher"),
   setWatcher: (running) => request("PUT", "/watcher", { running }),
+  setup: (focus = "both") => request("GET", `/setup?focus=${enc(focus)}`),
+  downloadModel: (name) => request("POST", `/setup/models/${enc(name)}`),
+  updates: (force = false) => request("GET", `/updates${force ? "?force=1" : ""}`),
+  installUpdate: () => request("POST", "/updates/install"),
+  restartApp: () => request("POST", "/updates/restart"),
 
   /** PUT a file as the raw body (logo, fonts). */
   async putFile(path, file) {
