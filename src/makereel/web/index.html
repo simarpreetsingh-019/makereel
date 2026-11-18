@@ -166,10 +166,18 @@
           <h2>Creator credit</h2>
           <p class="hint" style="margin-top:0">The streamer's profile picture and @handle, shown on every reel made from their videos,
             so viewers see who the clip is from. It sits in the opposite corner if it would cover your logo.</p>
-          <label class="field">Creator badge<select id="br-creator_badge">
-            <option value="top-left">Top left</option><option value="top-right">Top right</option>
-            <option value="bottom-left">Bottom left</option><option value="bottom-right">Bottom right</option>
-            <option value="off">Off</option></select></label>
+          <label class="switch"><input type="checkbox" id="br-badge-on"> Show creator badge on reels</label>
+          <div class="opts" id="br-badge-opts" style="grid-template-columns:1fr 1fr">
+            <label class="field">Corner<select id="br-creator_badge">
+              <option value="top-left">Top left</option><option value="top-right">Top right</option>
+              <option value="bottom-left">Bottom left</option><option value="bottom-right">Bottom right</option>
+              <option value="off" hidden>Off</option></select></label>
+            <label class="field">Placement<select id="br-creator_badge_place">
+              <option value="corner">Tucked into the corner (small, out of the way)</option>
+              <option value="safe">Inside the safe area (never covered by app buttons)</option></select></label>
+          </div>
+          <p class="hint" style="margin:0">Tucked in the corner it credits the creator without pulling focus. TikTok and Instagram
+            can draw their buttons over the corners, so part of it may be hidden there.</p>
         </div>
         <div class="card">
           <h2>Captions</h2>

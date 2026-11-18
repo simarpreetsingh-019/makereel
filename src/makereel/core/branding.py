@@ -96,7 +96,7 @@ def clean_look(look: dict) -> dict:
     return out
 
 
-BADGE_HEIGHT = 0.045      # badge height as a share of the reel's height
+BADGE_HEIGHT = {"safe": 0.045, "corner": 0.034}   # badge height as a share of the reel's height
 
 
 def badge_for(brand: dict, folder: Path, fmt: str = "9x16") -> Logo | None:
@@ -116,8 +116,11 @@ def badge_for(brand: dict, folder: Path, fmt: str = "9x16") -> Logo | None:
         position = f"{position.split('-')[0]}-{side}"
     w, h = FORMATS[fmt]
     bw, bh = _image_size(path)
-    zone = safezone.zone_for(brand.get("safe_zone", "all"), w, h)
-    return Logo(path.resolve(), position, min(BADGE_HEIGHT * h * bw / bh / w, 0.6), 0.95,
+    place = brand.get("creator_badge_place", "corner")
+    # "corner": small and right in the corner, out of the way (apps may draw over it); "safe": kept clear
+    zone = safezone.zone_for(brand.get("safe_zone", "all"), w, h) if place == "safe" else None
+    return Logo(path.resolve(), position, min(BADGE_HEIGHT[place] * h * bw / bh / w, 0.6),
+                0.95 if place == "safe" else 0.85,
                 clear_top=zone.top if zone else 0.0, clear_bottom=zone.bottom if zone else 0.0)
 
 

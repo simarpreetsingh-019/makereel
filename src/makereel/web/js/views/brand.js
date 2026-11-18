@@ -3,7 +3,7 @@
 import { api, media } from "../api.js";
 import { $, busy, drawSafeZone, esc, toast } from "../ui.js";
 
-const FIELDS = ["logo_enabled", "logo_position", "logo_scale", "logo_opacity", "creator_badge", "font", "text_colour",
+const FIELDS = ["logo_enabled", "logo_position", "logo_scale", "logo_opacity", "creator_badge", "creator_badge_place", "font", "text_colour",
   "highlight_colour", "outline_colour", "caption_position", "caption_size", "caption_template", "caption_script", "safe_zone", "caption_box", "box_colour",
   "box_opacity", "credit_footer"];
 const COMMON_FONTS = ["Arial Black", "Impact", "Montserrat", "Bebas Neue", "Anton", "Poppins", "Inter"];
@@ -27,6 +27,10 @@ function fillForm() {
   $("#br-fonts").innerHTML = state.fonts.length
     ? state.fonts.map((f) => `<span class="chip">${esc(f)} <button class="link" data-font="${esc(f)}">remove</button></span>`).join(" ")
     : `<span class="hint" style="margin:0">No uploaded fonts. Installed fonts work by name.</span>`;
+  // the switch shows/hides the badge; the corner select keeps the last corner while it's off
+  $("#br-badge-on").checked = s.creator_badge !== "off";
+  if (s.creator_badge === "off") $("#br-creator_badge").value = "top-left";
+  $("#br-badge-opts").style.opacity = $("#br-badge-on").checked ? 1 : 0.45;
   $("#br-logo-img").src = state.logo ? media(state.logo) : "";
   $("#br-logo-img").hidden = !state.logo;
   $("#br-logo-none").hidden = Boolean(state.logo);
@@ -39,6 +43,7 @@ function values() {
     const el = $(`#br-${k}`);
     out[k] = el.type === "checkbox" ? el.checked : el.type === "range" || el.type === "number" ? Number(el.value) : el.value;
   });
+  if (!$("#br-badge-on").checked) out.creator_badge = "off";
   return out;
 }
 
@@ -78,6 +83,7 @@ function preview() {
 
 export function mount() {
   $("#tab-brand").addEventListener("input", (e) => { if (e.target.id?.startsWith("br-")) preview(); });
+  $("#br-badge-on").addEventListener("change", (e) => ($("#br-badge-opts").style.opacity = e.target.checked ? 1 : 0.45));
   $("#br-save").addEventListener("click", (e) => busy(e.currentTarget, async () => {
     await api.saveSettings({ brand: values() });
     state.settings = values();

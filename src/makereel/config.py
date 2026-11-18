@@ -115,6 +115,7 @@ BRAND_DEFAULTS: dict[str, Any] = {
     "logo_scale": 0.16,             # logo width as a share of the video width
     "logo_opacity": 0.9,
     "creator_badge": "top-left",    # creator's picture + @handle on reels: off | top-left | top-right | ...
+    "creator_badge_place": "corner",  # corner: small, tucked into the corner (may sit under app buttons) | safe
     "font": "Arial Black",          # any installed font, or one uploaded in the Brand tab
     "text_colour": "#FFFFFF",
     "highlight_colour": "#FFDD00",
@@ -222,6 +223,8 @@ def validate_brand(brand: dict[str, Any]) -> None:
         raise ConfigError("brand.logo_position must be top-left, top-right, bottom-left or bottom-right")
     if brand.get("creator_badge", "off") not in ("off", "top-left", "top-right", "bottom-left", "bottom-right"):
         raise ConfigError("brand.creator_badge must be off or a corner (top-left, top-right, ...)")
+    if brand.get("creator_badge_place", "corner") not in ("corner", "safe"):
+        raise ConfigError("brand.creator_badge_place must be corner or safe")
     if brand.get("caption_position") not in ("bottom", "middle", "top"):
         raise ConfigError("brand.caption_position must be bottom, middle or top")
     for key in ("text_colour", "highlight_colour", "outline_colour", "box_colour"):
