@@ -50,6 +50,7 @@ export const api = {
   importCaptions: (folder, name, text) => request("POST", `${reelPath(folder, name)}/import`, { text }),
   trimReel: (folder, name, start, end) => request("POST", `${reelPath(folder, name)}/trim`, { start, end }),
   splitReel: (folder, name, at) => request("POST", `${reelPath(folder, name)}/split`, { at }),
+  shortVersions: (folder, name, length, count) => request("POST", `${reelPath(folder, name)}/shorts`, { length, count }),
   mergeReels: (folder, reels) => request("POST", `/folders/${enc(folder)}/merge`, { reels }),
   exportReel: (folder, name, format, fit) => request("POST", `${reelPath(folder, name)}/export`, { format, fit }),
   bench: () => request("GET", "/bench"),

@@ -61,7 +61,7 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand:
             counts = (chat_counts if chat_counts is not None
                       else signals.chat_activity(chat, n, meta.get("offset", 0.0)))
             curve, parts = highlights.signal_curve(n, loud, counts, clip["profile"])
-            cands = highlights.candidates(curve, k=clip["max_clips"] * 3)
+            cands = highlights.candidates(curve, k=clip["max_clips"] * 3, max_len=clip["max_len"])
 
     clip = resolve_language(video, [(c.start, c.end) for c in cands], clip)
     meta = {**meta, "language": clip["language"]}

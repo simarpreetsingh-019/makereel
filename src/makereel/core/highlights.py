@@ -87,13 +87,39 @@ def signal_curve(n: int, loud: np.ndarray, chat: np.ndarray, profile: str):
     return _smooth(w["loud"] * parts["loud"] + w["chat"] * parts["chat"], 5), parts
 
 
-def candidates(curve: np.ndarray, k: int, pre: float = 20, post: float = 12) -> list[Clip]:
-    """Top-k non-overlapping windows around the curve's peaks."""
+CALM = 8           # seconds of "back to normal" that end a moment
+ACTIVE_Z = 0.3     # the interest curve counts as "still going" above this (robust z-score)
+LEAD_MAX = 90      # a moment may reach back this far over its build-up (while it stays active)
+
+
+def moment(curve: np.ndarray, peak: int, max_len: float, pre: float = 20, post: float = 12) -> tuple[int, int]:
+    """The natural extent of the moment around `peak`: grow the end while the curve stays above normal
+    (lulls up to CALM s are allowed), grow the start back over the build-up, cap at max_len.
+    A quick reaction stays short; a long funny bit grows to minutes."""
+    n = len(curve)
+    s, e = int(max(0, peak - pre)), int(min(n, peak + post))
+    calm, i = 0, e
+    while i < n and i - s < max_len:
+        calm = 0 if curve[i] > ACTIVE_Z else calm + 1
+        if calm > CALM:
+            break
+        i += 1
+    e = max(e, i - calm)                    # end where the activity last was, not after the lull
+    j = s
+    while j > 0 and peak - j < LEAD_MAX and e - j < max_len and curve[j - 1] > ACTIVE_Z:
+        j -= 1
+    return j, int(min(e, j + max_len))
+
+
+def candidates(curve: np.ndarray, k: int, pre: float = 20, post: float = 12,
+               max_len: float | None = None) -> list[Clip]:
+    """Top-k non-overlapping windows around the curve's peaks; with max_len, each grows to its moment."""
     n, taken, out = len(curve), np.zeros(len(curve), bool), []
     for peak in np.argsort(curve)[::-1]:
         if len(out) >= k:
             break
-        s, e = int(max(0, peak - pre)), int(min(n, peak + post))
+        s, e = (moment(curve, int(peak), max_len, pre, post) if max_len
+                else (int(max(0, peak - pre)), int(min(n, peak + post))))
         if taken[s:e].any():
             continue
         taken[s:e] = True

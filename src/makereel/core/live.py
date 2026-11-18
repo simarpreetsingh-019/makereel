@@ -28,7 +28,9 @@ from . import media, pipeline, signals, sources
 log = logging.getLogger(__name__)
 
 SEGMENT_SECS = 6                 # length of each buffer piece
-BEFORE, AFTER = 30, 18           # seconds kept around a spike
+LEAD, TAIL = 20, 3               # a reel starts this long before its moment's peak, ends this long after it calms
+MIN_AFTER = 12                   # ...and runs at least this long past the peak
+CALM = 8                         # seconds back to normal that end a moment (it stays open while it lasts)
 JUMP = 0.6                       # 60% above the 3-minute baseline counts as a spike
 MIN_GAP = 75                     # seconds between spikes
 WARMUP = 90                      # seconds of baseline before spikes can fire
@@ -158,27 +160,46 @@ class LiveSession:
             self.segments.append((self.buf / name, self.clock, self.clock + dur))
             self.clock += dur
         self.csv_seen = len(rows)
-        protect = min((p["t"] for p in self.pending), default=1e18) - BEFORE - 5
+        protect = min((p["t"] for p in self.pending), default=1e18) - LEAD - 5
         while self.segments and self.segments[0][2] < min(self.clock - self.keep_secs, protect):
             self.segments.pop(0)[0].unlink(missing_ok=True)
 
     def _spike(self) -> None:
         n = len(self.db)
-        if n < WARMUP or n - self.last_spike < MIN_GAP:
+        if n < WARMUP:
             return
         amp = 10 ** (np.array(self.db[-190:]) / 20)
-        base, cur = amp[:-10].mean(), amp[-5:].mean()
+        cur = amp[-5:].mean()
+        chat = [self.chat.get(t, 0) for t in range(max(0, n - 190), n)]
+        c_now = sum(chat[-8:]) / 8
+        # a moment in progress stays open while it's still louder or chattier than before it began
+        for p in self.pending:
+            if cur > p["base"] * (1 + JUMP / 2) or c_now >= max(1.0, p["cbase"] * 1.5):
+                p["last"] = float(n)
+        if self.pending or n - self.last_spike < MIN_GAP:
+            return
+        base = amp[:-10].mean()
         why = []
         if cur / max(base, 1e-6) - 1 >= JUMP:
             why.append("loud")
-        chat = [self.chat.get(t, 0) for t in range(max(0, n - 190), n)]
-        c_base, c_now = sum(chat[:-10]) / max(1, len(chat) - 10), sum(chat[-8:]) / 8
+        c_base = sum(chat[:-10]) / max(1, len(chat) - 10)
         if c_now >= max(1.5, c_base * (1 + JUMP)):
             why.append("chat")
         if why:
             self.last_spike = n
-            self.pending.append({"t": float(n - 3), "why": why})
+            t = float(n - 3)
+            self.pending.append({"t": t, "why": why, "base": base, "cbase": c_base, "last": t})
             log.info("  spike at %ds (%s)", n - 3, ", ".join(why))
+
+    def _moment_over(self, p: dict) -> bool:
+        """True once the moment has calmed down (or hit the longest-reel limit) and its end is recorded."""
+        n, longest = len(self.db), float(self.clip.get("max_len", 180))
+        calmed = n - p["last"] >= CALM and n - p["t"] >= MIN_AFTER
+        too_long = n - (p["t"] - LEAD) >= longest
+        end = min(max(p["last"], p["t"] + MIN_AFTER) + TAIL, p["t"] - LEAD + longest)
+        if self.stop.is_set():
+            return True                    # stopping: make the reel from whatever was recorded
+        return (calmed or too_long) and self.clock >= end
 
     def _clip(self, spike: dict) -> None:
         hour_ago = time.time() - 3600
@@ -186,7 +207,10 @@ class LiveSession:
         if len(self.made) >= self.per_hour:
             log.info("  hourly reel limit reached; skipping spike")
             return
-        a, b = spike["t"] - BEFORE, spike["t"] + AFTER
+        longest = float(self.clip.get("max_len", 180))
+        a = spike["t"] - LEAD
+        b = min(max(spike.get("last", spike["t"]), spike["t"] + MIN_AFTER) + TAIL, a + longest)
+        log.info("  moment %ds-%ds (%ds) ready", a, b, b - a)
         parts = [s for s in self.segments if s[2] > a and s[1] < b]
         if not parts:
             return
@@ -204,15 +228,25 @@ class LiveSession:
         finally:
             win.unlink(missing_ok=True)
 
+    def _clear_leftovers(self) -> None:
+        """Pieces left by an earlier session of this stream that didn't end cleanly (makereel was closed
+        or restarted mid-stream). Only one session records a stream at a time, so they're unused."""
+        stale = [f for f in self.buf.iterdir() if f.is_file()] if self.buf.is_dir() else []
+        for f in stale:
+            f.unlink(missing_ok=True)
+        if stale:
+            log.info("  cleared %d leftover buffer files from an earlier session", len(stale))
+
     def run(self) -> None:
         log.info("LIVE: recording '%s' (%s)", self.info.title, self.info.channel)
+        self._clear_leftovers()
         logs.spawn(self._record, "live-record")
         logs.spawn(self._follow_chat, "live-chat")
         try:
             while not self.stop.is_set() or self.pending:
                 self._scan()
                 self._spike()
-                ready = [p for p in self.pending if self.clock >= p["t"] + AFTER or self.stop.is_set()]
+                ready = [p for p in self.pending if self._moment_over(p)]
                 for p in ready:
                     self.pending.remove(p)
                     try:

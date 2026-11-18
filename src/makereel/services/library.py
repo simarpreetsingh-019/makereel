@@ -538,6 +538,76 @@ def split_reel(folder: str, name: str, at: float) -> dict:
     return list_reels(folder)
 
 
+SHORT_LENGTHS = (20, 30, 45, 60, 90)
+
+
+def short_versions(folder: str, name: str, length: float = 45, count: int = 3) -> dict:
+    """The best `count` parts of a long reel, each about `length` seconds, as new reels in the folder.
+
+    Picks the loudest, wordiest stretches (the same signals that found the moment), never overlapping,
+    and moves each edge into a pause so no short starts or ends mid-sentence. The long reel is kept.
+    """
+    import numpy as np
+
+    from ..core import highlights, signals
+    from ..core.pipeline import next_reel_name
+    if length not in SHORT_LENGTHS:
+        raise InvalidInput(f"short versions are {', '.join(map(str, SHORT_LENGTHS))} seconds long")
+    if not 1 <= count <= 5:
+        raise InvalidInput("make between 1 and 5 short versions")
+    meta_file, post = _reel_paths(folder, name)
+    d = meta_file.parent
+    off, total = _require_section(d, post)
+    if total < length + 10:
+        raise InvalidInput(f"this reel is {total:.0f}s; short versions need a reel at least {length + 10:.0f}s long")
+    current = (d / post["captions"]).read_text(encoding="utf-8")
+    words = captions.parse_words(current)
+
+    loud = signals.loudness(d / post["source_clip"])[int(off): int(off + total) + 1]
+    n = max(1, int(total))
+    talk = np.zeros(n)                                   # words per second: keeps shorts on the talking bits
+    for w in words:
+        if 0 <= int(w["start"]) < n:
+            talk[int(w["start"])] += 1
+    curve, _ = highlights.signal_curve(n, loud, talk, "talk")
+    picks = highlights.candidates(curve, k=count, pre=length * 0.6, post=length * 0.4)
+    pauses = [(words[i]["end"] + words[i + 1]["start"]) / 2 for i in range(len(words) - 1)
+              if words[i + 1]["start"] - words[i]["end"] > 0.35]
+
+    def to_pause(t: float, lo: float, hi: float) -> float:
+        near = [p for p in pauses if lo <= p <= hi]
+        return min(near, key=lambda p: abs(p - t)) if near else t
+
+    brand, made = load_settings().brand, []
+    for c in sorted(picks, key=lambda c: c.start):
+        a = max(0.0, c.start)
+        a = to_pause(a, a - 3, a + 3)
+        b = min(total, max(a + length, c.end))
+        b = to_pause(b, b - 4, b + 3)
+        if b - a < 5:
+            continue
+        a, b = round(max(0.0, a), 2), round(min(total, b), 2)
+        new = next_reel_name(d)
+        part = {**post, "name": new, "file": f"{new}.mp4", "raw": f"{new}.raw.mp4", "captions": f"{new}.ass",
+                "source_clip": f"{new}.src.mp4", "exports": {}, "src_offset": round(off + a, 3),
+                "length": round(b - a, 3), "start": round(post.get("start", 0) + a, 2),
+                "end": round(post.get("start", 0) + b, 2), "short_of": name,
+                "cards": [x for x in captions.shift_cards(post.get("cards") or [], -a, round(b - a, 3))
+                          if x["kind"] != "outro"],
+                "shots": framing.shift_shots(post.get("shots"), a, round(b - a, 3))}
+        shutil.copyfile(d / post["source_clip"], d / part["source_clip"])
+        inside = [{**w, "start": round(w["start"] - a, 2), "end": round(w["end"] - a, 2)} for w in words
+                  if a <= w["start"] < b]
+        (d / f"{new}.json").write_text("{}", encoding="utf-8")             # reserve the name
+        _write_and_render(d, d / f"{new}.json", part,
+                          _rebuild(part, current, inside, part.get("hook"), brand, False, part["length"]),
+                          brand, reraw=True)
+        made.append(new)
+    if not made:
+        raise InvalidInput("couldn't find a good stretch for a short version")
+    return {**list_reels(folder), "made": made}
+
+
 def merge_reels(folder: str, names: list[str]) -> dict:
     """Join reels (in the given order) into a new reel. The originals are kept."""
     from ..core import media

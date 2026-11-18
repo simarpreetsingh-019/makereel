@@ -143,6 +143,15 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
             raise InvalidInput("start and end are seconds to move each edge, e.g. -2 or 1.5") from e
         return library.trim_reel(req.params["folder"], req.params["name"], start, end)
 
+    @api.post("/folders/{folder}/reels/{name}/shorts")
+    def make_shorts(req: Request):
+        body = req.json()
+        try:
+            length, count = float(body.get("length", 45)), int(body.get("count", 3))
+        except (TypeError, ValueError) as e:
+            raise InvalidInput("length and count must be numbers") from e
+        return library.short_versions(req.params["folder"], req.params["name"], length, count)
+
     @api.post("/folders/{folder}/reels/{name}/split")
     def split_reel(req: Request):
         try:
@@ -224,10 +233,12 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
 
     @api.put("/watcher")
     def put_watcher(req: Request):
-        if req.json().get("running"):
+        on = bool(req.json().get("running"))
+        if on:
             watcher.start()
         else:
             watcher.stop()
+        save_settings({"watching": on})          # remembered: it comes back on when makereel restarts
         return {"running": watcher.running}
 
     # ------------------------------------------------------------ first-run setup: speech models

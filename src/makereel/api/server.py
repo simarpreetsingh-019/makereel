@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from ..config import env
+from ..config import env, load_settings
 from ..errors import Forbidden, MakereelError, NotFound
 from ..services import library
 from ..services.jobs import JobManager
@@ -245,7 +245,7 @@ def serve(host: str | None = None, port: int | None = None, password: str | None
     shown = "localhost" if host in ("0.0.0.0", "::", "127.0.0.1") else host
     url = f"http://{shown}:{port}"
     log.info("makereel web: %s   (Ctrl+C to quit)", url)
-    if watch:
+    if watch or load_settings()["watching"]:
         watcher.start()
     if open_browser:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()

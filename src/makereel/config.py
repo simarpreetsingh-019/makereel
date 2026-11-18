@@ -99,8 +99,8 @@ def env() -> Env:
 CLIP_DEFAULTS: dict[str, Any] = {
     "profile": "gameplay",   # gameplay | talk
     "max_clips": 8,
-    "min_len": 15,
-    "max_len": 45,
+    "min_len": 15,           # shortest reel (s); each reel's length follows its moment, between these two
+    "max_len": 180,          # longest reel (s), up to 300
     "model": "base",         # whisper size: tiny | base | small | medium | large-v3
     "layout": "auto",        # auto (from what is on screen) | blur | crop | pad | track | split
     "language": None,        # None = auto-detect (once per video, so every reel matches)
@@ -154,6 +154,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "cookies_browser": "",   # use this browser's YouTube sign-in (chrome, firefox, edge, safari...): avoids bot checks
     "speech_device": "auto", # where speech recognition runs: auto (NVIDIA GPU if usable) | gpu | cpu
     "setup_done": False,     # the first-run setup (model suggestions) was finished or skipped
+    "watching": False,       # the channel watcher was on when makereel last ran (it starts again)
     "update_repo": "",       # GitHub "owner/repo" that publishes makereel releases ("" = don't check)
     "update_check": True,    # look for a new release when the app starts (one small request)
     "clip": CLIP_DEFAULTS,
@@ -213,8 +214,8 @@ def validate_clip(clip: dict[str, Any]) -> None:
             raise ConfigError(f"clip.{key} must be a number") from e
     if not 1 <= clip["max_clips"] <= 50:
         raise ConfigError("clip.max_clips must be between 1 and 50")
-    if not 3 <= clip["min_len"] <= clip["max_len"] <= 180:
-        raise ConfigError("clip lengths must satisfy 3 <= min_len <= max_len <= 180")
+    if not 3 <= clip["min_len"] <= clip["max_len"] <= 300:
+        raise ConfigError("clip lengths must satisfy 3 <= min_len <= max_len <= 300")
 
 
 def validate_brand(brand: dict[str, Any]) -> None:
@@ -355,7 +356,7 @@ def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings
         if repo and not re.fullmatch(r"[A-Za-z0-9._-]+/[A-Za-z0-9._-]+", repo):
             raise ConfigError("update_repo must look like owner/repo")
         current["update_repo"] = repo
-    for key in ("keep_source", "watch_uploads", "setup_done", "update_check"):
+    for key in ("keep_source", "watch_uploads", "setup_done", "update_check", "watching"):
         if key in changes:
             current[key] = bool(changes[key])
     if isinstance(changes.get("clip"), dict):

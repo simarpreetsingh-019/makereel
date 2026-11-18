@@ -669,6 +669,17 @@ export function mount() {
       cur.onSaved?.();
     });
   });
+  $("#cut-shorts").addEventListener("click", (e) => {
+    const length = Number($("#cut-shorts-len").value), count = Number($("#cut-shorts-n").value);
+    if (cur.reel.length < length + 10) return toast(`This reel is ${Math.round(cur.reel.length)}s: too short for ${length}s versions`);
+    $("#ed-msg").textContent = `Finding the best ${count} parts and rendering…`;
+    busy(e.currentTarget, async () => {
+      const res = await api.shortVersions(cur.folder, cur.name, length, count);
+      $("#ed-msg").textContent = "";
+      toast(`Made ${res.made.length} short version${res.made.length === 1 ? "" : "s"}: ${res.made.join(", ")}`);
+      cur.onSaved?.();
+    });
+  });
   $("#cut-split").addEventListener("click", async (e) => {
     const at = cv.currentTime;
     if (at < 2 || at > cur.reel.length - 2) return toast("Pause at least 2 seconds from either end");

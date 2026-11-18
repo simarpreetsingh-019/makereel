@@ -76,3 +76,22 @@ def test_clean_and_shift_shots():
     assert shots == [{"start": 0.0, "x": 1.0}, {"start": 5.0, "x": 0.8}]
     assert framing.shift_shots(shots, 3, 7) == [{"start": 0.0, "x": 1.0}, {"start": 2.0, "x": 0.8}]
     assert framing.shift_shots(shots, 6, 4) == [{"start": 0.0, "x": 0.8}]
+
+
+def test_moment_length_follows_the_moment():
+    import numpy as np
+
+    from makereel.core import highlights
+    curve = np.full(600, -1.0)
+    curve[100:105] = 3.0                      # a quick reaction
+    curve[300:480] = 1.0                      # a 3-minute funny bit, with a short lull inside
+    curve[380:385] = -1.0
+    curve[350] = 4.0
+    s, e = highlights.moment(curve, 102, max_len=240)
+    assert e - s < 45, (s, e)                 # stays short
+    s, e = highlights.moment(curve, 350, max_len=240)
+    assert e - s >= 170 and e <= 485, (s, e)  # grows to cover the whole bit, lull included
+    s, e = highlights.moment(curve, 350, max_len=60)
+    assert e - s <= 60                        # never past the longest-reel setting
+    picks = highlights.candidates(curve, k=2, max_len=240)
+    assert len(picks) == 2 and max(c.end - c.start for c in picks) >= 170
