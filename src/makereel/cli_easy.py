@@ -199,6 +199,8 @@ def cmd_update(a) -> None:
         import tempfile
         quoted = " ".join("'" + c.replace("'", "''") + "'" for c in cmd)
         ps1 = Path(tempfile.gettempdir()) / "makereel-update.ps1"
+        result = Path(tempfile.gettempdir()) / "makereel-update.result"   # exit code, for anyone checking
+        result.unlink(missing_ok=True)
         ps1.write_text("\n".join([
             f"Wait-Process -Id {os.getpid()} -ErrorAction SilentlyContinue",
             "Write-Host 'Updating makereel...'",
@@ -206,13 +208,15 @@ def cmd_update(a) -> None:
             "if ($LASTEXITCODE -eq 0) { Write-Host 'makereel is up to date. Start it with: makereel start' "
             "-ForegroundColor Green } else { Write-Host 'The update failed: run the installer again.' "
             "-ForegroundColor Red }",
+            f"Set-Content -Path '{result}' -Value $LASTEXITCODE",
             "if (-not $env:MAKEREEL_UPDATE_NO_WAIT) { Read-Host 'Press Enter to close' }",
             "exit $LASTEXITCODE",
         ]), encoding="utf-8")
         args = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1)]
-        if os.environ.get("MAKEREEL_UPDATE_NO_WAIT"):     # tests: run it here and now, no extra window
-            sys.exit(subprocess.run(args).returncode)
-        subprocess.Popen(args, creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+        # always hand off and exit, so makereel.exe is free to be replaced (tests: no extra window)
+        flags = (getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.environ.get("MAKEREEL_UPDATE_NO_WAIT")
+                 else getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+        subprocess.Popen(args, creationflags=flags)
         print("The update continues in a new window (makereel has to close first).")
         return
     if subprocess.run(cmd).returncode != 0:

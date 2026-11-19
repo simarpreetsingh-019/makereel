@@ -168,6 +168,10 @@ jobs:
           Get-Content -Raw -Encoding UTF8 install.ps1 | Invoke-Expression
           $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
           makereel update
-          if ($LASTEXITCODE -ne 0) { throw "makereel update failed ($LASTEXITCODE)" }
+          $result = Join-Path $env:TEMP "makereel-update.result"
+          foreach ($i in 1..120) { if (Test-Path $result) { break }; Start-Sleep 5 }   # the helper finishes on its own
+          if (-not (Test-Path $result)) { throw "the update helper never finished" }
+          $code = (Get-Content $result).Trim()
+          if ($code -ne "0") { throw "makereel update failed ($code)" }
           makereel --version
           makereel help | Select-String "makereel update"
