@@ -95,7 +95,17 @@ def check_sign_in() -> dict:
                     "message": f"Your computer isn't letting makereel read {browser.title()}'s sign-in. "
                                f"Allow it in {where}. "
                                "Or upload a sign-in file instead (Settings → Upload sign-in file)."}
-        return {"ok": False, "source": browser, "message": f"Couldn't read {browser.title()}'s sign-in: {msg[:160]}"}
+        low = msg.lower()
+        if "could not copy" in low or "app-bound" in low or "decrypt" in low or "locked" in low:
+            name = browser.title()
+            return {"ok": False, "source": browser, "blocked": True,
+                    "message": f"{name} keeps its sign-in locked, so makereel can't read it. Close {name} completely "
+                               "(also from the taskbar's hidden icons) and press Test sign-in again. On Windows, "
+                               "Chrome, Brave and Edge usually encrypt it so no other app can use it even then: "
+                               "use a sign-in file instead (Settings → Upload sign-in file, or "
+                               "`makereel signin cookies.txt`), or sign in to YouTube in Firefox and pick Firefox."}
+        clean = ANSI.sub("", msg).replace("ERROR: ", "")
+        return {"ok": False, "source": browser, "message": f"Couldn't read {browser.title()}'s sign-in: {clean[:160]}"}
     signed = any(c.name in ("SID", "__Secure-3PSID", "LOGIN_INFO", "SAPISID") for c in yt)
     return {"ok": signed, "source": browser,
             "message": f"Using your {browser.title()} sign-in." if signed

@@ -129,6 +129,11 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--port", type=int)
     p.set_defaults(fn=cli_easy.cmd_update)
 
+    p = sub.add_parser("signin", help="use a YouTube sign-in file (cookies.txt), or check the sign-in")
+    p.add_argument("file", nargs="?", help="cookies.txt exported from youtube.com")
+    p.add_argument("--remove", action="store_true", help="stop using the sign-in file")
+    p.set_defaults(fn=cli_easy.cmd_signin)
+
     p = sub.add_parser("gpu", help="use an NVIDIA GPU for speech (installs NVIDIA's libraries)")
     p.set_defaults(fn=cli_easy.cmd_gpu)
 

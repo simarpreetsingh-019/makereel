@@ -139,6 +139,31 @@ def cmd_gpu(a) -> None:
     offer_gpu(yes=True)
 
 
+# --------------------------------------------------------------------------- YouTube sign-in file
+def cmd_signin(a) -> None:
+    """Use a cookies.txt export as makereel's YouTube sign-in (or remove it with --remove)."""
+    from pathlib import Path
+
+    from .core import sources
+    from .services import youtube
+    if a.remove:
+        print(youtube.remove_cookies()["message"])
+        return
+    if not a.file:
+        st = sources.check_sign_in()
+        print(("✓ " if st["ok"] else "! ") + st["message"])
+        print("\nTo add a sign-in file: export cookies.txt from youtube.com with a 'Get cookies.txt LOCALLY' "
+              "browser extension, then run: makereel signin cookies.txt")
+        return
+    path = Path(a.file).expanduser()
+    if not path.is_file():
+        print(f"No file at {path}")
+        sys.exit(1)
+    st = youtube.save_cookies(path.read_bytes())
+    print(("✓ " if st["ok"] else "! ") + st["message"])
+    print("  Only the YouTube and Google lines were kept, in makereel's own folder. You can delete the exported file.")
+
+
 # --------------------------------------------------------------------------- update
 UPDATE_SOURCE = "makereel @ https://github.com/simarpreetsingh-019/makereel/archive/refs/heads/main.zip"
 
@@ -299,6 +324,7 @@ Everyday
   makereel status                what's installed, running and recording, and how much space it uses
   makereel update                get the latest version from GitHub (keeps settings, reels and models)
   makereel gpu                   use an NVIDIA GPU for speech (one-time download of NVIDIA's libraries)
+  makereel signin cookies.txt    use a YouTube sign-in file (fixes "confirm you're not a bot"); no file: check it
   makereel help                  this list
 
 Make reels from the terminal
