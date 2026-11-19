@@ -125,6 +125,10 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("status", help="what's installed, running and recording")
     p.set_defaults(fn=cli_easy.cmd_status)
 
+    p = sub.add_parser("update", aliases=["upgrade"], help="get the latest version from GitHub")
+    p.add_argument("--port", type=int)
+    p.set_defaults(fn=cli_easy.cmd_update)
+
     p = sub.add_parser("gpu", help="use an NVIDIA GPU for speech (installs NVIDIA's libraries)")
     p.set_defaults(fn=cli_easy.cmd_gpu)
 

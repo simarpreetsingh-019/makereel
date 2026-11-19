@@ -151,3 +151,23 @@ jobs:
         run: python -m pip install ".[gpu]"
       - name: makereel finds and loads cuBLAS and cuDNN
         run: python -c "from makereel.core import gpu; ok = gpu.libs_ok(); print('libs_ok =', ok); assert ok"
+
+  update-windows:
+    name: makereel update (Windows PowerShell 5.1)
+    needs: tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install, then update from GitHub the way `makereel update` does
+        shell: powershell
+        env:
+          MAKEREEL_SOURCE: ${{ github.workspace }}
+          MAKEREEL_NO_LAUNCH: "1"
+          MAKEREEL_UPDATE_NO_WAIT: "1"
+        run: |
+          Get-Content -Raw -Encoding UTF8 install.ps1 | Invoke-Expression
+          $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
+          makereel update
+          if ($LASTEXITCODE -ne 0) { throw "makereel update failed ($LASTEXITCODE)" }
+          makereel --version
+          makereel help | Select-String "makereel update"

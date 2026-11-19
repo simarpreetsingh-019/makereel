@@ -139,6 +139,64 @@ def cmd_gpu(a) -> None:
     offer_gpu(yes=True)
 
 
+# --------------------------------------------------------------------------- update
+UPDATE_SOURCE = "makereel @ https://github.com/simarpreetsingh-019/makereel/archive/refs/heads/main.zip"
+
+
+def cmd_update(a) -> None:
+    """Install the latest makereel from GitHub over this one (settings, reels and models are kept)."""
+    import os
+    import platform
+    import subprocess
+    from pathlib import Path
+
+    from .core import gpu, models
+    print(f"makereel {__version__}: updating to the latest version from GitHub…")
+    here = Path(__file__).resolve()
+    if any((p / ".git").is_dir() for p in here.parents):
+        print("This is a developer copy (a git checkout). Update it with: git pull")
+        return
+    uv = shutil.which("uv") or str(Path.home() / ".local" / "bin" / ("uv.exe" if os.name == "nt" else "uv"))
+    if not Path(uv).exists():
+        print("uv isn't installed, so update by running the installer again (see the README).")
+        sys.exit(1)
+    if _running(a.port or env().port) is not None:
+        print("makereel is running. Close it first (Ctrl+C in its window), then run `makereel update` again.")
+        sys.exit(1)
+    cmd = [uv, "tool", "install", "--force", "--reinstall", "--python", "3.12"]
+    if models.nvidia_gpu() is not None or gpu.libs_ok():
+        print("  NVIDIA GPU: including its speech libraries.")
+        cmd += ["--with", "nvidia-cublas-cu12", "--with", "nvidia-cudnn-cu12>=9,<10"]
+    cmd.append(UPDATE_SOURCE)
+    if platform.system() == "Windows":
+        # Windows can't replace makereel.exe while it runs (and this is makereel.exe). A small script waits for
+        # this process to end, updates, then says how it went, in its own window.
+        import tempfile
+        quoted = " ".join("'" + c.replace("'", "''") + "'" for c in cmd)
+        ps1 = Path(tempfile.gettempdir()) / "makereel-update.ps1"
+        ps1.write_text("\n".join([
+            f"Wait-Process -Id {os.getpid()} -ErrorAction SilentlyContinue",
+            "Write-Host 'Updating makereel...'",
+            f"& {quoted}",
+            "if ($LASTEXITCODE -eq 0) { Write-Host 'makereel is up to date. Start it with: makereel start' "
+            "-ForegroundColor Green } else { Write-Host 'The update failed: run the installer again.' "
+            "-ForegroundColor Red }",
+            "if (-not $env:MAKEREEL_UPDATE_NO_WAIT) { Read-Host 'Press Enter to close' }",
+            "exit $LASTEXITCODE",
+        ]), encoding="utf-8")
+        args = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1)]
+        if os.environ.get("MAKEREEL_UPDATE_NO_WAIT"):     # tests: run it here and now, no extra window
+            sys.exit(subprocess.run(args).returncode)
+        subprocess.Popen(args, creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+        print("The update continues in a new window (makereel has to close first).")
+        return
+    if subprocess.run(cmd).returncode != 0:
+        print("\nThe update failed. Run the installer again (see the README).")
+        sys.exit(1)
+    new = subprocess.run([shutil.which("makereel") or "makereel", "--version"], capture_output=True, text=True)
+    print(f"\n✓ Updated: {new.stdout.strip() or 'done'}. Start it with: makereel start")
+
+
 def cmd_start(a) -> None:
     import webbrowser
     port = a.port or env().port
@@ -239,6 +297,7 @@ HELP = """makereel: turn live streams and videos into captioned reels.
 Everyday
   makereel start                 set up (first time) and open makereel in your browser
   makereel status                what's installed, running and recording, and how much space it uses
+  makereel update                get the latest version from GitHub (keeps settings, reels and models)
   makereel gpu                   use an NVIDIA GPU for speech (one-time download of NVIDIA's libraries)
   makereel help                  this list
 
