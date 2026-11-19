@@ -54,13 +54,18 @@ jobs:
           MAKEREEL_SOURCE: ${{ github.workspace }}
           MAKEREEL_NO_LAUNCH: "1"
         run: cat install.sh | bash   # piped, exactly like `curl … | bash`
-      - name: run install.ps1 (Windows)
+      - name: run install.ps1 (Windows PowerShell 5.1, the way `irm … | iex` runs it)
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: powershell
         env:
           MAKEREEL_SOURCE: ${{ github.workspace }}
           MAKEREEL_NO_LAUNCH: "1"
-        run: ./install.ps1
+        run: |
+          Get-Content -Raw -Encoding UTF8 install.ps1 | Invoke-Expression
+          Write-Host "--- second run: uv is now installed and already on PATH (the case that used to stop it)"
+          Get-Content -Raw -Encoding UTF8 install.ps1 | Invoke-Expression
+          if (-not (Test-Path "$env:USERPROFILE\makereel\Start makereel.cmd")) { throw "launcher missing" }
+          if (-not (Test-Path ([Environment]::GetFolderPath("Desktop") + "\makereel.lnk"))) { throw "desktop shortcut missing" }
       - name: the web app starts and answers (macOS / Linux)
         if: runner.os != 'Windows'
         run: |
@@ -112,8 +117,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: hide Python and Node, then run install.ps1
-        shell: pwsh
+      - name: hide Python and Node, then run install.ps1 (Windows PowerShell 5.1)
+        shell: powershell
         env:
           MAKEREEL_SOURCE: ${{ github.workspace }}
           MAKEREEL_NO_LAUNCH: "1"
@@ -123,6 +128,6 @@ jobs:
           foreach ($c in 'python', 'python3', 'node') {
             if (Get-Command $c -ErrorAction SilentlyContinue) { Write-Host "still visible: $c ($((Get-Command $c).Source))" }
           }
-          ./install.ps1
+          Get-Content -Raw -Encoding UTF8 install.ps1 | Invoke-Expression
           $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
           makereel --version
