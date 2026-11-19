@@ -25,6 +25,23 @@ _model_name: str | None = None      # size + threads, so changing the processing
 _last_used = 0.0
 
 
+def _on_gpu() -> bool:
+    return bool(_model_name and _model_name.endswith("@cuda"))
+
+
+def _with_fallback(size: str, call):
+    """Run `call(model)`; if the GPU fails mid-way (missing CUDA library, out of memory), switch to the CPU
+    for the rest of this run and try once more, instead of failing the job."""
+    from . import gpu
+    try:
+        return call(_get(size))
+    except RuntimeError as e:
+        if not (_on_gpu() and gpu.is_gpu_error(e)):
+            raise
+        gpu.mark_broken(str(e))
+        return call(_get(size))
+
+
 def _device() -> str:
     """'cuda' when speech should run on the NVIDIA GPU, else 'cpu' (setting: speech_device)."""
     from ..config import load_settings
@@ -35,10 +52,10 @@ def _device() -> str:
 
 def _get(size: str):
     global _model, _model_name, _last_used
-    key = f"{size}@{media.cpu_threads()}"
+    device = _device()
+    key = f"{size}@{media.cpu_threads()}@{device}"
     if _model is None or _model_name != key:
         from faster_whisper import WhisperModel
-        device = _device()
         log.info("loading speech model '%s' on the %s (first use downloads it)", size,
                  "GPU" if device == "cuda" else "CPU")
         try:
@@ -46,8 +63,9 @@ def _get(size: str):
                 try:
                     _model = WhisperModel(size, device="cuda", compute_type="float16")
                 except Exception as e:  # noqa: BLE001 - driver / CUDA libraries / GPU memory: use the CPU
-                    log.warning("GPU unavailable for speech (%s); using the CPU", str(e).split("\n")[0][:120])
-                    device = "cpu"
+                    from . import gpu
+                    gpu.mark_broken(str(e).split("\n")[0])
+                    device, key = "cpu", f"{size}@{media.cpu_threads()}@cpu"
             if device == "cpu":
                 _model = WhisperModel(size, device="cpu", compute_type="int8", cpu_threads=media.cpu_threads())
         except Exception as e:  # noqa: BLE001 - network / disk / bad name
@@ -72,6 +90,17 @@ def _pcm(video: Path, start: float, end: float) -> np.ndarray:
     return np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
 
 
+def _downloaded_multilingual() -> str | None:
+    """A multilingual model already on disk (the user's other model first), to avoid a new download."""
+    from ..config import load_settings
+    from . import models
+    other = load_settings().clip.get("model_other")
+    for name in (other, "small", "medium", "large-v3", "base"):
+        if name and name in models.CATALOG and name not in ENGLISH_ONLY and models.installed(name):
+            return name
+    return None
+
+
 def detect_language(video: Path, windows: list[tuple[float, float]], size: str = "base") -> tuple[str | None, float]:
     """(language code, confidence) of the speech in up to three windows of a file, judged together.
 
@@ -79,13 +108,13 @@ def detect_language(video: Path, windows: list[tuple[float, float]], size: str =
     language and script, which matters for mixed speech like Hinglish.
     """
     if size in ENGLISH_ONLY:            # an English-only model always "hears" English
-        size = "small"
+        size = _downloaded_multilingual() or "small"
     audio = np.concatenate([_pcm(video, s, min(e, s + 30)) for s, e in windows[:3]] or [np.zeros(0, np.float32)])
     if len(audio) < 16000 * 2:
         return None, 0.0
     with _lock:
-        lang, prob, _ = _get(size).detect_language(audio, vad_filter=True,
-                                                     language_detection_segments=min(3, len(windows)))
+        lang, prob, _ = _with_fallback(size, lambda m: m.detect_language(
+            audio, vad_filter=True, language_detection_segments=min(3, len(windows))))
     return lang, float(prob)
 
 
@@ -102,13 +131,15 @@ def words_in(video: Path, start: float, end: float, size: str = "base",
     if len(audio) < 16000:  # under a second: nothing worth transcribing
         return []
     with _lock:
-        segments, _ = _get(size).transcribe(
-            audio, word_timestamps=True, language=language, task=task,
-            beam_size=5 if precise else 1,
-            vad_filter=True, vad_parameters={"min_silence_duration_ms": 300 if precise else 2000},
-            condition_on_previous_text=not precise)
-        return [{"start": round(float(w.start) + start, 2), "end": round(float(w.end) + start, 2),
-                 "word": w.word.strip()} for s in segments for w in (s.words or [])]
+        def run(model):      # the segments are produced lazily: a GPU error shows up while reading them
+            segments, _ = model.transcribe(
+                audio, word_timestamps=True, language=language, task=task,
+                beam_size=5 if precise else 1,
+                vad_filter=True, vad_parameters={"min_silence_duration_ms": 300 if precise else 2000},
+                condition_on_previous_text=not precise)
+            return [{"start": round(float(w.start) + start, 2), "end": round(float(w.end) + start, 2),
+                     "word": w.word.strip()} for s in segments for w in (s.words or [])]
+        return _with_fallback(size, run)
 
 
 def words_in_file(video: Path, size: str = "base", language: str | None = None,

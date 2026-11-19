@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import sys
 from dataclasses import asdict, dataclass, field
@@ -127,14 +128,20 @@ class Download:
     info: SourceInfo
 
 
+ANSI = re.compile(r"\x1b\[[0-9;]*m|\[[0-9;]*m(?=\S)")
+
+
 def _friendly(e: Exception) -> SourceError:
-    msg = str(e).replace("ERROR: ", "").split("\n")[0]
+    msg = ANSI.sub("", str(e)).replace("ERROR: ", "").split("\n")[0]
     hint = None
     low = msg.lower()
     if "private" in low or "sign in" in low or "members" in low:
         hint = "The video is private, members-only or age-restricted."
     elif "unavailable" in low or "not available" in low:
         hint = "Check the link. If it opens in a browser, update yt-dlp: pip install -U \"yt-dlp[default]\""
+    elif "403" in low or "forbidden" in low:
+        hint = ("YouTube refused this download (it does this now and then). Try again in a minute; if it "
+                "keeps happening, set up a YouTube sign-in in Settings.")
     elif "not a bot" in low or "confirm you" in low:
         hint = ("YouTube asked makereel to prove it isn't a bot. In Settings, choose the browser you're signed in "
                 "to YouTube with (Use my YouTube sign-in from), then try again.")
@@ -212,7 +219,7 @@ def download(url: str, out_dir: Path, section: str | None = None, chat: bool = T
     """720p by default: plenty for a 1080x1920 reel, half the disk and decode work of 1080p."""
     out_dir.mkdir(parents=True, exist_ok=True)
     opts = {
-        **BASE_OPTS,
+        **ydl_opts(),           # with the user's YouTube sign-in, like every other request
         "format": f"bv*[height<={max_height}][ext=mp4]+ba[ext=m4a]/bv*[height<={max_height}]+ba/b",
         "merge_output_format": "mp4",
         "outtmpl": str(out_dir / "%(id)s.%(ext)s"),
@@ -225,11 +232,27 @@ def download(url: str, out_dir: Path, section: str | None = None, chat: bool = T
         offset = start
         opts["download_ranges"] = yt_dlp.utils.download_range_func(None, [(start, end)])
         opts["force_keyframes_at_cuts"] = True
-    try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = _info(ydl.extract_info(validate_url(url), download=True), url, offset)
-    except DownloadError as e:
-        raise _friendly(e) from e
+    validate_url(url)
+    info, first = None, None
+    # YouTube sometimes refuses a download (403) or wants a bot check: try its other clients before failing
+    for clients in (None, *FALLBACK_CLIENTS):
+        try:
+            attempt = opts if clients is None else {**opts, "extractor_args": {"youtube": {"player_client": clients}}}
+            with yt_dlp.YoutubeDL(attempt) as ydl:
+                info = _info(ydl.extract_info(url, download=True), url, offset)
+            if clients:
+                log.info("YouTube refused the first download; it worked as its %s client", "/".join(clients))
+            break
+        except DownloadError as e:
+            first = first or e
+            low = str(e).lower()
+            if not ("403" in low or "forbidden" in low or _is_bot_check(e)):
+                raise _friendly(e) from e
+    if info is None:
+        if _is_bot_check(first):
+            from . import notify
+            notify.bot_check(url)
+        raise _friendly(first) from first
     video = next((p for p in out_dir.glob(f"{info.id}.*") if p.suffix in (".mp4", ".mkv", ".webm")), None)
     if video is None:
         raise SourceError("download finished but no video file was written")

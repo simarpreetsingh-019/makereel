@@ -131,3 +131,23 @@ jobs:
           Get-Content -Raw -Encoding UTF8 install.ps1 | Invoke-Expression
           $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
           makereel --version
+
+  # No GPU on these machines, but the risky part is finding and loading NVIDIA's libraries, which works
+  # without a GPU: install them the way `makereel gpu` does and check makereel's own check passes.
+  gpu-libraries:
+    name: NVIDIA GPU libraries load (${{ matrix.os }})
+    needs: tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: install makereel with its gpu extra
+        run: python -m pip install ".[gpu]"
+      - name: makereel finds and loads cuBLAS and cuDNN
+        run: python -c "from makereel.core import gpu; ok = gpu.libs_ok(); print('libs_ok =', ok); assert ok"

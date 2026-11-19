@@ -53,12 +53,24 @@ def nvidia_gpu() -> dict | None:
 
 
 def cuda_ready() -> bool:
-    """True when the speech engine can actually use an NVIDIA GPU (driver + CUDA libraries)."""
+    """True when the speech engine can really use an NVIDIA GPU: a GPU is there AND NVIDIA's CUDA
+    libraries (cuBLAS, cuDNN) load. A GPU without the libraries would crash speech, so it doesn't count."""
+    from . import gpu
+    if gpu.broken():
+        return False
     try:
         import ctranslate2
-        return ctranslate2.get_cuda_device_count() > 0
+        if ctranslate2.get_cuda_device_count() <= 0:
+            return False
     except Exception:  # noqa: BLE001
         return False
+    return gpu.libs_ok()
+
+
+def gpu_needs_libs() -> bool:
+    """An NVIDIA GPU is here but NVIDIA's CUDA libraries are missing (they can be installed)."""
+    from . import gpu
+    return nvidia_gpu() is not None and not gpu.libs_ok()
 
 
 def computer(models_dir: Path | None = None) -> dict:

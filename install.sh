@@ -62,7 +62,12 @@ main() {
   export PATH="$HOME/.local/bin:$PATH"
 
   step "Installing makereel"
-  uv tool install --force --python 3.12 "$SOURCE" </dev/null
+  GPU_LIBS=()
+  if [ "$OS" = "Linux" ] && have nvidia-smi; then   # NVIDIA GPU: its CUDA libraries, so speech can use it
+    echo "NVIDIA GPU found: adding its speech libraries too (about 1.2 GB)."
+    GPU_LIBS=(--with nvidia-cublas-cu12 --with "nvidia-cudnn-cu12>=9,<10")
+  fi
+  uv tool install --force --python 3.12 ${GPU_LIBS[@]+"${GPU_LIBS[@]}"} "$SOURCE" </dev/null
   uv tool update-shell >/dev/null 2>&1 || true
   EXE="$(command -v makereel)"
   makereel --version

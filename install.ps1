@@ -61,7 +61,12 @@
   }
 
   Step "Installing makereel"
-  Invoke-Native { uv tool install --force --python 3.12 $Source } "installing makereel"
+  $gpuLibs = @()
+  if (Have nvidia-smi) {                      # NVIDIA GPU: add NVIDIA's CUDA libraries so speech can use it
+    Write-Host "NVIDIA GPU found: adding its speech libraries too (about 1.2 GB)."
+    $gpuLibs = @("--with", "nvidia-cublas-cu12", "--with", "nvidia-cudnn-cu12>=9,<10")
+  }
+  Invoke-Native { uv tool install --force --python 3.12 @gpuLibs $Source } "installing makereel"
   Invoke-Native { uv tool update-shell } "adding makereel to PATH" -Optional
   $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
   $exe = (Get-Command makereel -ErrorAction Stop).Source

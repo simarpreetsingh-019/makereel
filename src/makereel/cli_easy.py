@@ -71,8 +71,10 @@ def check_tools() -> bool:
              "macOS `brew install node` · Windows `winget install OpenJS.NodeJS.LTS` · Linux `sudo apt install nodejs`")
     gpu = models.nvidia_gpu()
     if gpu:
-        _say(OK if models.cuda_ready() else WARN, f"NVIDIA {gpu['name']} ({gpu['vram_gb']} GB)",
-             None if models.cuda_ready() else "its CUDA libraries aren't installed, so speech uses the CPU")
+        ready = models.cuda_ready()
+        _say(OK if ready else WARN, f"NVIDIA {gpu['name']} ({gpu['vram_gb']} GB)"
+             + (": speech runs on it" if ready else ""),
+             None if ready else "its CUDA libraries aren't installed, so speech uses the CPU: run `makereel gpu`")
     return good
 
 
@@ -109,6 +111,34 @@ def _setup_models(yes: bool) -> None:
     print("  Speech models set.")
 
 
+def offer_gpu(yes: bool) -> None:
+    """NVIDIA GPU but no CUDA libraries: offer the one-time download that makes speech run on the GPU."""
+    from .core import gpu, models
+    if not models.gpu_needs_libs():
+        return
+    g = models.nvidia_gpu()
+    print(f"\nYour {g['name']} can make speech recognition several times faster.")
+    print(f"  It needs NVIDIA's CUDA libraries: about {gpu.DOWNLOAD_GB} GB, downloaded once.")
+    if _ask("Install them now? [Y/n]", "y", yes).lower().startswith("n"):
+        print("  Skipped. Speech uses the CPU. Run `makereel gpu` any time to add them.")
+        return
+    if gpu.install_libs():
+        print("  ✓ GPU ready: speech runs on your NVIDIA GPU.")
+    else:
+        print("  ✗ The GPU libraries didn't install or load; speech uses the CPU. `makereel gpu` to try again.")
+
+
+def cmd_gpu(a) -> None:
+    from .core import gpu, models
+    if models.nvidia_gpu() is None:
+        print("No NVIDIA GPU found here. Speech runs on the CPU (on Macs that's the normal, fast path).")
+        return
+    if gpu.libs_ok():
+        print("✓ NVIDIA GPU libraries are installed; speech runs on the GPU.")
+        return
+    offer_gpu(yes=True)
+
+
 def cmd_start(a) -> None:
     import webbrowser
     port = a.port or env().port
@@ -121,6 +151,7 @@ def cmd_start(a) -> None:
     if not check_tools():
         print("\nFix the item marked ✗ above, then run `makereel start` again.")
         sys.exit(1)
+    offer_gpu(a.yes)
     if not load_settings()["setup_done"]:
         _setup_models(a.yes)
     print(f"\nStarting makereel at http://localhost:{port}  (leave this window open; Ctrl+C to stop)\n")
@@ -208,6 +239,7 @@ HELP = """makereel: turn live streams and videos into captioned reels.
 Everyday
   makereel start                 set up (first time) and open makereel in your browser
   makereel status                what's installed, running and recording, and how much space it uses
+  makereel gpu                   use an NVIDIA GPU for speech (one-time download of NVIDIA's libraries)
   makereel help                  this list
 
 Make reels from the terminal
