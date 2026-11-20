@@ -213,6 +213,19 @@ def words_by_sentence(video: Path, start: float, end: float, size: str, primary:
     return words
 
 
+CHECKERS = {"hi": ("hinglish", "large-v3", "medium", "hinglish-lite", "small"),
+            "en": ("large-v3", "distil-large-v3", "medium", "small")}
+
+
+def checker_for(main: str, language: str | None) -> str | None:
+    """A second, different model already on disk to double-check `main`'s captions (None: none here).
+    Never the same model: a model checking itself proves nothing. Never triggers a download."""
+    for name in CHECKERS.get(language or "en", ("large-v3", "medium", "small")):
+        if name != main and name in models.CATALOG and models.installed(name):
+            return name
+    return None
+
+
 def words_in_file(video: Path, size: str = "base", language: str | None = None,
                   task: str = "transcribe") -> list[dict]:
     """Precise word timings for a whole (short) file, e.g. a rendered reel."""

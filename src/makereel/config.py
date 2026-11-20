@@ -106,6 +106,7 @@ CLIP_DEFAULTS: dict[str, Any] = {
     "language": None,        # None = auto-detect (once per video, so every reel matches)
     "model_other": "small",  # model for non-English speech when `model` is tiny/base ("same" = don't switch)
     "silence": False,        # trim dead air with auto-editor (talk content)
+    "caption_check": True,   # a second, already-downloaded model double-checks captions (more CPU per reel)
     "fps": 30,               # 30, or 60 to keep smooth motion from 50/60 fps sources (gameplay)
 }
 
@@ -201,6 +202,7 @@ class Settings:
 
 def validate_clip(clip: dict[str, Any]) -> None:
     clip.setdefault("model_other", "small")
+    clip["caption_check"] = bool(clip.get("caption_check", True))
     try:
         clip["fps"] = int(clip.get("fps") or 30)
     except (TypeError, ValueError) as e:

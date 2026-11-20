@@ -76,6 +76,7 @@ export function render(state) {
     $("#uploads_every").value = state.settings.uploads_every || "5";
     $("#cookies_browser").value = state.settings.cookies_browser || "";
     $("#cpu_mode").value = state.settings.cpu_mode || "balanced";
+    $("#caption_check").checked = state.settings.clip?.caption_check !== false;
     drawUploads();
     const ai = state.settings.ai || {};
     $("#ai-provider").value = ai.provider || "off";
@@ -119,6 +120,12 @@ export function mount() {
     e.target.value = "";
   });
   $("#yt-remove").addEventListener("click", (e) => busy(e.currentTarget, async () => drawSignIn(await api.ytRemoveCookies())));
+  $("#caption_check").addEventListener("change", async (e) => {
+    try {
+      store.set({ settings: await api.saveSettings({ clip: { caption_check: e.target.checked } }) });
+      toast(e.target.checked ? "Captions get a second opinion" : "Caption double-check off");
+    } catch (err) { showError(err); }
+  });
   $("#cpu_mode").addEventListener("change", async (e) => {
     try {
       store.set({ settings: await api.saveSettings({ cpu_mode: e.target.value }) });

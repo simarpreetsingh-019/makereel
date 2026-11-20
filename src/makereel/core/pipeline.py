@@ -205,12 +205,22 @@ def similar(a: str, b: str) -> bool:
     return x == y or (bool(x) and bool(y) and SequenceMatcher(None, x, y).ratio() >= SAME_WORD)
 
 
-def align(words: list[dict], other: list[dict]) -> list[dict]:
+def align(words: list[dict], other: list[dict], window: float = 0.6) -> list[dict]:
     """Line two transcripts of the same audio up word by word, whatever their script (भाई = bhai).
 
     One row per caption word: {"word", "alt", "ok"}. ok=False marks words the other model heard differently
-    ("alt" is its version; "" when it heard nothing there). Used for the side-by-side check in the editor.
+    ("alt" is its version; "" when it heard nothing there). With timings on both sides, each word is compared
+    with what the other model heard at the same moment (no drift when they split speech differently);
+    without timings, by word order.
     """
+    if words and other and all("start" in w for w in words) and all("start" in w for w in other):
+        rows = []
+        for w in words:
+            near = [o for o in other if abs(o["start"] - w["start"]) <= window]
+            hit = next((o for o in near if similar(w["word"], o["word"])), None)
+            best = hit or (min(near, key=lambda o: abs(o["start"] - w["start"])) if near else None)
+            rows.append({"word": w["word"], "alt": best["word"] if best else "", "ok": hit is not None})
+        return rows
     from difflib import SequenceMatcher
     a, b = [_norm(w["word"]) for w in words], [_norm(w["word"]) for w in other]
     rows = [{"word": w["word"], "alt": "", "ok": False} for w in words]
@@ -219,11 +229,9 @@ def align(words: list[dict], other: list[dict]) -> list[dict]:
             for k in range(i2 - i1):
                 rows[i1 + k].update(alt=other[j1 + k]["word"], ok=True)
         elif tag == "replace":
-            for k in range(i2 - i1):          # pair them up in order; leftovers on either side stay unmatched
-                j = j1 + round(k * (j2 - j1) / max(1, i2 - i1))
-                if j < j2:
-                    rows[i1 + k]["alt"] = other[j]["word"]
-                    rows[i1 + k]["ok"] = similar(words[i1 + k]["word"], other[j]["word"])
+            for k in range(min(i2 - i1, j2 - j1)):     # pair in order; no word is reused
+                rows[i1 + k].update(alt=other[j1 + k]["word"],
+                                    ok=similar(words[i1 + k]["word"], other[j1 + k]["word"]))
     return rows
 
 
@@ -255,16 +263,18 @@ def synced_words(clip_file: Path, section: tuple[float, float], source_words: li
         mine = [{**w, "start": round(w["start"] - clip_start, 2), "end": round(w["end"] - clip_start, 2)}
                 for w in yt if 0 <= w["start"] - clip_start < length]
         if mine:
+            checker = (transcribe.checker_for("youtube", clip.get("language")) if clip.get("caption_check", True)
+                       else None) or clip["model"]
             try:
-                check = transcribe.words_in(clip_file, off, off + length, clip["model"], clip["language"])
+                check = transcribe.words_in(clip_file, off, off + length, checker, clip["language"])
             except MediaError:
                 check = []
             check = [{**w, "start": w["start"] - off, "end": w["end"] - off} for w in check]
             score = agreement(mine, check) if check else 1.0
             if len(check) < 8 or score >= 0.15:
-                log.info("   captions: YouTube's (%d%% match with the local check)", round(score * 100))
+                log.info("   captions: YouTube's (%d%% match with the %s model)", round(score * 100), checker)
                 if report is not None and check:
-                    report.update(source="youtube", checker=clip["model"], agree=round(score * 100),
+                    report.update(source="youtube", checker=checker, agree=round(score * 100),
                                   other=[{"start": round(w["start"], 2), "word": w["word"]} for w in check])
                 return language.romanize_words(mine) if mode == "roman" else mine
             log.info("   YouTube's captions don't match this reel (%d%%); using the local ones", round(score * 100))
@@ -282,7 +292,27 @@ def synced_words(clip_file: Path, section: tuple[float, float], source_words: li
         precise = []
     words = precise or [{**w, "start": w["start"] - clip_start, "end": w["end"] - clip_start}
                         for w in source_words if w["start"] >= clip_start]
+    if precise and report is not None and clip.get("caption_check", True) and not translate:
+        _second_opinion(clip_file, section, words, clip, mode, report)
     return language.romanize_words(words) if mode == "roman" else words
+
+
+def _second_opinion(clip_file: Path, section: tuple[float, float], words: list[dict], clip: dict, mode: str,
+                    report: dict) -> None:
+    """A different model listens to the same reel; the editor shows where the two disagree (in yellow)."""
+    off, length = section
+    main = transcribe.model_for(clip["model"], clip.get("language"), clip.get("model_other", "small"), mode)
+    checker = transcribe.checker_for(main, clip.get("language"))
+    if not checker:
+        return
+    try:
+        other = transcribe.words_in(clip_file, off, off + length, checker, clip.get("language"), precise=True)
+    except MediaError:
+        return
+    other = [{"start": round(w["start"] - off, 2), "word": w["word"]} for w in other]
+    score = agreement(words, other) if other else 0.0
+    log.info("   caption check: %d%% match with the %s model", round(score * 100), checker)
+    report.update(source="local", checker=checker, agree=round(score * 100), other=other)
 
 
 def _apply_judge(cands: list[highlights.Clip], ai: dict, profile: str) -> None:

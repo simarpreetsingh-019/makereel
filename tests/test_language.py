@@ -94,3 +94,12 @@ def test_align_marks_only_real_disagreements():
     rows = align(a, b)
     assert [r["ok"] for r in rows] == [True] * 6 + [False]
     assert rows[-1]["alt"] == "mausam"
+
+
+def test_align_by_time_does_not_drift():
+    from makereel.core.pipeline import align
+    a = [{"word": "भाई", "start": 0.0}, {"word": "ब्रान", "start": 1.0}, {"word": "को", "start": 1.4}]
+    b = [{"word": "bhai", "start": 0.1}, {"word": "know", "start": 1.0}, {"word": "steel", "start": 1.3},
+         {"word": "ko", "start": 1.5}]
+    rows = align(a, b)
+    assert [r["ok"] for r in rows] == [True, False, True] and rows[1]["alt"] == "know"
