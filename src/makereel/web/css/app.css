@@ -307,3 +307,12 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .heat-warm { color: var(--warn); font-weight: 600; }
 .heat-hot { color: var(--accent); font-weight: 600; }
 .load-note { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; flex-direction: row !important; }
+
+/* side-by-side caption check */
+.cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cmp-col { font-size: 13px; line-height: 1.9; max-height: 220px; overflow: auto; padding: 8px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--soft); }
+.cmp-bad { background: color-mix(in srgb, #f5c400 45%, transparent); border-radius: 4px; padding: 0 3px; }
+.cmp-pick { border: 0; font: inherit; cursor: pointer; color: inherit; }
+.cmp-used { background: color-mix(in srgb, var(--ok) 35%, transparent); border-radius: 4px; padding: 0 3px; border: 0; font: inherit; }
+@media (max-width: 640px) { .cmp { grid-template-columns: 1fr; } }

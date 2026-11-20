@@ -123,7 +123,8 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
     with stage("render"):
         render.cut_source(video, s0, e0, src, int(clip.get("fps", 30)))
     with stage("sync"):
-        words = synced_words(src, section, c.words, c.start, clip, mode, yt)
+        check: dict = {}
+        words = synced_words(src, section, c.words, c.start, clip, mode, yt, check)
     # the title comes from the precise words (the first, fast pass is rougher, more so outside English)
     hook_original = c.ai.get("title") or make_hook(" ".join(w["word"] for w in words) if mode == "original"
                                                    and words else c.text)
@@ -147,7 +148,8 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
             "logo": True, "exports": {}, "score": round(c.score, 2), "why": c.reasons, "hook": hook,
             "hook_original": hook_original, "language": clip.get("language"),
             "ai": c.ai or None,
-            "start": c.start, "end": c.end, **credits(meta, c.start, clip["profile"], hook, brand)}
+            "start": c.start, "end": c.end, "caption_check": check or None,
+            **credits(meta, c.start, clip["profile"], hook, brand)}
     (out_dir / f"{name}.json").write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
     log.info("   %s  %.1f-%.1fs  score %.2f  %s", name, c.start, c.end, c.score, c.reasons)
     return post
@@ -180,6 +182,51 @@ def caption_hook(hook: str, words: list[dict], mode: str) -> str:
     return hook
 
 
+def _norm(word: str) -> str:
+    from anyascii import anyascii
+    return anyascii(word).lower().strip(".,!?\"'।:;-")
+
+
+SAME_WORD = 0.6   # spelling similarity above which two words count as the same word (hamare / hamaare)
+
+
+def _sounds(word: str) -> str:
+    """Rough sound of a word for comparing spellings across scripts and romanizations."""
+    w = _norm(word)
+    for a, b in (("aa", "a"), ("ee", "i"), ("oo", "u"), ("ii", "i"), ("w", "v"), ("ph", "f"), ("z", "j"),
+                 ("q", "k"), ("y", "i")):
+        w = w.replace(a, b)
+    return w
+
+
+def similar(a: str, b: str) -> bool:
+    from difflib import SequenceMatcher
+    x, y = _sounds(a), _sounds(b)
+    return x == y or (bool(x) and bool(y) and SequenceMatcher(None, x, y).ratio() >= SAME_WORD)
+
+
+def align(words: list[dict], other: list[dict]) -> list[dict]:
+    """Line two transcripts of the same audio up word by word, whatever their script (भाई = bhai).
+
+    One row per caption word: {"word", "alt", "ok"}. ok=False marks words the other model heard differently
+    ("alt" is its version; "" when it heard nothing there). Used for the side-by-side check in the editor.
+    """
+    from difflib import SequenceMatcher
+    a, b = [_norm(w["word"]) for w in words], [_norm(w["word"]) for w in other]
+    rows = [{"word": w["word"], "alt": "", "ok": False} for w in words]
+    for tag, i1, i2, j1, j2 in SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+        if tag == "equal":
+            for k in range(i2 - i1):
+                rows[i1 + k].update(alt=other[j1 + k]["word"], ok=True)
+        elif tag == "replace":
+            for k in range(i2 - i1):          # pair them up in order; leftovers on either side stay unmatched
+                j = j1 + round(k * (j2 - j1) / max(1, i2 - i1))
+                if j < j2:
+                    rows[i1 + k]["alt"] = other[j]["word"]
+                    rows[i1 + k]["ok"] = similar(words[i1 + k]["word"], other[j]["word"])
+    return rows
+
+
 def agreement(a: list[dict], b: list[dict]) -> float:
     """Share of words two transcripts have in common, script-independent (हाँ and haan match)."""
     from anyascii import anyascii
@@ -191,7 +238,8 @@ def agreement(a: list[dict], b: list[dict]) -> float:
 
 
 def synced_words(clip_file: Path, section: tuple[float, float], source_words: list[dict], clip_start: float,
-                 clip: dict, mode: str = "original", yt: list[dict] | None = None) -> list[dict]:
+                 clip: dict, mode: str = "original", yt: list[dict] | None = None,
+                 report: dict | None = None) -> list[dict]:
     """Caption timings measured on the finished clip itself (auto-sync).
 
     The first transcription ran on the long source with fast settings; cutting and re-encoding can
@@ -215,6 +263,9 @@ def synced_words(clip_file: Path, section: tuple[float, float], source_words: li
             score = agreement(mine, check) if check else 1.0
             if len(check) < 8 or score >= 0.15:
                 log.info("   captions: YouTube's (%d%% match with the local check)", round(score * 100))
+                if report is not None and check:
+                    report.update(source="youtube", checker=clip["model"], agree=round(score * 100),
+                                  other=[{"start": round(w["start"], 2), "word": w["word"]} for w in check])
                 return language.romanize_words(mine) if mode == "roman" else mine
             log.info("   YouTube's captions don't match this reel (%d%%); using the local ones", round(score * 100))
     try:

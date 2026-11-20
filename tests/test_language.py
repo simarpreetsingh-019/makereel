@@ -85,3 +85,12 @@ def test_caption_agreement_ignores_script():
     a = [{"word": "भाई"}, {"word": "GTA5"}, {"word": "मिशन"}]
     b = [{"word": "bhai"}, {"word": "gta5"}, {"word": "mission"}]
     assert agreement(a, b) > 0.3
+
+
+def test_align_marks_only_real_disagreements():
+    from makereel.core.pipeline import align
+    a = [{"word": w} for w in "भाई हमारे लिए बहुत मोमेंट है मिशन".split()]
+    b = [{"word": w} for w in "bhai hamare liye bahut moment hai mausam".split()]
+    rows = align(a, b)
+    assert [r["ok"] for r in rows] == [True] * 6 + [False]
+    assert rows[-1]["alt"] == "mausam"

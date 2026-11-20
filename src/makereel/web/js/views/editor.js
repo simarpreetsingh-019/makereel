@@ -33,6 +33,17 @@ export async function openEditor(folder, name, onSaved, tab = "text") {
   }
 }
 
+// Side-by-side caption check: the captions next to a second model's words, disagreements in yellow.
+function fillCompare(cmp) {
+  $("#ed-compare").hidden = !cmp;
+  if (!cmp) return;
+  $("#ed-compare-sum").textContent = `Check captions: ${cmp.agree}% match (${cmp.captions_from} vs the ${cmp.checked_by})`;
+  $("#ed-cmp-b-title").textContent = `Heard by the ${cmp.checked_by}`;
+  $("#ed-cmp-a").innerHTML = cmp.rows.map((r, i) => `<span class="${r.ok ? "" : "cmp-bad"}" data-i="${i}">${esc(r.word)}</span>`).join(" ");
+  $("#ed-cmp-b").innerHTML = cmp.rows.map((r, i) => r.ok ? `<span>${esc(r.alt)}</span>`
+    : `<button type="button" class="cmp-bad cmp-pick" data-i="${i}" title="Use this word">${esc(r.alt || "—")}</button>`).join(" ");
+}
+
 function fill(reel) {
   cur.reel = reel;
   cur.words = reel.words.map((w) => ({ ...w }));
@@ -41,6 +52,7 @@ function fill(reel) {
   $("#ed-download").href = media(reel.download);
   $("#ed-hook").value = reel.hook || "";
   $("#ed-transcript").value = reel.transcript;
+  fillCompare(reel.compare);
   $("#ed-caption").value = reel.caption || "";
   $("#ed-ass").value = reel.ass;
   $("#ed-logo").checked = reel.logo !== false;
@@ -574,6 +586,17 @@ export function mount() {
       e.target.disabled = false;
       fillScript();
     }
+  });
+  $("#ed-cmp-b").addEventListener("click", (e) => {
+    const b = e.target.closest(".cmp-pick");
+    if (!b || !b.textContent || b.textContent === "—") return;
+    const tokens = $("#ed-transcript").value.trim().split(/\s+/);
+    if (tokens.length !== cur.reel.compare.rows.length) return toast("You've already edited the words; change this one by hand");
+    tokens[Number(b.dataset.i)] = b.textContent;
+    $("#ed-transcript").value = tokens.join(" ");
+    $("#ed-transcript").dispatchEvent(new Event("input"));
+    b.classList.remove("cmp-bad"); b.classList.add("cmp-used");
+    toast("Word replaced. Press Save to re-render.");
   });
   $("#ed-save").addEventListener("click", (e) => {
     const c = textChanges();

@@ -201,7 +201,23 @@ def get_reel(folder: str, name: str) -> dict:
             "language": _language(d, post), "script": language.script_of(" ".join(w["word"] for w in words)),
             "can_trim": bool(sec), "length": sec[1] if sec else captions.length_of(ass_text),
             "room_before": sec[0] if sec else 0.0,
-            "room_after": max(0.0, src_len - sec[0] - sec[1]) if sec else 0.0}
+            "room_after": max(0.0, src_len - sec[0] - sec[1]) if sec else 0.0,
+            "compare": _compare(post, words)}
+
+
+def _compare(post: dict, words: list[dict]) -> dict | None:
+    """The side-by-side caption check: caption words lined up with the second model's words."""
+    from ..core.pipeline import align
+    check = post.get("caption_check") or {}
+    other = check.get("other")
+    if not other or not words:
+        return None
+    rows = align(words, other)
+    ok = sum(r["ok"] for r in rows)
+    names = {"youtube": "YouTube's captions", "local": "makereel's captions"}
+    return {"captions_from": names.get(check.get("source"), check.get("source")),
+            "checked_by": f"{check.get('checker', 'local')} model", "agree": round(100 * ok / len(rows)),
+            "rows": rows}
 
 
 # --------------------------------------------------------------------------- helpers

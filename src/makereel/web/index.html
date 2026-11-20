@@ -359,6 +359,12 @@
         <textarea id="ed-transcript" class="transcript" rows="6" spellcheck="true"></textarea>
         <span class="hint" style="margin:0">Fix any word right here. Words you don't touch keep their exact timing; edited, added or removed words are fitted around them.</span>
       </label>
+      <details id="ed-compare" hidden>
+        <summary id="ed-compare-sum"></summary>
+        <p class="hint" style="margin:6px 0">Yellow = the two disagree. Click a yellow word on the right to use that version, then Save.</p>
+        <div class="cmp"><div><b class="hint">Captions now</b><div id="ed-cmp-a" class="cmp-col"></div></div>
+          <div><b class="hint" id="ed-cmp-b-title">Other model</b><div id="ed-cmp-b" class="cmp-col"></div></div></div>
+      </details>
       <div class="row">
         <label class="btn small">Import subtitles or transcript<input type="file" id="ed-import" accept=".srt,.vtt,.txt,text/plain" hidden></label>
         <button class="btn small" id="ed-srt" type="button">Download .srt</button>
