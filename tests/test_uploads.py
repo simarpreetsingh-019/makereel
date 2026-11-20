@@ -101,6 +101,9 @@ def test_ydl_opts_with_and_without_browser_sign_in(monkeypatch):
     assert "cookiesfrombrowser" not in sources.ydl_opts()
     signed_in = real().__class__({**real().data, "cookies_browser": "chrome"})
     monkeypatch.setattr(config, "load_settings", lambda *a: signed_in)
+    monkeypatch.setattr(sources, "_browser_readable", lambda b: False)
+    assert "cookiesfrombrowser" not in sources.ydl_opts()      # unreadable: skipped, so requests still work
+    monkeypatch.setattr(sources, "_browser_readable", lambda b: True)
     assert sources.ydl_opts()["cookiesfrombrowser"] == ("chrome",)
     assert "--cookies-from-browser" in sources.live_chat_command("https://youtu.be/x", __import__("pathlib").Path("c"))
 
