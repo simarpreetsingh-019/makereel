@@ -44,3 +44,18 @@ def test_update_check_off_means_no_request(tmp_path, monkeypatch):
     info = updates.check()                          # turned off: no request to GitHub at all
     assert info["available"] is False and called == []
     assert info["repo"] == "simarpreetsingh-019/makereel"
+
+
+def test_hinglish_routing():
+    mf = transcribe.model_for
+    assert mf("distil-large-v3", "hi", "hinglish") == "hinglish"            # Hindi speech -> Hinglish
+    assert mf("distil-large-v3", "en", "hinglish") == "distil-large-v3"     # English stays on the English model
+    assert mf("base", "hi", "hinglish", "original") != "hinglish"           # Hindi script wanted: not Hinglish
+    assert mf("base", "ta", "hinglish") != "hinglish"                       # Tamil: Hinglish model can't
+
+
+def test_indian_focus_suggests_hinglish(monkeypatch):
+    monkeypatch.setattr(models, "installed", lambda name: False)
+    assert models.recommend(pc(16), "indian")["model_other"] == "hinglish"
+    assert models.recommend(pc(4), "indian")["model_other"] == "hinglish-lite"
+    assert models.source("hinglish").endswith("-ct2") and models.source("small") == "small"

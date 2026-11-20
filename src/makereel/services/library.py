@@ -428,7 +428,7 @@ def _fresh_words(d: Path, post: dict, section: tuple[float, float] | None, mode:
     clip = load_settings().clip
     mode = mode or branding.script_mode(load_settings().brand, post.get("look"))
     lang = _language(d, post)
-    model = transcribe.model_for(clip["model"], lang, clip.get("model_other", "small"))
+    model = transcribe.model_for(clip["model"], lang, clip.get("model_other", "small"), mode)
     task = "translate" if mode == "english" and lang not in (None, "en") else "transcribe"
     if section is None:
         words = transcribe.words_in_file(d / post["raw"], model, lang, task)

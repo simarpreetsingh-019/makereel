@@ -31,9 +31,18 @@ CATALOG: dict[str, dict] = {
                                 "Hindi streams use the other model."},
     "large-v3": {"label": "Large v3", "size_gb": 3.1, "ram_gb": 10, "english_only": False, "translate": True,
                  "note": "The most accurate for Hindi and mixed Hindi-English. Best with an NVIDIA GPU."},
+    "hinglish": {"label": "Hinglish", "size_gb": 0.8, "ram_gb": 4, "english_only": False, "translate": False,
+                 "note": "Hindi + English speech written in English letters (\"bhai anyway…\"): English words stay "
+                         "English. Best for Indian streamers. Fast with an NVIDIA GPU."},
+    "hinglish-lite": {"label": "Hinglish lite", "size_gb": 0.08, "ram_gb": 1, "english_only": False,
+                      "translate": False, "note": "A tiny Hinglish model for small computers. Rougher words."},
 }
+# Hinglish models (Oriserve's Hindi2Hinglish, Apache-2.0), converted for the speech engine by the community.
+REPOS = {"hinglish": "abhayhadez/anchor-hinglish-apex-ct2",
+         "hinglish-lite": "MSpider3/whisper-hindi2hinglish-swift-ct2"}
+HINGLISH = tuple(REPOS)
 ENGLISH_CHOICES = ("base", "small", "medium", "distil-large-v3", "large-v3")
-OTHER_CHOICES = ("small", "medium", "large-v3")
+OTHER_CHOICES = ("small", "medium", "large-v3", "hinglish", "hinglish-lite")
 FOCUS = ("english", "indian", "both")
 
 
@@ -96,6 +105,9 @@ def recommend(pc: dict, focus: str = "both") -> dict:
     if focus == "indian":
         # Indian streamers still speak English now and then: keep a decent English model, spend the space on Hindi
         english = "small" if english == "distil-large-v3" and vram < 6 else english
+        # Hinglish: Hindi and English speech written in English letters, English words kept as English
+        other = "hinglish" if vram >= 4 or ram >= 8 else "hinglish-lite"
+        why += "; Hinglish model for Hindi-English speech"
     needed = sum(CATALOG[m]["size_gb"] for m in {english, other} if not installed(m))
     return {"model": english, "model_other": other, "device": "gpu" if vram >= 4 else "cpu", "why": why,
             "download_gb": round(needed, 1), "fits_disk": needed + 2 < pc["free_disk_gb"], "focus": focus}
@@ -103,14 +115,21 @@ def recommend(pc: dict, focus: str = "both") -> dict:
 
 # --------------------------------------------------------------------------- downloads
 def _repo(name: str) -> str:
+    if name in REPOS:
+        return REPOS[name]
     from faster_whisper.utils import _MODELS
     return _MODELS[name]
+
+
+def source(name: str) -> str:
+    """What to hand the speech engine for this model: its name, or its repository for the Hinglish ones."""
+    return REPOS.get(name, name)
 
 
 def installed(name: str) -> bool:
     try:                                  # faster-whisper fetches only the files it needs: ask it, not the hub
         from faster_whisper import download_model
-        return (Path(download_model(name, local_files_only=True)) / "model.bin").is_file()
+        return (Path(download_model(source(name), local_files_only=True)) / "model.bin").is_file()
     except Exception:  # noqa: BLE001 - not in the cache (or unknown)
         return False
 
@@ -143,7 +162,7 @@ def download(name: str) -> dict:
             _downloads[name] = {"state": "done"}
         elif _downloads.get(name, {}).get("state") != "downloading":
             code = "import sys; from faster_whisper import download_model; download_model(sys.argv[1])"
-            proc = subprocess.Popen([sys.executable, "-c", code, name],
+            proc = subprocess.Popen([sys.executable, "-c", code, source(name)],
                                     stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             _procs[name], _downloads[name] = proc, {"state": "downloading"}
 

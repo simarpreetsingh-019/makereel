@@ -63,7 +63,7 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand:
             curve, parts = highlights.signal_curve(n, loud, counts, clip["profile"])
             cands = highlights.candidates(curve, k=clip["max_clips"] * 3, max_len=clip["max_len"])
 
-    clip = resolve_language(video, [(c.start, c.end) for c in cands], clip)
+    clip = resolve_language(video, [(c.start, c.end) for c in cands], {**clip, "_mode": branding.script_mode(brand)})
     meta = {**meta, "language": clip["language"]}
     write_folder_info(out_dir, meta)
     yt = _youtube_words(meta, clip, brand)
@@ -164,7 +164,7 @@ def resolve_language(video: Path, windows: list[tuple[float, float]], clip: dict
                 log.info("   language: %s (%.0f%% sure)", lang, prob * 100)
         except MediaError as e:
             log.warning("   language detection skipped: %s", e.message)
-    model = transcribe.model_for(clip["model"], lang, clip.get("model_other", "small"))
+    model = transcribe.model_for(clip["model"], lang, clip.get("model_other", "small"), clip.get("_mode"))
     if model != clip["model"]:
         log.info("   using the '%s' speech model for %s (more accurate than '%s' outside English)",
                  model, lang, clip["model"])

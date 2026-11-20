@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from ..errors import MediaError
-from . import media
+from . import media, models
 
 log = logging.getLogger(__name__)
 
@@ -61,13 +61,14 @@ def _get(size: str):
         try:
             if device == "cuda":
                 try:
-                    _model = WhisperModel(size, device="cuda", compute_type="float16")
+                    _model = WhisperModel(models.source(size), device="cuda", compute_type="float16")
                 except Exception as e:  # noqa: BLE001 - driver / CUDA libraries / GPU memory: use the CPU
                     from . import gpu
                     gpu.mark_broken(str(e).split("\n")[0])
                     device, key = "cpu", f"{size}@{media.cpu_threads()}@cpu"
             if device == "cpu":
-                _model = WhisperModel(size, device="cpu", compute_type="int8", cpu_threads=media.cpu_threads())
+                _model = WhisperModel(models.source(size), device="cpu", compute_type="int8",
+                                      cpu_threads=media.cpu_threads())
         except Exception as e:  # noqa: BLE001 - network / disk / bad name
             raise MediaError(f"could not load speech model '{size}': {e}") from e
         _model_name = key
@@ -96,7 +97,8 @@ def _downloaded_multilingual() -> str | None:
     from . import models
     other = load_settings().clip.get("model_other")
     for name in (other, "small", "medium", "large-v3", "base"):
-        if name and name in models.CATALOG and name not in ENGLISH_ONLY and models.installed(name):
+        if (name and name in models.CATALOG and name not in ENGLISH_ONLY and not _hinglish(name)
+                and models.installed(name)):
             return name
     return None
 
@@ -107,7 +109,7 @@ def detect_language(video: Path, windows: list[tuple[float, float]], size: str =
     Detecting once per video (instead of per clip) keeps every reel of a video in the same
     language and script, which matters for mixed speech like Hinglish.
     """
-    if size in ENGLISH_ONLY:            # an English-only model always "hears" English
+    if size in ENGLISH_ONLY or _hinglish(size):   # these always "hear" English: detect with a normal model
         size = _downloaded_multilingual() or "small"
     audio = np.concatenate([_pcm(video, s, min(e, s + 30)) for s, e in windows[:3]] or [np.zeros(0, np.float32)])
     if len(audio) < 16000 * 2:
@@ -130,6 +132,8 @@ def words_in(video: Path, start: float, end: float, size: str = "base",
     audio = _pcm(video, start, end)
     if len(audio) < 16000:  # under a second: nothing worth transcribing
         return []
+    if _hinglish(size):     # Hinglish models write Hindi + English in English letters, in their "en" mode
+        language, task = "en", "transcribe"
     with _lock:
         def run(model):      # the segments are produced lazily: a GPU error shows up while reading them
             segments, _ = model.transcribe(
@@ -185,6 +189,9 @@ def words_by_sentence(video: Path, start: float, end: float, size: str, primary:
     primary = primary or "en"
     allowed = allowed or {primary, "en"}
     detector = model_for(size, primary if primary != "en" else "hi", other)   # a multilingual model
+    if _hinglish(detector) and primary == "hi":
+        # a Hinglish model handles Hindi and English in one pass, mid-sentence switches included
+        return [{**w, "lang": "hi"} for w in words_in(video, start, end, detector, "en", precise=True)]
     words: list[dict] = []
     current = primary
     with _lock:
@@ -216,7 +223,21 @@ RANK = ("tiny", "base", "small", "medium", "distil-large-v3", "large-v3")
 ENGLISH_ONLY = ("distil-large-v3",)
 
 
-def model_for(size: str, language: str | None, other: str) -> str:
+def _hinglish(name: str | None) -> bool:
+    from .models import HINGLISH
+    return name in HINGLISH
+
+
+def model_for(size: str, language: str | None, other: str, mode: str | None = None) -> str:
+    """See _model_for; a Hinglish model only writes English letters, so captions in Hindi script
+    (mode "original") get a normal multilingual model instead."""
+    chosen = _model_for(size, language, other)
+    if _hinglish(chosen) and (language not in (None, "hi") or mode == "original"):
+        return _downloaded_multilingual() or "small"
+    return chosen
+
+
+def _model_for(size: str, language: str | None, other: str) -> str:
     """The speech model for this language: `size` for English, `other` for Hindi and the rest.
 
     An English-only model can't hear Hindi at all, and small sizes are weak outside English, so for
@@ -224,6 +245,8 @@ def model_for(size: str, language: str | None, other: str) -> str:
     """
     if not language or language == "en" or other == "same":
         return size if size not in ENGLISH_ONLY or not language or language == "en" else "small"
+    if _hinglish(other):
+        return other if language == "hi" else (size if size not in ENGLISH_ONLY else "small")
     if size in ENGLISH_ONLY or RANK.index(other) > RANK.index(size):
         return other
     return size
