@@ -70,3 +70,18 @@ def test_look_script_validation():
         pass
     else:
         raise AssertionError
+
+
+def test_language_switch_needs_a_clear_win():
+    from makereel.core import transcribe
+    pick = transcribe.pick_language
+    assert pick([("en", 0.9), ("hi", 0.05)], "hi", {"hi", "en"}, "hi") == "en"       # clearly English
+    assert pick([("en", 0.5), ("hi", 0.4)], "hi", {"hi", "en"}, "hi") == "hi"        # unsure: stay
+    assert pick([("fr", 0.9), ("hi", 0.05)], "hi", {"hi", "en"}, "hi") == "hi"       # not allowed: stay
+
+
+def test_caption_agreement_ignores_script():
+    from makereel.core.pipeline import agreement
+    a = [{"word": "भाई"}, {"word": "GTA5"}, {"word": "मिशन"}]
+    b = [{"word": "bhai"}, {"word": "gta5"}, {"word": "mission"}]
+    assert agreement(a, b) > 0.3

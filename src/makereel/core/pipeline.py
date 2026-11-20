@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 
 from ..errors import MediaError
-from . import branding, captions, highlights, judge, language, media, render, signals, transcribe
+from . import branding, captions, highlights, judge, language, media, render, signals, sources, transcribe
 from .metrics import stage
 
 log = logging.getLogger(__name__)
@@ -66,11 +66,14 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand:
     clip = resolve_language(video, [(c.start, c.end) for c in cands], clip)
     meta = {**meta, "language": clip["language"]}
     write_folder_info(out_dir, meta)
-    log.info("[2/3] transcribing %d candidate windows (whisper %s)", len(cands), clip["model"])
+    yt = _youtube_words(meta, clip, brand)
+    log.info("[2/3] %s %d candidate windows", "reading YouTube's captions for" if yt
+             else f"transcribing (whisper {clip['model']})", len(cands))
     for c in cands:
         with stage("transcribe"):
-            words = transcribe.words_in(video, max(0, c.start - 6), min(total, c.end + 8),
-                                        clip["model"], clip["language"])
+            lo, hi = max(0, c.start - 6), min(total, c.end + 8)
+            words = ([w for w in yt if lo <= w["start"] < hi] if yt
+                     else transcribe.words_in(video, lo, hi, clip["model"], clip["language"]))
         highlights.rescore(c, words, parts, clip["profile"])
     if ai and judge.enabled(ai):
         with stage("judge"):
@@ -81,7 +84,7 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand:
     results = []
     for c in best:
         try:
-            results.append(_render_one(video, c, meta, out_dir, clip, brand, total))
+            results.append(_render_one(video, c, meta, out_dir, clip, brand, total, yt))
         except MediaError as e:  # one bad clip shouldn't lose the others
             log.error("   reel at %.0fs failed: %s", c.start, e.message)
     if best and not results:
@@ -89,8 +92,23 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand:
     return results
 
 
+def _youtube_words(meta: dict, clip: dict, brand: dict) -> list[dict] | None:
+    """YouTube's captions on this file's clock, for finished YouTube videos (not while live, not when
+    translating to English: those keep the local model)."""
+    if meta.get("live_status") == "is_live" or not clip.get("youtube_captions", True):
+        return None
+    if branding.script_mode(brand) == "english" and clip.get("language") not in (None, "en"):
+        return None
+    words = sources.youtube_captions(meta.get("url") or "", clip.get("language"))
+    if not words:
+        return None
+    off = float(meta.get("offset") or 0.0)
+    return [{**w, "start": round(w["start"] - off, 2), "end": round(w["end"] - off, 2), "src": "youtube"}
+            for w in words if w["start"] >= off]
+
+
 def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip: dict, brand: dict,
-                total: float) -> dict:
+                total: float, yt: list[dict] | None = None) -> dict:
     highlights.snap(c, clip["min_len"], clip["max_len"], total)
     with stage("scenes"):
         cuts = signals.scene_cuts(video, c.start, c.start + 3)
@@ -105,7 +123,7 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
     with stage("render"):
         render.cut_source(video, s0, e0, src, int(clip.get("fps", 30)))
     with stage("sync"):
-        words = synced_words(src, section, c.words, c.start, clip, mode)
+        words = synced_words(src, section, c.words, c.start, clip, mode, yt)
     # the title comes from the precise words (the first, fast pass is rougher, more so outside English)
     hook_original = c.ai.get("title") or make_hook(" ".join(w["word"] for w in words) if mode == "original"
                                                    and words else c.text)
@@ -162,8 +180,18 @@ def caption_hook(hook: str, words: list[dict], mode: str) -> str:
     return hook
 
 
+def agreement(a: list[dict], b: list[dict]) -> float:
+    """Share of words two transcripts have in common, script-independent (हाँ and haan match)."""
+    from anyascii import anyascii
+
+    def norm(ws):
+        return {anyascii(w["word"]).lower().strip(".,!?\"'") for w in ws if w["word"].strip()}
+    x, y = norm(a), norm(b)
+    return len(x & y) / max(1, min(len(x), len(y)))
+
+
 def synced_words(clip_file: Path, section: tuple[float, float], source_words: list[dict], clip_start: float,
-                 clip: dict, mode: str = "original") -> list[dict]:
+                 clip: dict, mode: str = "original", yt: list[dict] | None = None) -> list[dict]:
     """Caption timings measured on the finished clip itself (auto-sync).
 
     The first transcription ran on the long source with fast settings; cutting and re-encoding can
@@ -172,10 +200,32 @@ def synced_words(clip_file: Path, section: tuple[float, float], source_words: li
     """
     off, length = section
     translate = mode == "english" and clip.get("language") not in (None, "en")
+    if yt:
+        # YouTube's captions for this reel (exact: same timeline as the download), double-checked with a
+        # quick local pass. If they barely match (wrong track), the local captions are used instead.
+        # reel time 0 = video time clip_start, so a word's reel time is its video time - clip_start
+        mine = [{**w, "start": round(w["start"] - clip_start, 2), "end": round(w["end"] - clip_start, 2)}
+                for w in yt if 0 <= w["start"] - clip_start < length]
+        if mine:
+            try:
+                check = transcribe.words_in(clip_file, off, off + length, clip["model"], clip["language"])
+            except MediaError:
+                check = []
+            check = [{**w, "start": w["start"] - off, "end": w["end"] - off} for w in check]
+            score = agreement(mine, check) if check else 1.0
+            if len(check) < 8 or score >= 0.15:
+                log.info("   captions: YouTube's (%d%% match with the local check)", round(score * 100))
+                return language.romanize_words(mine) if mode == "roman" else mine
+            log.info("   YouTube's captions don't match this reel (%d%%); using the local ones", round(score * 100))
     try:
-        precise = [{**w, "start": round(w["start"] - off, 2), "end": round(w["end"] - off, 2)}
-                   for w in transcribe.words_in(clip_file, off, off + length, clip["model"], clip["language"],
-                                                precise=True, task="translate" if translate else "transcribe")]
+        if not translate and clip.get("mixed_languages", True):
+            # language per sentence: Hindi stays Hindi, English stays English, within one reel
+            found = transcribe.words_by_sentence(clip_file, off, off + length, clip["model"], clip["language"],
+                                                 clip.get("model_other", "small"))
+        else:
+            found = transcribe.words_in(clip_file, off, off + length, clip["model"], clip["language"],
+                                        precise=True, task="translate" if translate else "transcribe")
+        precise = [{**w, "start": round(w["start"] - off, 2), "end": round(w["end"] - off, 2)} for w in found]
     except MediaError as e:
         log.warning("   caption sync skipped: %s", e.message)
         precise = []

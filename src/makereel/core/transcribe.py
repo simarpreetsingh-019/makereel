@@ -142,6 +142,70 @@ def words_in(video: Path, start: float, end: float, size: str = "base",
         return _with_fallback(size, run)
 
 
+SWITCH_SURE = 0.6       # switch away from the stream's language only when the model is at least this sure
+SHORT_SENTENCE = 1.5    # sentences shorter than this keep the previous sentence's language (too little to judge)
+
+
+def sentences(audio: np.ndarray, gap: float = 0.45, longest: float = 15.0) -> list[tuple[int, int]]:
+    """Speech in `audio` split at pauses into sentence-sized pieces (sample ranges)."""
+    from faster_whisper.vad import VadOptions, get_speech_timestamps
+    parts = get_speech_timestamps(audio, VadOptions(min_silence_duration_ms=int(gap * 1000), speech_pad_ms=150,
+                                                    max_speech_duration_s=longest))
+    out: list[list[int]] = []
+    for p in parts:
+        if out and p["start"] - out[-1][1] < gap * 16000 and p["end"] - out[-1][0] < longest * 16000:
+            out[-1][1] = p["end"]
+        else:
+            out.append([p["start"], p["end"]])
+    return [(a, b) for a, b in out]
+
+
+def pick_language(probs: list[tuple[str, float]], primary: str, allowed: set[str], previous: str) -> str:
+    """The sentence's language among the allowed ones; stays on `previous` unless clearly another."""
+    scores = {lang: p for lang, p in probs if lang in allowed}
+    if not scores:
+        return previous
+    best = max(scores, key=scores.get)
+    if best != previous and scores[best] >= SWITCH_SURE and scores[best] > scores.get(previous, 0) * 2:
+        return best
+    return previous
+
+
+def words_by_sentence(video: Path, start: float, end: float, size: str, primary: str | None,
+                      other: str = "small", allowed: set[str] | None = None) -> list[dict]:
+    """Captions for speech that switches language between sentences (Hindi, then English, then Hindi):
+    each sentence is detected and transcribed in its own language, with the model suited to it.
+
+    Only `allowed` languages are considered (by default the stream's language and English), so game
+    noise can't come out as a random language. Each word carries its "lang".
+    """
+    audio = _pcm(video, start, end)
+    if len(audio) < 16000:
+        return []
+    primary = primary or "en"
+    allowed = allowed or {primary, "en"}
+    detector = model_for(size, primary if primary != "en" else "hi", other)   # a multilingual model
+    words: list[dict] = []
+    current = primary
+    with _lock:
+        for a, b in sentences(audio):
+            chunk = audio[a:b]
+            if (b - a) / 16000 >= SHORT_SENTENCE and len(allowed) > 1:
+                _, _, probs = _with_fallback(detector, lambda m, c=chunk: m.detect_language(c))
+                current = pick_language(probs, primary, allowed, current)
+
+            def run(model, c=chunk, lang=current):
+                segs, _ = model.transcribe(c, word_timestamps=True, language=lang, beam_size=5,
+                                           condition_on_previous_text=False)
+                return [w for s in segs for w in (s.words or [])]
+            for w in _with_fallback(detector, run):   # one multilingual model for every sentence (no reloads)
+                if w.word.strip():
+                    words.append({"start": round(float(w.start) + start + a / 16000, 2),
+                                  "end": round(float(w.end) + start + a / 16000, 2),
+                                  "word": w.word.strip(), "lang": current})
+    return words
+
+
 def words_in_file(video: Path, size: str = "base", language: str | None = None,
                   task: str = "transcribe") -> list[dict]:
     """Precise word timings for a whole (short) file, e.g. a rendered reel."""

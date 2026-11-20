@@ -50,7 +50,32 @@ def ydl_opts() -> dict:
     if cookies_file().is_file():
         return {**BASE_OPTS, "cookiefile": str(cookies_file())}
     browser = cookies_browser()
-    return {**BASE_OPTS, **({"cookiesfrombrowser": (browser,)} if browser else {})}
+    if browser and _browser_readable(browser):
+        return {**BASE_OPTS, "cookiesfrombrowser": (browser,)}
+    return dict(BASE_OPTS)
+
+
+_readable: dict[str, tuple[bool, float]] = {}
+
+
+def _browser_readable(browser: str) -> bool:
+    """Can yt-dlp read this browser's sign-in? An unreadable one makes yt-dlp fail EVERY request, so
+    it's left out instead (checked once, then again every 10 minutes)."""
+    import time
+    ok, when = _readable.get(browser, (False, 0.0))
+    if time.time() - when < 600:
+        return ok
+    try:
+        with yt_dlp.YoutubeDL({**BASE_OPTS, "cookiesfrombrowser": (browser,)}) as ydl:
+            _ = ydl.cookiejar
+        ok = True
+    except Exception as e:  # noqa: BLE001
+        ok = False
+        log.warning("can't read %s's YouTube sign-in (%s); continuing without it. "
+                    "Settings → Test sign-in explains why.",
+                    browser.title(), ANSI.sub("", str(e)).replace("ERROR: ", "").split("\n")[0][:100])
+    _readable[browser] = (ok, time.time())
+    return ok
 
 
 # Other YouTube clients that are often not asked to prove they aren't a bot. Tried, in turn, when the
@@ -269,6 +294,56 @@ def download(url: str, out_dir: Path, section: str | None = None, chat: bool = T
     chat_file = out_dir / f"{info.id}.live_chat.json"
     (out_dir / f"{info.id}.meta.json").write_text(json.dumps(info.to_meta(), indent=2), encoding="utf-8")
     return Download(video, chat_file if chat_file.exists() else None, info)
+
+
+def youtube_captions(url: str, language: str | None) -> list[dict] | None:
+    """YouTube's own captions for a video as timed words ({start, end, word}, on the video's clock).
+
+    Prefers subtitles the creator uploaded, then YouTube's automatic captions of the original speech
+    ("hi-orig"), then the plain language track. None when there are none (Twitch/Kick, new videos, music).
+    """
+    if "youtube.com" not in url and "youtu.be" not in url:
+        return None
+    import urllib.request
+    try:
+        with yt_dlp.YoutubeDL({**ydl_opts(), "skip_download": True}) as ydl:
+            raw = ydl.extract_info(url, download=False) or {}
+    except Exception:  # noqa: BLE001 - captions are a bonus; never fail a job over them
+        return None
+    lang = (language or raw.get("language") or "en").split("-")[0]
+    manual, auto = raw.get("subtitles") or {}, raw.get("automatic_captions") or {}
+    # only the original speech: creator subtitles, YouTube's "-orig" track, or the plain track when the video
+    # really is in that language. Otherwise the plain track is a machine translation of another language.
+    spoken = (raw.get("language") or "").split("-")[0]
+    tracks = [manual.get(lang), auto.get(f"{lang}-orig"), auto.get(lang) if spoken == lang else None]
+    fmt = next((f for t in tracks if t for f in t if f.get("ext") == "json3"), None)
+    if not fmt:
+        return None
+    try:
+        req = urllib.request.Request(fmt["url"], headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read().decode("utf-8"))
+    except Exception:  # noqa: BLE001
+        return None
+    words = []
+    for ev in data.get("events") or []:
+        t0 = ev.get("tStartMs", 0)
+        for seg in ev.get("segs") or []:
+            text = (seg.get("utf8") or "").strip()
+            if text and text != "\n" and not text.startswith("["):     # skip [Music], [Applause]
+                words.append({"start": (t0 + seg.get("tOffsetMs", 0)) / 1000, "word": text})
+    words.sort(key=lambda w: w["start"])
+    for i, w in enumerate(words):   # YouTube gives start times; a word ends when the next starts (max 1 s)
+        nxt = words[i + 1]["start"] if i + 1 < len(words) else w["start"] + 0.6
+        w["end"] = round(min(nxt, w["start"] + 1.0), 2)
+        w["start"] = round(w["start"], 2)
+    minutes = max(1.0, (raw.get("duration") or 60) / 60)
+    if len(words) / minutes < 25:   # people speak 100+ words a minute: this track isn't the speech
+        log.info("   YouTube's %s captions are too sparse (%d words in %.0f min); using local captions",
+                 lang, len(words), minutes)
+        return None
+    log.info("   using YouTube's %s captions (%d words)", lang, len(words))
+    return words or None
 
 
 def live_chat_command(url: str, out_base: Path) -> list[str]:
