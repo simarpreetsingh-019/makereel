@@ -142,6 +142,10 @@
       <div class="card">
         <label class="switch" style="font-weight:400"><input type="checkbox" id="caption_check"> Double-check captions with a
           second speech model (one you've already downloaded). Disagreements show in yellow in Edit → Text.</label>
+        <label class="field" style="margin-top:10px">YouTube's own captions (finished YouTube videos)
+          <select id="youtube_captions"><option value="use">Use them as the reel's captions (makereel checks them)</option>
+            <option value="check">Only use them to check makereel's captions</option>
+            <option value="off">Don't use them</option></select></label>
         <label class="field" style="margin-top:10px">Names to keep exactly, for every creator (one per line)
           <textarea id="names" rows="3" placeholder="CarryMinati&#10;Mythpat&#10;Vice City"></textarea></label>
       </div>

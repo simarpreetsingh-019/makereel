@@ -253,13 +253,17 @@ def youtube_upgrade(folder: str) -> dict:
     yt = sources.youtube_captions(info.get("url") or "", info.get("language"))
     if not yt:
         return {"updated": 0, "status": "YouTube has no captions for this video yet"}
-    brand, updated, skipped = load_settings().brand, 0, 0
+    settings = load_settings()
+    only_check = (settings.clip or {}).get("youtube_captions", "use") == "check"   # keep makereel's, just flag
+    brand, updated, skipped = settings.brand, 0, 0
     for meta_file in sorted(d.glob("reel_*.json")):
         try:
             post = json.loads(meta_file.read_text(encoding="utf-8"))
         except ValueError:
             continue
-        if post.get("captions_edited") or post.get("captions_source") == "youtube" or "source_start" not in post:
+        if (post.get("captions_source") == "youtube" or "source_start" not in post
+                or (post.get("captions_edited") and not only_check)
+                or (only_check and (post.get("caption_check") or {}).get("checker") == "YouTube's captions")):
             skipped += 1
             continue
         current = (d / post["captions"]).read_text(encoding="utf-8")
@@ -279,6 +283,13 @@ def youtube_upgrade(folder: str) -> dict:
         if not best or best_score < 0.2:
             skipped += 1
             continue
+        if only_check:                                     # no re-render: the editor shows YouTube's words beside
+            post["caption_check"] = {"source": "local", "checker": "YouTube's captions",
+                                     "agree": round(best_score * 100),
+                                     "other": [{"start": w["start"], "word": w["word"]} for w in best]}
+            meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
+            updated += 1
+            continue
         mode = branding.script_mode(brand, post.get("look"))
         words = language.romanize_words(best) if mode == "roman" else best
         post["caption_check"] = {"source": "youtube", "checker": "makereel's live captions",
@@ -292,7 +303,8 @@ def youtube_upgrade(folder: str) -> dict:
         info["yt_captions_done"] = time.time()
         (d / FOLDER_FILE).write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")
     return {"updated": updated, "skipped": skipped,
-            "status": (f"{updated} reel now uses YouTube's captions" if updated == 1
+            "status": (f"Checked {updated} reel{'' if updated == 1 else 's'} against YouTube's captions" if only_check
+                       else f"{updated} reel now uses YouTube's captions" if updated == 1
                        else f"{updated} reels now use YouTube's captions")}
 
 

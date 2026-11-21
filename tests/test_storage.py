@@ -111,3 +111,36 @@ def test_creator_memory_and_suggestions():
     assert creators.channels() == ["Mythpat"]
     saved = creators.save("Mythpat", ["Vice City", " "], "GTA in Hinglish")
     assert saved["names"] == ["Vice City"] and creators.load("Mythpat")["notes"] == "GTA in Hinglish"
+
+
+def test_youtube_captions_check_only_keeps_makereel_captions(monkeypatch):
+    import json
+
+    from makereel import config
+    from makereel.core import captions, sources
+    from makereel.services import library
+    config.save_settings({"clip": {"youtube_captions": "check"}})
+    d = config.reels_dir() / "Live2"
+    d.mkdir(parents=True)
+    (d / "folder.json").write_text(json.dumps({"url": "https://www.youtube.com/watch?v=x", "recorded_live": True}))
+    words = [{"start": 10 + i, "end": 10.5 + i, "word": w} for i, w in enumerate(["hello", "there", "big", "world"])]
+    ass = captions.build_ass(words, 10.0, 15.0, "Title")
+    (d / "reel_01.ass").write_text(ass)
+    (d / "reel_01.json").write_text(json.dumps({"source_start": 10, "captions": "reel_01.ass", "length": 5}))
+    yt = [{"start": 10 + i, "end": 10.5 + i, "word": w} for i, w in enumerate(["hello", "there", "bug", "world"])]
+    monkeypatch.setattr(sources, "youtube_captions", lambda url, lang: yt)
+    res = library.youtube_upgrade("Live2")
+    assert res["updated"] == 1 and res["status"].startswith("Checked")
+    post = json.loads((d / "reel_01.json").read_text())
+    check = post["caption_check"]
+    assert check["checker"] == "YouTube's captions" and "bug" in [w["word"] for w in check["other"]]
+    assert "captions_source" not in post and (d / "reel_01.ass").read_text() == ass     # captions untouched
+    assert library.youtube_upgrade("Live2")["updated"] == 0                           # not checked twice
+
+
+def test_youtube_captions_setting_values():
+    from makereel import config
+    for given, want in ((True, "use"), (False, "off"), ("check", "check"), ("junk", "use")):
+        clip = {**config.CLIP_DEFAULTS, "youtube_captions": given}
+        config.validate_clip(clip)
+        assert clip["youtube_captions"] == want

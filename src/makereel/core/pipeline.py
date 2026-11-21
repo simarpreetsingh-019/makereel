@@ -138,7 +138,7 @@ def _add_replays(curve: np.ndarray, parts: dict, meta: dict, n: int) -> np.ndarr
 def _youtube_words(meta: dict, clip: dict, brand: dict) -> list[dict] | None:
     """YouTube's captions on this file's clock, for finished YouTube videos (not while live, not when
     translating to English: those keep the local model)."""
-    if meta.get("live_status") == "is_live" or not clip.get("youtube_captions", True):
+    if meta.get("live_status") == "is_live" or clip.get("youtube_captions", "use") in ("off", False):
         return None
     if branding.script_mode(brand) == "english" and clip.get("language") not in (None, "en"):
         return None
@@ -338,6 +338,11 @@ def synced_words(clip_file: Path, section: tuple[float, float], source_words: li
     """
     off, length = section
     translate = mode == "english" and clip.get("language") not in (None, "en")
+    yt_check = None
+    if yt and clip.get("youtube_captions", "use") == "check":   # makereel's captions; YouTube's only check them
+        yt_check = [{"start": round(w["start"] - clip_start, 2), "word": w["word"]}
+                    for w in yt if 0 <= w["start"] - clip_start < length]
+        yt = None
     if yt:
         # YouTube's captions for this reel (exact: same timeline as the download), double-checked with a
         # quick local pass. If they barely match (wrong track), the local captions are used instead.
@@ -374,7 +379,11 @@ def synced_words(clip_file: Path, section: tuple[float, float], source_words: li
         precise = []
     words = precise or [{**w, "start": w["start"] - clip_start, "end": w["end"] - clip_start}
                         for w in source_words if w["start"] >= clip_start]
-    if precise and report is not None and clip.get("caption_check", True) and not translate:
+    if precise and report is not None and yt_check and not translate:
+        score = agreement(words, yt_check)
+        log.info("   caption check: %d%% match with YouTube's captions", round(score * 100))
+        report.update(source="local", checker="YouTube's captions", agree=round(score * 100), other=yt_check)
+    elif precise and report is not None and clip.get("caption_check", True) and not translate:
         _second_opinion(clip_file, section, words, clip, mode, report)
     words = language.romanize_words(words) if mode == "roman" else words
     return keep_names(words, clip.get("names") or [])

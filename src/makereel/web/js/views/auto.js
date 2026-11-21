@@ -116,6 +116,7 @@ export function render(state) {
     $("#cookies_browser").value = state.settings.cookies_browser || "";
     $("#cpu_mode").value = state.settings.cpu_mode || "balanced";
     $("#caption_check").checked = state.settings.clip?.caption_check !== false;
+    $("#youtube_captions").value = state.settings.clip?.youtube_captions || "use";
     $("#names").value = (state.settings.clip?.names || []).join("\n");
     drawUploads();
     const ai = state.settings.ai || {};
@@ -165,6 +166,12 @@ export function mount() {
   $("#caption_check").addEventListener("change", async (e) => {
     try {
       store.set({ settings: await api.saveSettings({ clip: { caption_check: e.target.checked } }) });
+      savedTick();
+    } catch (err) { showError(err); }
+  });
+  $("#youtube_captions").addEventListener("change", async (e) => {
+    try {
+      store.set({ settings: await api.saveSettings({ clip: { youtube_captions: e.target.value } }) });
       savedTick();
     } catch (err) { showError(err); }
   });

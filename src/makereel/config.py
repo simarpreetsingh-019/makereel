@@ -107,6 +107,7 @@ CLIP_DEFAULTS: dict[str, Any] = {
     "model_other": "small",  # model for non-English speech when `model` is tiny/base ("same" = don't switch)
     "silence": False,        # trim dead air with auto-editor (talk content)
     "caption_check": True,   # a second, already-downloaded model double-checks captions (more CPU per reel)
+    "youtube_captions": "use",  # use: YouTube's captions become the reel's | check: only flag doubtful words | off
     "names": [],             # names written exactly like this in captions (streamers, places, in-jokes)
     "picture_signal": True,  # gameplay: fast on-screen action (kills, crashes) helps find moments (videos ≤ 2 h)
     "live_words": True,      # a tiny model listens to live streams for exciting words (off in cool mode)
@@ -207,6 +208,9 @@ class Settings:
 def validate_clip(clip: dict[str, Any]) -> None:
     clip.setdefault("model_other", "small")
     clip["caption_check"] = bool(clip.get("caption_check", True))
+    yc = clip.get("youtube_captions", "use")
+    yc = {True: "use", False: "off"}.get(yc, yc) if yc in (True, False, "use", "check", "off") else "use"
+    clip["youtube_captions"] = yc
     names = clip.get("names") or []
     if isinstance(names, str):
         names = names.replace(",", "\n").splitlines()
