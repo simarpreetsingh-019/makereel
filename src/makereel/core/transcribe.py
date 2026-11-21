@@ -245,6 +245,12 @@ def model_for(size: str, language: str | None, other: str, mode: str | None = No
     """See _model_for; a Hinglish model only writes English letters, so captions in Hindi script
     (mode "original") get a normal multilingual model instead."""
     chosen = _model_for(size, language, other)
+    if mode == "roman" and language == "hi" and not _hinglish(chosen):
+        # English letters: a Hinglish model writes them natively, when one is downloaded
+        from . import models
+        best = next((m for m in models.HINGLISH if models.installed(m)), None)
+        if best:
+            return best
     if _hinglish(chosen) and (language not in (None, "hi") or mode == "original"):
         return _downloaded_multilingual() or "small"
     return chosen

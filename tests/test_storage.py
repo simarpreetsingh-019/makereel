@@ -163,3 +163,30 @@ def test_compare_with_pasted_script():
     assert post["caption_check"]["checker"] == "English text"
     rows = library._compare(post, captions.parse_words((d / "reel_01.ass").read_text()))["rows"]
     assert [r["ok"] for r in rows] == [True, False, True, False]        # lined up by word order
+
+
+def test_bulk_english_letters_picks_the_right_reels():
+    import json
+
+    from makereel import config
+    from makereel.core import captions
+    from makereel.services import library
+    d = config.reels_dir() / "Bulk"
+    d.mkdir(parents=True)
+    for name, word, check, edited in (("reel_01", "भाई", "hinglish", False), ("reel_02", "bhai", None, False),
+                                      ("reel_03", "भाई", "hinglish", True)):
+        (d / f"{name}.ass").write_text(captions.build_ass([{"start": 10, "end": 11, "word": word}], 10.0, 12.0, "T"))
+        post = {"captions": f"{name}.ass", "captions_edited": edited}
+        if check:
+            post["caption_check"] = {"checker": check, "other": [{"start": 0, "word": "bhai"}]}
+        (d / f"{name}.json").write_text(json.dumps(post))
+    assert [n for _, n in library._bulk_targets("convert")] == ["reel_01", "reel_03"]   # still in हिंदी letters
+    assert [n for _, n in library._bulk_targets("hinglish")] == ["reel_01"]             # hand edits kept
+
+
+def test_english_letters_prefers_a_downloaded_hinglish_model(monkeypatch):
+    from makereel.core import models, transcribe
+    monkeypatch.setattr(models, "installed", lambda name: name == "hinglish")
+    assert transcribe.model_for("base", "hi", "small", "roman") == "hinglish"
+    assert transcribe.model_for("base", "hi", "small", "original") != "hinglish"
+    assert transcribe.model_for("base", "en", "small", "roman") == "base"

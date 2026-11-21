@@ -111,6 +111,14 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
     def reel_ready(req: Request):
         return library.set_ready(req.params["folder"], req.params["name"], bool(req.json().get("ready")))
 
+    @api.post("/library/english-letters")
+    def library_english_letters(req: Request):
+        return library.bulk_english_letters(req.json().get("source", "convert"))
+
+    @api.get("/library/english-letters")
+    def library_english_letters_status(req: Request):
+        return dict(library.BULK)
+
     @api.post("/folders/{folder}/reels/{name}/compare")
     def reel_compare(req: Request):
         body = req.json()

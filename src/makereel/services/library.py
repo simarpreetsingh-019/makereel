@@ -16,6 +16,7 @@ anything that escapes the output directory.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 from pathlib import Path
@@ -25,6 +26,7 @@ from ..core import branding, captions, framing, language, render, transcribe
 from ..core.pipeline import FOLDER_FILE, caption_hook, folder_language
 from ..errors import Forbidden, InvalidInput, NotFound
 
+log = logging.getLogger(__name__)
 _UNSAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 REEL_NAME = re.compile(r"reel_\d+")
 
@@ -629,6 +631,66 @@ def use_other_version(folder: str, name: str) -> dict:
                              "checker": f"previous captions ({old_label})" if old_label else "previous captions"}
     meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
     return get_reel(folder, name)
+
+
+_DEVANAGARI = re.compile(r"[\u0900-\u097F]")
+BULK = {"running": False, "done": 0, "total": 0, "changed": 0, "message": ""}
+
+
+def _bulk_targets(source: str) -> list[tuple[str, str]]:
+    out = []
+    r = root()
+    for meta_file in sorted(r.glob("*/reel_*[0-9].json")) if r.is_dir() else []:
+        try:
+            post = json.loads(meta_file.read_text(encoding="utf-8"))
+            ass = (meta_file.parent / post["captions"]).read_text(encoding="utf-8")
+        except (OSError, ValueError, KeyError):
+            continue
+        check = post.get("caption_check") or {}
+        if source == "hinglish":
+            if transcribe_is_hinglish(check.get("checker")) and check.get("other") and not post.get("captions_edited"):
+                out.append((meta_file.parent.name, meta_file.stem))
+        elif _DEVANAGARI.search(" ".join(w["word"] for w in captions.parse_words(ass))):
+            out.append((meta_file.parent.name, meta_file.stem))
+    return out
+
+
+def transcribe_is_hinglish(name: str | None) -> bool:
+    from ..core.models import HINGLISH
+    return name in HINGLISH
+
+
+def bulk_english_letters(source: str = "convert") -> dict:
+    """Bring every existing reel to English-letter captions, in the background.
+
+    convert: Hindi-script words are converted to English letters (hand edits kept).
+    hinglish: reels the Hinglish model double-checked take its words instead (not hand-edited ones)."""
+    import threading
+    if source not in ("convert", "hinglish"):
+        raise InvalidInput("source must be convert or hinglish")
+    if BULK["running"]:
+        return dict(BULK)
+    targets = _bulk_targets(source)
+    BULK.update(running=bool(targets), done=0, total=len(targets), changed=0,
+                message="" if targets else "Nothing to change: all reels are already in English letters")
+
+    def work():
+        for folder, name in targets:
+            try:
+                if source == "hinglish":
+                    use_other_version(folder, name)
+                else:
+                    meta_file, post = _reel_paths(folder, name)
+                    words = captions.parse_words((meta_file.parent / post["captions"]).read_text(encoding="utf-8"))
+                    update_reel(folder, name, words=language.romanize_words(words))
+                BULK["changed"] += 1
+            except Exception as e:  # noqa: BLE001 - one bad reel must not stop the rest
+                log.warning("english letters skipped %s/%s: %s", folder, name, e)
+            BULK["done"] += 1
+        BULK.update(running=False, message=f"Updated {BULK['changed']} of {BULK['total']} reels")
+    if targets:
+        threading.Thread(target=work, daemon=True, name="bulk-letters").start()
+    return dict(BULK)
 
 
 def import_captions(folder: str, name: str, text: str) -> dict:

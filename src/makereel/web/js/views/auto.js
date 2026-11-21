@@ -175,6 +175,16 @@ export function mount() {
       savedTick();
     } catch (err) { showError(err); }
   });
+  const bulkWatch = (st) => {
+    const msg = $("#bulk-msg");
+    msg.textContent = st.running ? `Updating reels… ${st.done} of ${st.total}` : st.message;
+    $("#bulk-hinglish").disabled = $("#bulk-convert").disabled = st.running;
+    if (st.running) setTimeout(async () => bulkWatch(await api.bulkLettersStatus()), 2000);
+  };
+  [["#bulk-hinglish", "hinglish"], ["#bulk-convert", "convert"]].forEach(([id, src]) =>
+    $(id).addEventListener("click", async () => {
+      try { bulkWatch(await api.bulkLetters(src)); } catch (err) { showError(err); }
+    }));
   const showCreator = (c) => {
     $("#cr-names").value = (c.names || []).join("\n");
     $("#cr-notes").value = c.notes || "";
