@@ -1,11 +1,13 @@
 // "Reels" tab: one folder per source video; open a folder to see and edit its reels.
 import { api, media } from "../api.js";
 import { store } from "../store.js";
-import { $, busy, confirmDialog, copyText, esc, timeAgo, toast } from "../ui.js";
+import { $, busy, confirmDialog, copyText, esc, showError, timeAgo, toast } from "../ui.js";
 import { openEditor } from "./editor.js";
 
 let lastDrawn = "";   // avoid redrawing (and restarting videos) when nothing changed
 let joining = null;   // null, or the reel names picked to join, in click order
+let sortBest = true;  // best score first, or in the order they happen in the video
+try { sortBest = localStorage.getItem("mr-reel-sort") !== "time"; } catch { /* private mode */ }
 
 export async function load(folder) {
   if (folder !== store.state.folder?.folder) joining = null;
@@ -34,13 +36,21 @@ function reelsHTML(data) {
       : "Tick the reels to join, in the order they should play."}</span>
       <button class="btn primary" data-act="join-go" ${joining.length < 2 ? "disabled" : ""}>Join ${joining.length || ""}</button>
       <button class="btn" data-act="join-cancel">Cancel</button></div>` : "";
-  return `<div class="reels">${data.reels.map((r) => `
-    <div class="reel">
+  const best = sortBest && !joining;
+  const list = best ? [...data.reels].sort((a, b) => (b.score || 0) - (a.score || 0)) : data.reels;
+  const ready = data.reels.filter((r) => r.ready).length;
+  const tools = `<div class="reel-tools"><div class="seg" role="group" aria-label="Order">
+      <button class="${best ? "on" : ""}" data-act="sort-best">Best first</button><button class="${best ? "" : "on"}" data-act="sort-time">In order</button></div>
+      <span class="hint" style="margin:0">${ready} of ${data.reels.length} ready to post</span></div>`;
+  return `${tools}<div class="reels">${list.map((r, i) => `
+    <div class="reel${r.ready ? " is-ready" : ""}">
       ${joining ? `<input type="checkbox" class="pick" data-pick="${r.name}" ${joining.includes(r.name) ? "checked" : ""}>` : ""}
       <video src="${esc(media(r.video))}" controls playsinline preload="metadata"></video>
       <div class="body">
         <div class="hook">${esc(r.hook)}</div>
-        <div class="sub"><span class="chip">${Math.round(r.end - r.start)} s</span> <span class="chip">score ${r.score}</span></div>
+        <div class="sub">${best && i === 0 && data.reels.length > 1 ? `<span class="chip top">★ Best</span> ` : ""}<span class="chip">${Math.round(r.end - r.start)} s</span> <span class="chip">score ${r.score}</span></div>
+        ${r.caption ? `<div class="post-preview" title="Post text">${esc(r.caption)}</div>` : ""}
+        <label class="switch ready-toggle"><input type="checkbox" data-ready="${r.name}" ${r.ready ? "checked" : ""}> Ready to post</label>
         ${r.ai?.reason ? `<div class="ai-why" title="AI judge">✦ ${esc(r.ai.reason)}</div>` : ""}
         <div class="acts">
           <button class="btn small primary" data-act="edit" data-name="${r.name}">Edit</button>
@@ -95,6 +105,13 @@ export function mount() {
     }
     const folderBtn = e.target.closest(".folder");
     if (folderBtn) { location.hash = `#/library/${encodeURIComponent(folderBtn.dataset.folder)}`; return; }
+    const rd = e.target.closest("[data-ready]");
+    if (rd) {
+      const { folder, reels } = store.state.folder, reel = reels.find((r) => r.name === rd.dataset.ready);
+      try { await api.setReady(folder, reel.name, rd.checked); reel.ready = rd.checked; lastDrawn = null; render(store.state); }
+      catch (err) { rd.checked = !rd.checked; showError(err); }
+      return;
+    }
     const pick = e.target.closest("[data-pick]");
     if (pick) {
       const n = pick.dataset.pick;
@@ -105,6 +122,11 @@ export function mount() {
     const btn = e.target.closest("[data-act]");
     if (!btn) return;
     const { folder, reels } = store.state.folder;
+    if (btn.dataset.act === "sort-best" || btn.dataset.act === "sort-time") {
+      sortBest = btn.dataset.act === "sort-best";
+      try { localStorage.setItem("mr-reel-sort", sortBest ? "best" : "time"); } catch { /* private mode */ }
+      lastDrawn = null; render(store.state); return;
+    }
     if (btn.dataset.act === "join-cancel") { joining = null; render(store.state); return; }
     if (btn.dataset.act === "join-go") {
       busy(btn, async () => {

@@ -85,6 +85,14 @@ def _reel_paths(folder: str, name: str) -> tuple[Path, dict]:
     return meta_file, json.loads(meta_file.read_text(encoding="utf-8"))
 
 
+def set_ready(folder: str, name: str, ready: bool) -> dict:
+    """Mark a reel "ready to post" (no re-render)."""
+    meta_file, post = _reel_paths(folder, name)
+    post["ready"] = bool(ready)
+    meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
+    return {"name": name, "ready": post["ready"]}
+
+
 def media_file(rel: str) -> Path:
     """A file inside the library, for streaming to the browser."""
     path = (root() / rel).resolve()
@@ -167,7 +175,8 @@ def _summary(folder: str, name: str, post: dict, video: Path) -> dict:
             "can_export": (d / post.get("source_clip", "-")).is_file(),
             "logo": post.get("logo", True), "exports": exports, "look": _look(post),
             **{k: post.get(k) for k in ("hook", "caption", "creator", "creator_url", "source",
-                                        "score", "why", "start", "end", "fit", "ai")}}
+                                        "score", "why", "start", "end", "fit", "ai")},
+            "ready": bool(post.get("ready"))}
 
 
 def _look(post: dict) -> dict:

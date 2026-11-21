@@ -107,6 +107,10 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
     def folder(req: Request):
         return library.list_reels(req.params["folder"])
 
+    @api.put("/folders/{folder}/reels/{name}/ready")
+    def reel_ready(req: Request):
+        return library.set_ready(req.params["folder"], req.params["name"], bool(req.json().get("ready")))
+
     @api.post("/folders/{folder}/reels/{name}/ai-fix")
     def reel_ai_fix(req: Request):
         return library.ai_fix_words(req.params["folder"], req.params["name"])

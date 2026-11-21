@@ -44,3 +44,13 @@ def test_list_and_read_reel():
     assert reel["transcript"] == "HI"
     library.delete_reel("My video", "reel_01")
     assert not (d / "reel_01.mp4").exists()
+
+
+def test_set_ready_marks_reel():
+    d = library.folder_for("Ready test", "rid")
+    d.mkdir(parents=True)
+    (d / "reel_01.json").write_text(json.dumps({"file": "reel_01.mp4", "hook": "hi"}))
+    (d / "reel_01.mp4").write_bytes(b"x")
+    assert library.list_reels(d.name)["reels"][0]["ready"] is False
+    library.set_ready(d.name, "reel_01", True)
+    assert library.list_reels(d.name)["reels"][0]["ready"] is True
