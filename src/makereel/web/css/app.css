@@ -352,3 +352,13 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
         border: 1px solid var(--line); color: var(--muted); }
 .reel .hook { font-size: 15.5px; font-weight: 700; }
 #create-layout select { min-width: 240px; max-width: 100%; }
+
+/* settings tabs */
+.subtabs { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 18px; padding: 4px;
+           background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.subtabs button { background: none; border: 0; color: var(--muted); padding: 8px 12px; border-radius: 9px; font: inherit;
+                  cursor: pointer; }
+.subtabs button[aria-selected=true] { background: var(--soft); color: var(--ink); font-weight: 600; }
+.subtabs button:focus-visible { outline: 2px solid var(--accent); }
+.saved { margin-left: auto; color: var(--ok); font-size: 13px; font-weight: 600; padding-right: 8px; }
+@media (max-width: 760px) { .subtabs { flex-wrap: nowrap; overflow-x: auto; } .subtabs button { white-space: nowrap; } }

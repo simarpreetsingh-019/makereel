@@ -84,9 +84,19 @@
   </section>
 
   <!-- 24/7 -->
-  <section id="tab-auto" class="stack" hidden>
-    <div class="card">
-      <label class="switch"><input type="checkbox" id="watch"> Watch my channels and clip them when they go live</label>
+  <section id="tab-auto" hidden>
+    <div class="subtabs" role="tablist" aria-label="Settings">
+      <button role="tab" data-st="channels" aria-selected="true">Channels &amp; 24/7</button>
+      <button role="tab" data-st="captions" aria-selected="false">Captions</button>
+      <button role="tab" data-st="signin" aria-selected="false">YouTube sign-in</button>
+      <button role="tab" data-st="ai" aria-selected="false">AI</button>
+      <button role="tab" data-st="speed" aria-selected="false">Speed &amp; storage</button>
+      <span class="saved" id="st-saved" hidden>Saved ✓</span>
+    </div>
+
+    <div class="stack" data-stpane="channels">
+      <div class="card">
+        <label class="switch"><input type="checkbox" id="watch"> Watch my channels and clip them when they go live</label>
       <label class="switch"><input type="checkbox" id="watch_uploads"> Also clip new uploads and premieres (YouTube)</label>
       <div class="opts" id="uploads-opts" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
         <label class="field">Clip uploads from<select id="uploads_since_kind">
@@ -102,6 +112,49 @@
           <option value="random">Random (4 to 30 minutes)</option></select></label>
       </div>
       <p class="hint" id="uploads-hint"></p>
+        <p class="hint">Uses almost no CPU while nobody is live. Keep makereel running.</p>
+      </div>
+      <div class="card">
+        <h2>Channels</h2>
+        <textarea id="channels" rows="9" placeholder="@streamer&#10;https://www.youtube.com/@another&#10;twitch.tv/name&#10;kick.com/name"></textarea>
+        <p class="hint">One per line: YouTube @handles or channel links, Twitch or Kick. Add <code>| hi</code> (or <code>| en</code>…)
+          after a channel to set its language, e.g. <code>@CarryisLive | hi</code>.</p>
+        <label class="field">Language of watched channels<select id="watch_language"><option value="">Auto-detect (once per video)</option><option value="en">English</option><option value="hi">Hindi / Hinglish</option><option value="pa">Punjabi</option><option value="ur">Urdu</option><option value="bn">Bengali</option><option value="mr">Marathi</option><option value="gu">Gujarati</option><option value="ta">Tamil</option><option value="te">Telugu</option><option value="kn">Kannada</option><option value="ml">Malayalam</option><option value="es">Spanish</option><option value="pt">Portuguese</option><option value="fr">French</option><option value="de">German</option><option value="ar">Arabic</option><option value="id">Indonesian</option><option value="ja">Japanese</option><option value="ko">Korean</option></select></label>
+      </div>
+      <div class="card">
+        <h2>Limits</h2>
+        <div class="opts" style="grid-template-columns:1fr 1fr">
+          <label class="field">Check every (min)<input id="poll_minutes" type="number" min="1"></label>
+          <label class="field">Reels per hour, per stream<input id="clips_per_hour" type="number" min="1"></label>
+          <label class="field">Live streams at once<input id="max_parallel_live" type="number" min="1"></label>
+          <label class="field">Buffer (min)<input id="buffer_minutes" type="number" min="1"></label>
+          <label class="field">Delete reels after (days)<input id="keep_days" type="number" min="1"></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="stack" data-stpane="captions" hidden>
+      <div class="card">
+        <label class="switch" style="font-weight:400"><input type="checkbox" id="caption_check"> Double-check captions with a
+          second speech model (one you've already downloaded). Disagreements show in yellow in Edit → Text.</label>
+        <label class="field" style="margin-top:10px">Names to keep exactly, for every creator (one per line)
+          <textarea id="names" rows="3" placeholder="CarryMinati&#10;Mythpat&#10;Vice City"></textarea></label>
+      </div>
+    <div class="card" id="creator-card">
+      <h2>Creator memory</h2>
+      <p class="hint" style="margin-top:0">Per creator: names, places and in-jokes their captions should spell exactly right, and a few
+        notes for the AI word-fixer. Stored on this computer.</p>
+      <label class="field">Creator<select id="cr-channel"><option value="">Pick a creator…</option></select></label>
+      <label class="field">Names to spell exactly (one per line)<textarea id="cr-names" rows="4" placeholder="Mythpat&#10;Vice City&#10;Lucia"></textarea></label>
+      <label class="field">Notes (optional)<textarea id="cr-notes" rows="2" placeholder="Plays GTA 6 in Hinglish; calls his car 'Pinky'"></textarea></label>
+      <p class="hint" id="cr-suggest"></p>
+      <div class="row" style="gap:8px"><button class="btn small" id="cr-find" type="button">Suggest from their reels</button>
+        <button class="btn small primary" id="cr-save" type="button">Save</button></div>
+    </div>
+    </div>
+
+    <div class="stack" data-stpane="signin" hidden>
+      <div class="card">
       <label class="field" style="max-width:360px">Use my YouTube sign-in from<select id="cookies_browser">
         <option value="">Nothing (not signed in)</option>
         <option value="chrome">Chrome</option><option value="safari">Safari</option><option value="firefox">Firefox</option>
@@ -121,13 +174,14 @@
           <li>Open youtube.com, make sure you're signed in, click the extension, and export <b>cookies.txt</b>.</li>
           <li>Press <b>Upload sign-in file</b> here. makereel keeps only the YouTube and Google lines, on this computer.</li>
         </ol></details>
-      <p class="hint">Checks each channel every few minutes and uses almost no CPU while nobody is live.
-        Keep makereel running (or start it with <code>makereel web --watch</code> on a machine that stays on).</p>
+      </div>
     </div>
-    <div class="card">
-      <h2>AI judge <span class="hint" style="font-weight:400">(optional)</span></h2>
-      <p class="hint" style="margin-top:0">An AI model reads the moments makereel shortlisted and scores them like an editor (hook, engagement,
-        value, shareability), then writes better titles. Without it, picks come from loudness, chat and words only.</p>
+
+    <div class="stack" data-stpane="ai" hidden>
+      <div class="card">
+        <h2>AI judge <span class="hint" style="font-weight:400">(optional)</span></h2>
+        <p class="hint" style="margin-top:0">Scores moments like an editor and writes titles; also powers "Fix words with AI". Off: picks
+          come from loudness, chat and words.</p>
       <div class="opts" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
         <label class="field">Provider<select id="ai-provider">
           <option value="off">Off</option>
@@ -139,51 +193,17 @@
         <label class="field">AI influence <span id="ai-weight-v"></span><input type="range" id="ai-weight" min="0" max="1" step="0.05"></label>
       </div>
       <p class="hint" id="ai-help"></p>
-      <button class="btn primary" id="ai-save">Save AI settings</button>
-    </div>
-    <div class="grid2">
-      <div class="card">
-        <h2>Channels</h2>
-        <textarea id="channels" rows="9" placeholder="@streamer&#10;https://www.youtube.com/@another&#10;twitch.tv/name&#10;kick.com/name"></textarea>
-        <p class="hint">One per line: YouTube @handles or channel links, Twitch or Kick. Add <code>| hi</code> (or <code>| en</code>…)
-          after a channel to set its language, e.g. <code>@CarryisLive | hi</code>.</p>
-        <label class="field">Language of watched channels<select id="watch_language"><option value="">Auto-detect (once per video)</option><option value="en">English</option><option value="hi">Hindi / Hinglish</option><option value="pa">Punjabi</option><option value="ur">Urdu</option><option value="bn">Bengali</option><option value="mr">Marathi</option><option value="gu">Gujarati</option><option value="ta">Tamil</option><option value="te">Telugu</option><option value="kn">Kannada</option><option value="ml">Malayalam</option><option value="es">Spanish</option><option value="pt">Portuguese</option><option value="fr">French</option><option value="de">German</option><option value="ar">Arabic</option><option value="id">Indonesian</option><option value="ja">Japanese</option><option value="ko">Korean</option></select></label>
       </div>
+    </div>
+
+    <div class="stack" data-stpane="speed" hidden>
       <div class="card">
-        <h2>Limits</h2>
-        <div class="opts" style="grid-template-columns:1fr 1fr">
-          <label class="field">Check every (min)<input id="poll_minutes" type="number" min="1"></label>
-          <label class="field">Reels per hour, per stream<input id="clips_per_hour" type="number" min="1"></label>
-          <label class="field">Live streams at once<input id="max_parallel_live" type="number" min="1"></label>
-          <label class="field">Buffer (min)<input id="buffer_minutes" type="number" min="1"></label>
-          <label class="field">Delete reels after (days)<input id="keep_days" type="number" min="1"></label>
-        </div>
         <label class="field" style="margin-top:10px">Processing<select id="cpu_mode">
           <option value="quiet">Cool and quiet: 1 core, low priority (slower reels, less heat and fan)</option>
           <option value="balanced">Balanced: 2 cores, below-normal priority (default)</option>
           <option value="fast">Fast: most cores (quickest reels, most heat)</option></select></label>
-        <label class="switch" style="font-weight:400"><input type="checkbox" id="caption_check"> Double-check captions with a
-          second speech model (only one you've already downloaded; adds work per reel). Disagreements show in yellow in Edit → Text.</label>
-        <label class="field" style="margin-top:10px">Names to keep exactly (one per line: streamers, places, in-jokes)
-          <textarea id="names" rows="3" placeholder="CarryMinati&#10;Mythpat&#10;Vice City"></textarea></label>
-        <p class="hint" style="margin-top:-6px">A caption word that sounds like one of these is written exactly like this.
-          Saved with the Save button.</p>
-        <p class="hint" style="margin-top:-6px">Every reel is a burst of work (listening to the audio, then rendering).
-          Fewer "Reels per hour" means fewer bursts; "Cool and quiet" makes each burst gentler.</p>
+        <p class="hint">Fewer "Reels per hour" (Channels tab) means fewer bursts of work; "Cool and quiet" makes each burst gentler.</p>
       </div>
-    </div>
-    <div><button class="btn primary" id="save-settings">Save</button></div>
-    <div class="card" id="creator-card">
-      <h2>Creator memory</h2>
-      <p class="hint" style="margin-top:0">Per creator: names, places and in-jokes their captions should spell exactly right, and a few
-        notes for the AI word-fixer. Stored on this computer.</p>
-      <label class="field">Creator<select id="cr-channel"><option value="">Pick a creator…</option></select></label>
-      <label class="field">Names to spell exactly (one per line)<textarea id="cr-names" rows="4" placeholder="Mythpat&#10;Vice City&#10;Lucia"></textarea></label>
-      <label class="field">Notes (optional)<textarea id="cr-notes" rows="2" placeholder="Plays GTA 6 in Hinglish; calls his car 'Pinky'"></textarea></label>
-      <p class="hint" id="cr-suggest"></p>
-      <div class="row" style="gap:8px"><button class="btn small" id="cr-find" type="button">Suggest from their reels</button>
-        <button class="btn small primary" id="cr-save" type="button">Save</button></div>
-    </div>
     <div class="card" id="storage-card">
       <h2>Where files are saved</h2>
       <p class="hint" style="margin-top:0" id="st-summary">Loading…</p>
@@ -201,6 +221,7 @@
         <span class="hint" style="margin:0">Deletes downloads, uploads and old live buffers. Keeps your reels, live streams being
           recorded, and speech models (delete those in System).</span>
       </div>
+    </div>
     </div>
   </section>
   <!-- Brand kit -->

@@ -6,6 +6,19 @@ import { $, busy, esc, showError, toast } from "../ui.js";
 const LIMITS = ["poll_minutes", "clips_per_hour", "max_parallel_live", "buffer_minutes", "keep_days"];
 let filled = false;
 
+function debounce(fn, ms) {
+  let t;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+
+// a small "Saved ✓" next to the settings tabs, for any setting that saved itself
+function savedTick() {
+  const el = $("#st-saved");
+  el.hidden = false;
+  clearTimeout(savedTick.t);
+  savedTick.t = setTimeout(() => (el.hidden = true), 1800);
+}
+
 const SINCE_HELP = {
   new: "Videos already on a channel are left alone; anything posted after makereel first checks it is clipped.",
   "24h": "The first check also clips what each channel posted in the last 24 hours, then every new upload.",
@@ -96,12 +109,14 @@ export function render(state) {
 
 export function mount() {
   ["#ai-provider", "#ai-weight"].forEach((id) => $(id).addEventListener("input", drawAi));
-  $("#ai-save").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+  // AI settings save on their own (typing: after a pause; choices: right away)
+  const saveAi = async () => {
     const ai = { provider: $("#ai-provider").value, model: $("#ai-model").value.trim(),
                  base_url: $("#ai-base_url").value.trim(), weight: Number($("#ai-weight").value) };
-    store.set({ settings: await api.saveSettings({ ai }) });
-    toast(ai.provider === "off" ? "AI judge off" : "AI judge saved. It's used for the next videos you clip.");
-  }));
+    try { store.set({ settings: await api.saveSettings({ ai }) }); savedTick(); } catch (err) { showError(err); }
+  };
+  ["#ai-provider", "#ai-weight"].forEach((id) => $(id).addEventListener("change", saveAi));
+  ["#ai-model", "#ai-base_url"].forEach((id) => $(id).addEventListener("input", debounce(saveAi, 800)));
   $("#watch").addEventListener("change", async (e) => {
     try {
       const { running } = await api.setWatcher(e.target.checked);
@@ -129,7 +144,7 @@ export function mount() {
   $("#caption_check").addEventListener("change", async (e) => {
     try {
       store.set({ settings: await api.saveSettings({ clip: { caption_check: e.target.checked } }) });
-      toast(e.target.checked ? "Captions get a second opinion" : "Caption double-check off");
+      savedTick();
     } catch (err) { showError(err); }
   });
   const showCreator = (c) => {
@@ -206,13 +221,24 @@ export function mount() {
     toast(`Freed ${gb(res.freed_bytes)}${res.kept.length ? ` (kept ${res.kept.length} live recording${res.kept.length === 1 ? "" : "s"})` : ""}`);
   }));
 
-  $("#save-settings").addEventListener("click", (e) => {
+  // channels, limits and names save on their own, a moment after you stop typing
+  const saveGeneral = async () => {
     const body = { channels: $("#channels").value.split("\n"), watch_language: $("#watch_language").value,
                    clip: { names: $("#names").value.split("\n") } };
     LIMITS.forEach((k) => (body[k] = $(`#${k}`).value));
-    busy(e.currentTarget, async () => {
-      store.set({ settings: await api.saveSettings(body) });
-      toast("Saved. The watcher uses it on its next check.");
-    });
-  });
+    try { store.set({ settings: await api.saveSettings(body) }); savedTick(); } catch (err) { showError(err); }
+  };
+  const later = debounce(saveGeneral, 900);
+  ["#channels", "#names", ...LIMITS.map((k) => `#${k}`)].forEach((id) => $(id).addEventListener("input", later));
+  $("#watch_language").addEventListener("change", saveGeneral);
+
+  // settings tabs
+  document.querySelectorAll("#tab-auto [data-st]").forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll("#tab-auto [data-st]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+    document.querySelectorAll("#tab-auto [data-stpane]").forEach((p) => (p.hidden = p.dataset.stpane !== b.dataset.st));
+    try { localStorage.setItem("mr-settings-tab", b.dataset.st); } catch { /* private window */ }
+  }));
+  let tab = null;
+  try { tab = localStorage.getItem("mr-settings-tab"); } catch { /* private window */ }
+  document.querySelector(`#tab-auto [data-st="${tab || "channels"}"]`)?.click();;
 }
