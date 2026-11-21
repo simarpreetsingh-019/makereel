@@ -333,6 +333,17 @@ class LiveSession:
         recent = [{"word": w["word"]} for w in self.heard if w["t"] >= n - 10]
         return hype_count(recent) if recent else 0
 
+    def _mark_ended(self) -> None:
+        """The folder stops showing as live (its 🔴), and remembers it came from a live recording."""
+        import json
+        meta = self.out / "folder.json"
+        try:
+            info = json.loads(meta.read_text(encoding="utf-8"))
+            info.update(live_status="was_live", recorded_live=True)
+            meta.write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")
+        except (OSError, ValueError):
+            pass
+
     def _clear_leftovers(self) -> None:
         """Pieces left by an earlier session of this stream that didn't end cleanly (makereel was closed
         or restarted mid-stream). Only one session records a stream at a time, so they're unused."""
@@ -377,4 +388,5 @@ class LiveSession:
                 except subprocess.TimeoutExpired:
                     self.proc.kill()
             shutil.rmtree(self.buf, ignore_errors=True)
+            self._mark_ended()
             log.info("LIVE: '%s' ended", self.info.title)

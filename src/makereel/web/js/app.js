@@ -22,6 +22,12 @@ function parseRoute() {
 async function refreshJobs() {
   try {
     store.set({ jobs: (await api.jobs()).jobs });
+    const live = store.state.jobs.filter((j) => j.status === "live" && j.kind !== "watcher").length;
+    const busy = store.state.jobs.filter((j) => ["running", "queued"].includes(j.status)).length;
+    const nb = $("#nb-create");
+    nb.hidden = !(live || busy);
+    nb.textContent = live ? `● ${live} live` : `${busy}`;
+    nb.title = live ? `${live} live stream${live === 1 ? "" : "s"} recording` : `${busy} job${busy === 1 ? "" : "s"} running`;
     setup.botCheck(store.state.jobs);
     if (store.state.route.view === "create") create.refreshLoad(store.state.jobs);
     await create.refreshLogs();
@@ -48,7 +54,8 @@ function render(state) {
   document.querySelectorAll("main > section").forEach((s) => (s.hidden = s.id !== `tab-${tab}`));
   const sys = state.system;
   if (sys) {
-    $("#sys").textContent = `${sys.os} · encoder ${(sys.encoder || "none").replace("h264_", "")} · v${sys.version}`;
+    $("#sys").textContent = `makereel v${sys.version}`;
+    $("#sys").title = `${sys.os} · video encoder ${sys.encoder || "none"}`;
     $("#banner").innerHTML = sys.libass ? "" : `<div class="banner">This ffmpeg can't draw text captions, so reels will fail.
       Install a full build: macOS <code>brew install ffmpeg-full</code> · Windows <code>winget install Gyan.FFmpeg</code> · Linux <code>sudo apt install ffmpeg</code>.</div>`;
   }
@@ -57,6 +64,13 @@ function render(state) {
   if (tab === "auto") auto.render(state);
   if (tab === "system") system.render(state);
 }
+
+// ⋯ menus close when you pick something or click elsewhere
+document.addEventListener("click", (e) => {
+  document.querySelectorAll("details.menu[open]").forEach((m) => {
+    if (!m.contains(e.target) || e.target.closest(".menu-list button, .menu-list a")) m.open = false;
+  });
+});
 
 async function start() {
   create.mount(refreshJobs);

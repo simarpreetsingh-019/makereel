@@ -40,14 +40,15 @@ function reelsHTML(data) {
       <video src="${esc(media(r.video))}" controls playsinline preload="metadata"></video>
       <div class="body">
         <div class="hook">${esc(r.hook)}</div>
-        <div class="sub">${esc(r.name)} · ${Math.round(r.end - r.start)}s · score ${r.score}</div>
+        <div class="sub"><span class="chip">${Math.round(r.end - r.start)} s</span> <span class="chip">score ${r.score}</span></div>
         ${r.ai?.reason ? `<div class="ai-why" title="AI judge">✦ ${esc(r.ai.reason)}</div>` : ""}
         <div class="acts">
-          <button class="btn small" data-act="edit" data-name="${r.name}">Edit</button>
-          <button class="btn small" data-act="copy" data-name="${r.name}">Copy post text</button>
+          <button class="btn small primary" data-act="edit" data-name="${r.name}">Edit</button>
           <a class="btn small" href="${esc(media(r.download))}">Download</a>
-          <button class="btn small" data-act="export" data-name="${r.name}">Formats</button>
-          <button class="btn small danger" data-act="delete" data-name="${r.name}">Delete</button>
+          <button class="btn small" data-act="copy" data-name="${r.name}">Copy post text</button>
+          <details class="menu"><summary class="btn small" aria-label="More for this reel">⋯</summary><div class="menu-list">
+            <button class="btn small" data-act="export" data-name="${r.name}">Other shapes (4:5, 1:1, 16:9)</button>
+            <button class="btn small danger" data-act="delete" data-name="${r.name}">Delete reel</button></div></details>
         </div>
       </div>
     </div>`).join("")}</div>${bar}`;
@@ -64,12 +65,13 @@ export function render(state) {
   $("#library-crumbs").innerHTML = inFolder
     ? `<a class="btn small" href="#/library">← All folders</a><h2>${esc(state.folder.info?.title || state.folder.folder)}</h2>
        ${state.folder.info?.url ? `<a class="hint" style="margin:0" href="${esc(state.folder.info.url)}" target="_blank" rel="noopener">original video ↗</a>` : ""}
-       <button class="btn small" id="lib-refresh" style="margin-left:auto" title="Look for new reels">↻ Refresh</button>
-       <button class="btn small" id="lib-show" title="Open this folder in Finder / Explorer">Show in folder</button>
+       <button class="btn small primary" id="lib-zip" style="margin-left:auto" title="All reels and their post text in one zip">Download all</button>
        ${state.folder.info?.url?.includes("youtube") ? `<button class="btn small" id="lib-ytcap" title="Use YouTube's own captions for reels you haven't edited">Get YouTube captions</button>` : ""}
-       <button class="btn small" id="lib-zip" title="All reels and their post text in one zip">Download all</button>
        <button class="btn small" id="join-start">Join reels</button>
-       <button class="btn small danger" id="delete-folder">Delete folder</button>`
+       <details class="menu"><summary class="btn small" aria-label="More actions">⋯</summary><div class="menu-list">
+         <button class="btn small" id="lib-refresh" title="Look for new reels">↻ Refresh</button>
+         <button class="btn small" id="lib-show" title="Open this folder in Finder / Explorer">Show in folder</button>
+         <button class="btn small danger" id="delete-folder">Delete folder</button></div></details>`
     : `<h2>Folders</h2><button class="btn small" id="lib-refresh" style="margin-left:auto" title="Look for new reels">↻ Refresh</button>`;
   $("#library-body").innerHTML = inFolder ? reelsHTML(state.folder) : foldersHTML(state.folders, query);
 }

@@ -51,6 +51,9 @@ function fill(reel) {
   $("#ed-video").src = media(reel.video);
   $("#ed-download").href = media(reel.download);
   $("#ed-hook").value = reel.hook || "";
+  $("#ed-title").textContent = reel.hook ? `Edit: ${reel.hook}` : `Edit ${cur.name}`;
+  $("#ed-title").title = cur.name;
+  api.settings().then((s) => { $("#ed-aifix").hidden = (s.ai?.provider || "off") === "off"; }).catch(() => {});
   $("#ed-transcript").value = reel.transcript;
   fillCompare(reel.compare);
   $("#ed-caption").value = reel.caption || "";

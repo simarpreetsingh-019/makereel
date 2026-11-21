@@ -203,6 +203,8 @@ export async function drawNotices(settings) {
   const first = !update;
   try { update = update || (await api.updates()); } catch { /* offline: no notice */ }
   if (first) announce(update);
+  const dot = document.getElementById("nb-system");
+  if (dot) { dot.hidden = !(update?.available && !update.installed); dot.title = "An update is ready"; }
   if (update?.available && !update.installed) {
     parts.push(`<div class="banner notice">makereel <b>${esc(update.latest.version)}</b> is available.
       <a href="#/system">See what's new and update →</a></div>`);

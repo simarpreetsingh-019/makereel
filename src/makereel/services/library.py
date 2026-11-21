@@ -118,11 +118,22 @@ def list_folders() -> list[dict]:
         cover = next((d / r.stem for r in reels if (d / f"{r.stem}.mp4").exists()), None)
         out.append({
             "folder": d.name, "title": info.get("title") or d.name, "channel": info.get("channel"),
-            "url": info.get("url"), "live": info.get("live_status") == "is_live", "count": len(reels),
+            "url": info.get("url"), "count": len(reels),
+            "live": info.get("live_status") == "is_live" and _recent(d, 3600),
             "updated": max([p.stat().st_mtime for p in reels] + [d.stat().st_mtime]),
             "cover": _media_url(d.name, cover.name + ".mp4", cover.with_suffix(".mp4")) if cover else None,
         })
     return sorted(out, key=lambda f: f["updated"], reverse=True)
+
+
+def _recent(d: Path, seconds: float) -> bool:
+    """Something in the folder changed within `seconds` (a live recording still adds reels or updates it)."""
+    import time
+    try:
+        newest = max((p.stat().st_mtime for p in d.iterdir()), default=d.stat().st_mtime)
+    except OSError:
+        return False
+    return time.time() - newest < seconds
 
 
 def list_reels(folder: str) -> dict:
@@ -285,7 +296,7 @@ def pending_youtube_upgrades() -> list[str]:
             info = json.loads(meta.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if (info.get("live_status") == "is_live" and not info.get("yt_captions_done")
+        if ((info.get("live_status") == "is_live" or info.get("recorded_live")) and not info.get("yt_captions_done")
                 and now - meta.parent.stat().st_mtime < UPGRADE_FOR
                 and now - info.get("yt_captions_tried", 0) > UPGRADE_EVERY
                 and "youtube" in (info.get("url") or "")):
