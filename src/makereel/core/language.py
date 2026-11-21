@@ -188,12 +188,18 @@ def romanize(word: str) -> str:
         return flat or word
 
 
+def romanize_word(word: str) -> str:
+    """English letters for one word; English words written in Hindi script get their English spelling."""
+    from .loanwords import english_spelling
+    return english_spelling(word) or romanize(word)
+
+
 def romanize_words(words: list[dict]) -> list[dict]:
-    return [{**w, "word": romanize(w["word"])} for w in words]
+    return [{**w, "word": romanize_word(w["word"])} for w in words]
 
 
 def romanize_text(text: str) -> str:
-    return " ".join(romanize(t) for t in text.split())
+    return " ".join(romanize_word(t) for t in text.split())
 
 
 # --------------------------------------------------------------------------- fonts

@@ -103,3 +103,9 @@ def test_align_by_time_does_not_drift():
          {"word": "ko", "start": 1.5}]
     rows = align(a, b)
     assert [r["ok"] for r in rows] == [True, False, True] and rows[1]["alt"] == "know"
+
+
+def test_english_words_in_hindi_script_get_english_spelling():
+    from makereel.core import language
+    out = language.romanize_text("भाई इमोशनल मोमेंट है। तुम मिशन टाइम")
+    assert out == "bhai emotional moment hai. tum mission time"
