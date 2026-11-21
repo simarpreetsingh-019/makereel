@@ -382,3 +382,9 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .ready-toggle{font-weight:400;font-size:13px;margin:2px 0}
 .reel.is-ready{outline:2px solid #30a46c66}
 .chip.top{background:#f5a52422;color:#f5a524}
+/* system page */
+.sys-bench>summary{cursor:pointer;list-style:none}
+.sys-bench>summary::-webkit-details-marker{display:none}
+.sys-bench>summary::before{content:"▸ ";color:var(--muted)}
+.sys-bench[open]>summary::before{content:"▾ "}
+.sys-compact{font-size:13px}

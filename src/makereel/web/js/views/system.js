@@ -24,14 +24,14 @@ const fmtPct = (v) => (v === null || v === undefined ? "—"
 
 function draw() {
   const d = data.device;
-  $("#sys-device").innerHTML = `<table class="kv">
-    <tr><td>CPU</td><td>${esc(d.cpu)} · ${d.cores_physical} cores</td></tr>
-    <tr><td>Memory</td><td>${d.ram_gb} GB</td></tr>
-    <tr><td>GPU</td><td>${esc(d.gpu || "unknown")}</td></tr>
-    <tr><td>Video encoder</td><td>${esc(d.encoder)}${d.encoder === "libx264" ? " (software)" : " (hardware)"}</td></tr>
+  const gpu = d.gpu && d.gpu !== "unknown" ? ` · ${esc(d.gpu)}` : "";
+  const power = d.on_battery ? ` · <span class="bad">on battery (slower)</span>` : "";
+  $("#sys-device").innerHTML = `<div>${esc(d.cpu)} · ${d.cores_physical} cores · ${d.ram_gb} GB memory${gpu}${power}</div>
+    <div class="hint" style="margin:4px 0 0">Video ${d.encoder === "libx264" ? "made on the processor" : "uses hardware encoding"}.</div>
+    <details style="margin-top:6px"><summary class="hint" style="margin:0">Technical details</summary><table class="kv">
+    <tr><td>Video encoder</td><td>${esc(d.encoder)}</td></tr>
     <tr><td>System</td><td>${esc(d.os)} · ${esc(d.arch)} · Python ${esc(d.python)} · ffmpeg ${esc(d.ffmpeg)}</td></tr>
-    <tr><td>Power</td><td>${d.on_battery === null ? "n/a" : d.on_battery ? "on battery (results will be slower)" : "plugged in"}</td></tr>
-  </table>`;
+  </table></details>`;
   $("#sys-runs").innerHTML = data.runs.length ? `<table class="grid">
     <thead><tr><th>When</th><th>Version</th><th>Model</th><th>Total</th><th>Speed</th><th>CPU time</th><th>Peak RAM</th></tr></thead>
     <tbody>${data.runs.map((r) => `<tr data-id="${r.id}" class="${selected?.id === r.id ? "on" : ""}">

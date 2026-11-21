@@ -347,22 +347,19 @@
       </div>
       <pre class="log" id="up-log" hidden></pre>
     </div>
-    <div class="grid2">
-      <div class="card"><h2>This device</h2><div id="sys-device">Loading…</div></div>
-      <div class="card">
-        <h2>Benchmark</h2>
-        <p class="hint" style="margin-top:0">Makes a reel from a fixed 19-second test video and measures time, CPU, memory and disk.
-          It uses this device's processor for about a minute. Results stay on this device unless you choose to share them.</p>
-        <label class="switch" style="font-weight:400;margin-top:8px"><input type="checkbox" id="sys-consent"> Allow the benchmark to run on this device</label>
-        <div class="row" style="margin-top:12px">
-          <select id="sys-model"><option value="">Speech model from settings</option><option>tiny</option><option>base</option><option>small</option></select>
-          <button class="btn primary" id="sys-run">Run benchmark</button>
-          <span class="hint" id="sys-status" style="margin:0"></span>
-        </div>
+    <div class="card"><h2>This computer</h2><div id="sys-device" class="sys-compact">Loading…</div></div>
+    <details class="card sys-bench"><summary><h2 style="display:inline">Speed test (benchmark)</h2> <span class="hint" style="margin:0">optional</span></summary>
+      <p class="hint">Makes a reel from a fixed 19-second test video and measures time, CPU, memory and disk.
+        It uses this device's processor for about a minute. Results stay on this device unless you choose to share them.</p>
+      <label class="switch" style="font-weight:400;margin-top:8px"><input type="checkbox" id="sys-consent"> Allow the benchmark to run on this device</label>
+      <div class="row" style="margin-top:12px">
+        <select id="sys-model"><option value="">Speech model from settings</option><option>tiny</option><option>base</option><option>small</option></select>
+        <button class="btn primary" id="sys-run">Run benchmark</button>
+        <span class="hint" id="sys-status" style="margin:0"></span>
       </div>
-    </div>
-    <div class="card"><h2>Result</h2><div id="sys-result"><div class="empty">Run a benchmark to see results.</div></div></div>
-    <div class="card"><h2>History</h2><div id="sys-runs"></div></div>
+      <h3>Result</h3><div id="sys-result"><div class="empty">Run a benchmark to see results.</div></div>
+      <h3>History</h3><div id="sys-runs"></div>
+    </details>
   </section>
 </main>
 
