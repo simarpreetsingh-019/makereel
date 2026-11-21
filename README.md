@@ -1,23 +1,33 @@
 # makereel
 
-Paste any link (a live stream, a past stream, a long video or a Short; YouTube, Twitch, Kick and more)
-and get captioned 9:16 reels with full creator credits, ready for Instagram, YouTube Shorts and X.
+**Turn live streams and long videos into captioned vertical reels, automatically, on your own computer.**
 
-- **Any link, auto-detected.** Live streams are recorded and clipped as big moments happen. Past streams use the chat replay.
-- **One folder per video.** Each folder is named after the video's title, with all its reels inside.
-- **Editable, in-sync captions.** Captions are text, not images, and are timed from each reel's own audio. Fix words in a paragraph,
-  auto-sync, shift them, or tap along to the audio, all with a live preview.
-- **Speaker framing.** "Follow the speaker" keeps the person centred with a calm, smooth camera.
-- **Caption styles.** Classic, Pop, Boxed word, Glow, Karaoke fill, One word, Minimal.
-- **Trim, split, join.** Every reel keeps 6 s of extra footage on each side, so you can extend or cut it later.
-- **Optional AI judge.** A local model or your own key scores moments like an editor and writes titles. Off by default.
-- **Any shape.** Export each reel as 9:16, 4:5, 1:1 or 16:9 (blurred fill, crop or black bars) in seconds.
-- **Brand kit.** Your logo, fonts and caption colours on every reel. The "Made with makereel" line in the post text is opt-out.
-- **Benchmarks.** Measure speed, CPU, RAM and disk on any device, and compare versions.
-- **Credits on every post.** Creator, channel link, original title, a link to the exact second, and their tags.
-- **Runs on your own machine** (Windows, macOS, Linux or a server) at low power, 24/7 if you like.
+makereel watches a YouTube, Twitch or Kick stream (or any video link or file), finds the big moments as
+they happen, and makes 9:16 reels with word-by-word captions, smart framing and full credit to the
+creator. Ready for YouTube Shorts, Instagram Reels and TikTok. It runs on Windows, macOS and Linux, needs
+no account and no API key, and nothing is uploaded anywhere.
 
-Built first for GTA 6 streams; the `talk` profile tunes it for podcasts and talking heads.
+[Website](https://simarpreetsingh-019.github.io/makereel/) · [Getting started](docs/GETTING_STARTED.md) ·
+[For AI assistants: llms.txt](llms.txt)
+
+```text
+live stream ──▶ big moment (loud + chat spike) ──▶ reel: 9:16, captions, framing, creator credit
+```
+
+## Why makereel
+
+Most "long video to shorts" tools work on finished videos, in the cloud, with an AI key. makereel is built
+for streamers and clippers:
+
+| | makereel |
+|---|---|
+| **Clips live streams while they're live** | A rolling buffer records the stream; a reel is made each time something big happens. |
+| **Watches channels 24/7** | Clips your channels when they go live, plus new uploads and premieres. |
+| **Reads the chat** | Moments are found from chat activity *and* loudness, not just the transcript. |
+| **Credits every creator** | Channel badge on the video; creator, link and exact timestamp in the post text. |
+| **Hindi, English and Hinglish** | Language per sentence, a Hinglish model, YouTube's own captions for past videos, and a second model that double-checks every caption. |
+| **Free and private** | Runs on your computer. Optional AI only with your own key. |
+| **Low power** | Stream copying uses almost no CPU; a "Cool and quiet" mode keeps laptops calm. |
 
 ## Install (one command)
 
@@ -35,57 +45,99 @@ irm https://raw.githubusercontent.com/simarpreetsingh-019/makereel/main/install.
 curl -LsSf https://raw.githubusercontent.com/simarpreetsingh-019/makereel/main/install.sh | bash
 ```
 
-Then open **makereel** from the shortcut it creates. New here? Read **[Getting started](docs/GETTING_STARTED.md)**.
+Then open **makereel** from the shortcut, or run `makereel start`. Check on it with `makereel status`;
+update with `makereel update`; all commands: `makereel help`.
 
-### For developers
+## Features
+
+**Finding moments**
+- Live clipping with a rolling 10-minute buffer; past streams use the chat replay.
+- Each reel is as long as its moment (a quick reaction ≈ 30 s, a long bit up to your limit, max 5 min).
+- Optional AI judge (a local model, Claude, or any OpenAI-compatible API) scores hook, engagement, value
+  and shareability, and writes titles.
+
+**Captions**
+- Word-by-word captions, 7 styles, kept clear of TikTok/Reels/Shorts buttons.
+- Hindi, English and mixed speech: language per sentence; a **Hinglish** model (Hindi and English in
+  English letters); YouTube's own captions for finished videos; captions in the original script, in
+  English letters, or translated to English.
+- A **second model double-checks** captions; disagreements show in yellow side by side, one click to fix.
+- Edit any word (timing kept), shift or tap-to-sync, import SRT/VTT.
+
+**Framing and look**
+- Auto layout: split screen (two people, or webcam over gameplay), follow the speaker, or blurred fill.
+- Follow the speaker by who is talking; edit the camera cuts on a timeline; "show everyone" zoom-outs.
+- Brand kit (logo, fonts, colours) and a creator badge (channel picture + @handle).
+
+**Editing and export**
+- Trim, split, join, and "make short versions" of a long reel.
+- Quote and note cards, outros. Export as 9:16, 4:5, 1:1 or 16:9.
+
+**Automation and setup**
+- Channel watcher for live streams and new uploads; start-date window and check interval.
+- Speech models suggested for your computer (RAM, disk, NVIDIA GPU); NVIDIA GPU speech with CPU fallback.
+- Live CPU/temperature card, processing modes, choose where files are saved, clear cache.
+- YouTube "are you a bot?" checks: retries other clients first, then a sign-in file or browser sign-in.
+- Updates from GitHub with checksum verification; `makereel update`.
+
+## How it works
+
+1. **yt-dlp** asks the site where the stream is; **ffmpeg** copies it (no re-encoding) into 6-second
+   pieces in a rolling buffer and reads the loudness every second; a second yt-dlp process counts chat.
+2. A jump in loudness or chat opens a **moment**; it stays open while the moment lasts.
+3. The moment is cut, **transcribed** (faster-whisper, or YouTube's captions for past videos) and checked
+   by a second model, **framed** (face and speaker detection) and **rendered** with a hardware encoder.
+4. Post text with full credits is written next to each reel. Everything stays on your computer.
+
+Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## From the terminal
 
 ```bash
-git clone https://github.com/simarpreetsingh-019/makereel && cd makereel
-python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # Windows: .venv\Scripts\pip install -e ".[dev]"
-.venv/bin/makereel web                                         # opens http://localhost:8765
-.venv/bin/python -m pytest -q                                  # tests
-```
-
-You'll need ffmpeg with libass (captions) and Node.js on your PATH; the installers above show how.
-
-From the terminal instead:
-
-```bash
-makereel run "<any link>"                         # live → clips as it streams; anything else → clips now
-makereel run "<long VOD>" --section "1:00:00-2:30:00"
+makereel start                                   # first-run setup, then open the app
+makereel run "<any link>"                        # live: clips as it streams; anything else: clips now
+makereel run "<long video>" --section "1:00:00-2:30:00" --language hi
 makereel local gameplay.mp4 --credit "Name" --credit-url "https://youtube.com/@name"
-makereel rerender "Me at the zoo" reel_01 --transcript "fixed caption text…"   # or --sync / --offset -0.2
-makereel export "Me at the zoo" reel_01 --format 4x5 --fit blur
-makereel bench                                    # speed, CPU, RAM, disk on this device
-makereel daemon                                   # 24/7 channel watcher without the web UI
+makereel status                                  # what's installed, running, recording
+makereel signin cookies.txt                      # a YouTube sign-in file, if YouTube asks
+makereel daemon                                  # 24/7 channel watcher without the app
 ```
 
-## How it picks moments
+## FAQ
 
-1. **Cheap signals over the whole video.** It measures loudness every second and chat speed (from the chat replay or live chat). Chat is shifted back about 6 s because people react late. A 10-hour video uses only a few MB of memory.
-2. **Candidates.** The biggest spikes become 30-second windows, 3× as many as the reels you asked for.
-3. **Transcribe only those windows** (faster-whisper, int8). A 6-hour stream needs about 15 minutes of transcription, not 6 hours. Hype words and talking pace re-rank the windows.
-4. **Clean edges.** Each clip starts and ends in a pause between words, and starts on a new shot (PySceneDetect).
-5. **Render.** The reel is 9:16 with a blurred fill, loudness-normalised, with an on-screen title and word-by-word captions. It uses a hardware encoder when one is available.
+**Is it free?** Yes. It runs on your computer; there's nothing to pay for. AI features are optional and use
+your own key.
 
-Live streams use a rolling buffer (idea from [PeakCut](https://github.com/haziqahmedqasmi/PeakCut), MIT). The stream is copied into 6-second pieces without re-encoding, which costs almost no CPU, and old pieces are deleted. Nothing is transcribed until loudness or chat jumps 60% above the last 3 minutes.
+**Does it upload my videos?** No. Everything is processed locally. The only network use is downloading the
+stream or video, checking channels, and checking for updates.
+
+**Which sites?** YouTube, Twitch and Kick, and any site yt-dlp supports, plus local video files.
+
+**Which languages?** Any language Whisper supports; extra care for Hindi, English and Hinglish.
+
+**Do I need a GPU?** No. An NVIDIA GPU makes speech faster; Apple Silicon Macs run well on the CPU.
+
+**Can I repost other people's streams?** Credit is not permission. You're responsible for having the right
+to repost what you clip; check each platform's rules and the creator's wishes.
 
 ## Documentation
 
 | | |
 |---|---|
-| [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) | First steps: install, speech models, your first reels, editing, 24/7 |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Folder structure, layers, data flow, state, error handling |
-| [docs/API.md](docs/API.md) | REST API v1 reference |
-| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every environment variable and setting |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Windows, macOS, Linux, Docker, servers, 24/7 low-power setup |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Setting up, tests, lint, conventions, adding a route |
-| [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | What's measured, how to share results, results table |
-| [docs/CLIENT_SIDE_PLAN.md](docs/CLIENT_SIDE_PLAN.md) | Plan: offer makereel as a website that runs on each visitor's own device (no servers to pay for) |
-| [CHANGELOG.md](CHANGELOG.md) | What changed |
+| [Getting started](docs/GETTING_STARTED.md) | Install, speech models, your first reels, editing, 24/7 |
+| [Architecture](docs/ARCHITECTURE.md) | Folder structure, layers, data flow |
+| [Configuration](docs/CONFIGURATION.md) | Every setting and environment variable |
+| [API](docs/API.md) | Local REST API |
+| [Deployment](docs/DEPLOYMENT.md) | Windows, macOS, Linux, Docker, 24/7 setups |
+| [Development](docs/DEVELOPMENT.md) | Tests, lint, conventions |
+| [Benchmarks](docs/BENCHMARKS.md) | Speed, CPU, memory measurements |
+| [Releasing](docs/RELEASING.md) | Publishing updates |
+| [Changelog](CHANGELOG.md) | What changed |
 
-## Credits and responsibility
+## Credits
 
-Every reel's post text credits the original creator and links to the exact moment.
-You are responsible for having the right to repost what you clip. Credit is not permission, so check each
-platform's rules and the creator's wishes.
+Built on [yt-dlp](https://github.com/yt-dlp/yt-dlp), [FFmpeg](https://ffmpeg.org),
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper), OpenCV, PySceneDetect and
+[uv](https://github.com/astral-sh/uv). The live rolling-buffer idea comes from
+[PeakCut](https://github.com/haziqahmedqasmi/PeakCut) (MIT). Hinglish speech models by
+[Oriserve](https://huggingface.co/Oriserve) (Apache-2.0).

@@ -1,0 +1,106 @@
+# makereel — full description (for people and AI assistants)
+
+Source: https://github.com/simarpreetsingh-019/makereel · Website: https://simarpreetsingh-019.github.io/makereel/
+
+## In one paragraph
+
+makereel is a free, open-source application that turns live streams and long videos into short, captioned
+vertical reels (9:16) for YouTube Shorts, Instagram Reels and TikTok. It runs entirely on the user's own
+computer (Windows 10/11, macOS, Linux) and opens in the browser at http://localhost:8765. It can clip a
+YouTube, Twitch or Kick stream while it is live, watch channels 24/7 and clip them automatically, and
+process past streams, ordinary videos (any site yt-dlp supports) and local files. Moments are found from
+loudness and live-chat activity, optionally ranked by an AI judge. Each reel gets word-by-word captions,
+automatic framing (split screen, follow the speaker, or blurred background), the creator's channel badge,
+and post text that credits the creator with a link to the exact moment. No account, server or API key is
+required; nothing is uploaded.
+
+## Who it is for
+
+- Clippers and editors who turn streamers' broadcasts into shorts.
+- Streamers and podcasters repurposing their own streams and videos.
+- Especially Indian (Hindi / Hinglish) and English gaming and talk streams.
+
+## What makes it different
+
+Compared with SupoClip, OpusClip, OpenShorts, Clips Kitty and Cutawan:
+1. Clips live streams while they are live (rolling buffer), not only finished videos.
+2. Watches channels 24/7: clips them when they go live, and new uploads and premieres.
+3. Finds moments from chat activity and loudness, not only the transcript.
+4. Credits the original creator on every reel (badge) and in every post text.
+5. Local-first and free: no cloud, no account, no API key; optional AI uses the user's own key or a local model.
+6. Strong Hindi/English/Hinglish captions: language per sentence, a Hinglish speech model, YouTube's own
+   captions for finished videos, and a second model that double-checks captions.
+
+## How it works
+
+1. yt-dlp asks the platform where the stream is (HLS playlist links).
+2. ffmpeg copies the stream without re-encoding into 6-second pieces in a rolling 10-minute buffer, and
+   decodes the audio to measure loudness every second. A second yt-dlp process counts live-chat messages.
+3. A jump in loudness or chat opens a moment; it stays open while the moment lasts and closes after about
+   8 calm seconds. Reels are 30 seconds to several minutes, within the user's limits (max 5 minutes).
+4. The moment is cut, transcribed (faster-whisper / CTranslate2; or YouTube's own captions for finished
+   videos), double-checked by a second speech model, framed (YuNet face detection, mouth-movement speaker
+   tracking) and rendered with a hardware video encoder when available.
+5. Post text with credits is written next to each reel. Everything stays on the computer.
+
+## Features
+
+Finding moments: live clipping; chat replay for past streams; automatic reel length; reels-per-hour limit;
+optional AI judge (local model via Ollama/LM Studio, Claude, or any OpenAI-compatible API) with hook,
+engagement, value and shareability scores and titles; one recording per stream.
+
+Captions: word-by-word, 7 styles, safe zones for app buttons; Whisper models (base, small, medium,
+distil-large-v3, large-v3) and Hinglish models (Oriserve Hindi2Hinglish Apex and Swift); language per
+sentence; original script, English letters, or English translation; YouTube's own captions for finished
+YouTube videos (original-speech tracks only); second-model double-check with a side-by-side view where
+disagreements are highlighted in yellow; edit words with timing kept; shift or tap-to-sync; SRT/VTT import.
+
+Framing and look: auto layout (split screen for two people or webcam over gameplay, follow the speaker,
+blurred fill, crop, black bars); speaker tracking by mouth movement; editable camera cuts; "show everyone"
+zoom-outs; brand kit (logo, fonts, colours); creator badge.
+
+Editing and export: trim, split, join, make short versions of a long reel; quote and note cards, outros;
+export 9:16, 4:5, 1:1, 16:9.
+
+Automation: 24/7 channel watcher (live streams, new uploads, premieres) with start-date window and check
+interval; inbox file; daemon mode; local REST API.
+
+Setup and computer: one-command installers (they install ffmpeg, Node.js and a private Python via uv);
+speech models suggested for the computer (RAM, disk, NVIDIA GPU); NVIDIA GPU speech with automatic CPU
+fallback; processing modes (cool and quiet / balanced / fast); live CPU and Mac temperature card; choose
+where files are saved; clear cache; in-app updates verified by checksum; commands `makereel start`,
+`status`, `help`, `update`, `gpu`, `signin`.
+
+YouTube bot checks ("Sign in to confirm you're not a bot"): retries other YouTube clients first, then
+uses the user's sign-in (a cookies file, or a browser such as Firefox); notifies the user when blocked.
+
+## Install
+
+Windows (PowerShell):
+    irm https://raw.githubusercontent.com/simarpreetsingh-019/makereel/main/install.ps1 | iex
+macOS / Linux (Terminal):
+    curl -LsSf https://raw.githubusercontent.com/simarpreetsingh-019/makereel/main/install.sh | bash
+Then: `makereel start`. Update: `makereel update`.
+
+Download size: about 90 MB of libraries plus a speech model (150 MB to 3 GB, chosen during setup).
+
+## Requirements
+
+Windows 10/11, macOS or Linux; 4 GB RAM minimum, 8–16 GB recommended; an NVIDIA GPU is optional.
+
+## Limits
+
+- YouTube's automatic captions are available only after a live stream ends.
+- On Windows, Chrome/Brave/Edge logins can't be read by other apps (app-bound encryption); use Firefox or a
+  sign-in file if YouTube asks to confirm you're not a bot.
+- Live clipping needs makereel running; 24/7 watching needs the computer on.
+- Reposting requires the right to do so; credit is not permission.
+
+## FAQ
+
+Is makereel free? Yes, it runs locally with nothing to pay for.
+Does it upload videos? No.
+Which platforms? YouTube, Twitch, Kick, any site yt-dlp supports, and local files.
+Does it need a GPU? No; an NVIDIA GPU makes speech faster.
+Does it support Hindi? Yes, including mixed Hindi-English (Hinglish).
+Is it open source? The code is public on GitHub.

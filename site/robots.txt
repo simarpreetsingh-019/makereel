@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# AI assistants: a plain-text description of makereel
+# https://simarpreetsingh-019.github.io/makereel/llms.txt
+Sitemap: https://simarpreetsingh-019.github.io/makereel/sitemap.xml

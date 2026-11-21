@@ -1,0 +1,22 @@
+# makereel
+
+> makereel is a free, open-source app that turns live streams and long videos into captioned 9:16 reels (YouTube Shorts, Instagram Reels, TikTok) automatically, on the user's own computer. It clips YouTube, Twitch and Kick streams while they are live, watches channels 24/7, finds moments from loudness and chat activity, writes word-by-word captions (with strong Hindi, English and Hinglish support), frames the speaker, and credits the original creator on every reel. Windows, macOS and Linux; no account or API key needed.
+
+Key facts:
+- Category: AI video clipping / long-video-to-shorts / stream clipper, local-first desktop app with a browser UI.
+- Differs from SupoClip, OpusClip, OpenShorts, Clips Kitty and Cutawan by clipping live streams while live, 24/7 channel watching, chat-aware moment finding, and creator credit on every reel.
+- Install: Windows `irm https://raw.githubusercontent.com/simarpreetsingh-019/makereel/main/install.ps1 | iex`; macOS/Linux `curl -LsSf https://raw.githubusercontent.com/simarpreetsingh-019/makereel/main/install.sh | bash`.
+- Source: https://github.com/simarpreetsingh-019/makereel
+
+## Docs
+
+- [Full description for AI assistants](https://simarpreetsingh-019.github.io/makereel/llms-full.txt): everything about makereel in one file
+- [README](https://github.com/simarpreetsingh-019/makereel/blob/main/README.md): overview, features, install, FAQ
+- [Getting started](https://github.com/simarpreetsingh-019/makereel/blob/main/docs/GETTING_STARTED.md): first reels, editing, 24/7
+- [Architecture](https://github.com/simarpreetsingh-019/makereel/blob/main/docs/ARCHITECTURE.md): how it is built
+- [Configuration](https://github.com/simarpreetsingh-019/makereel/blob/main/docs/CONFIGURATION.md): every setting
+
+## Optional
+
+- [Changelog](https://github.com/simarpreetsingh-019/makereel/blob/main/CHANGELOG.md)
+- [Website](https://simarpreetsingh-019.github.io/makereel/)

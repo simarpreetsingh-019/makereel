@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>makereel: clip live streams into captioned reels, free and on your computer</title>
+<meta name="description" content="makereel turns live streams and long videos into captioned 9:16 reels for YouTube Shorts, Instagram Reels and TikTok. Clips YouTube, Twitch and Kick streams while they're live, watches channels 24/7, reads the chat, supports Hindi, English and Hinglish, and credits every creator. Free, open source, runs on Windows, macOS and Linux.">
+<link rel="canonical" href="https://simarpreetsingh-019.github.io/makereel/">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#111113">
+<link rel="alternate" type="text/plain" title="makereel for AI assistants" href="https://simarpreetsingh-019.github.io/makereel/llms.txt">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="makereel">
+<meta property="og:title" content="makereel: live streams into captioned reels, automatically">
+<meta property="og:description" content="Clips streams while they're live, watches channels 24/7, chat-aware moments, Hindi + English captions, creator credit on every reel. Free, on your own computer.">
+<meta property="og:url" content="https://simarpreetsingh-019.github.io/makereel/">
+<meta property="og:image" content="https://simarpreetsingh-019.github.io/makereel/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="makereel: live streams into captioned reels">
+<meta name="twitter:description" content="Clips streams while they're live. 24/7, chat-aware, Hindi + English, creator credit. Free, local.">
+<meta name="twitter:image" content="https://simarpreetsingh-019.github.io/makereel/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23e5484d'/%3E%3Cpath d='M12 9l12 7-12 7z' fill='white'/%3E%3C/svg%3E">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"SoftwareApplication","name":"makereel","applicationCategory":"MultimediaApplication","operatingSystem":"Windows 10, Windows 11, macOS, Linux",
+  "description":"Free, local app that turns live streams and long videos into captioned 9:16 reels. Clips YouTube, Twitch and Kick streams while live, watches channels 24/7, finds moments from loudness and chat, supports Hindi, English and Hinglish captions, and credits every creator.",
+  "url":"https://simarpreetsingh-019.github.io/makereel/","downloadUrl":"https://github.com/simarpreetsingh-019/makereel","codeRepository":"https://github.com/simarpreetsingh-019/makereel",
+  "softwareVersion":"0.7.0","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},
+  "featureList":["Clip live streams while live","24/7 channel watcher","Chat-aware moment detection","Word-by-word captions","Hindi, English and Hinglish","Speaker framing and split screen","Creator credit on every reel","Runs locally, no API key"]},
+ {"@type":"FAQPage","mainEntity":[
+  {"@type":"Question","name":"Is makereel free?","acceptedAnswer":{"@type":"Answer","text":"Yes. It runs on your own computer with nothing to pay for. AI features are optional and use your own key or a local model."}},
+  {"@type":"Question","name":"Does makereel upload my videos?","acceptedAnswer":{"@type":"Answer","text":"No. Everything is processed on your computer. It only downloads the stream or video, checks channels and checks for updates."}},
+  {"@type":"Question","name":"Can makereel clip a live stream while it is live?","acceptedAnswer":{"@type":"Answer","text":"Yes. It records the stream into a rolling buffer and makes a reel each time loudness or chat jumps, while the stream is still going."}},
+  {"@type":"Question","name":"Which platforms does makereel support?","acceptedAnswer":{"@type":"Answer","text":"YouTube, Twitch and Kick, any site yt-dlp supports, and local video files."}},
+  {"@type":"Question","name":"Does makereel support Hindi and Hinglish?","acceptedAnswer":{"@type":"Answer","text":"Yes. It detects the language per sentence, has a Hinglish speech model, can use YouTube's own captions for finished videos, and double-checks captions with a second model."}},
+  {"@type":"Question","name":"Do I need a GPU?","acceptedAnswer":{"@type":"Answer","text":"No. An NVIDIA GPU makes speech recognition faster; Apple Silicon Macs run well on the CPU."}}]}
+]}
+</script>
+<style>
+:root { --bg:#f7f7f5; --panel:#fff; --ink:#18181b; --muted:#5f5f68; --line:#e4e4e0; --accent:#d63c41; --soft:#efeeea; }
+@media (prefers-color-scheme: dark) { :root { --bg:#111113; --panel:#1a1a1d; --ink:#ececee; --muted:#a1a1aa; --line:#2a2a2f; --accent:#f05a5f; --soft:#202024; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+a { color:var(--accent); }
+.wrap { max-width:1040px; margin:0 auto; padding:0 20px; }
+header.top { display:flex; justify-content:space-between; align-items:center; padding:18px 0; }
+.logo { font-weight:800; font-size:20px; color:var(--ink); text-decoration:none; } .logo span { color:var(--accent); }
+nav a { color:var(--muted); text-decoration:none; margin-left:18px; font-size:15px; } nav a:hover { color:var(--ink); }
+.hero { padding:56px 0 40px; }
+.hero h1 { font-size:clamp(32px,5.5vw,54px); line-height:1.1; margin:0 0 16px; letter-spacing:-0.02em; }
+.hero p.lead { font-size:clamp(17px,2.2vw,20px); color:var(--muted); max-width:720px; margin:0 0 26px; }
+.badges { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:28px; }
+.badge { background:var(--soft); border:1px solid var(--line); border-radius:999px; padding:4px 12px; font-size:14px; }
+.install { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; }
+.tabs { display:flex; gap:6px; margin-bottom:10px; }
+.tabs button { background:none; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:6px 12px; cursor:pointer; font:inherit; font-size:14px; }
+.tabs button[aria-selected=true] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+.cmd { display:flex; gap:10px; align-items:center; }
+.cmd code { flex:1; overflow-x:auto; white-space:nowrap; background:var(--soft); border-radius:8px; padding:12px; font:14px ui-monospace,SFMono-Regular,Menlo,monospace; }
+.cmd button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:11px 16px; cursor:pointer; font:inherit; font-weight:600; }
+.after { color:var(--muted); font-size:14px; margin:10px 0 0; }
+section { padding:44px 0; border-top:1px solid var(--line); }
+h2 { font-size:clamp(24px,3.4vw,32px); margin:0 0 20px; letter-spacing:-0.01em; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; }
+.card h3 { margin:0 0 6px; font-size:17px; } .card p { margin:0; color:var(--muted); font-size:15px; }
+ol.flow { counter-reset:s; list-style:none; padding:0; display:grid; gap:12px; }
+ol.flow li { counter-increment:s; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px 16px 14px 58px; position:relative; }
+ol.flow li::before { content:counter(s); position:absolute; left:16px; top:12px; width:28px; height:28px; border-radius:50%; background:var(--accent); color:#fff; display:grid; place-items:center; font-weight:700; }
+table { width:100%; border-collapse:collapse; font-size:15px; }
+th, td { text-align:left; padding:10px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--muted); font-weight:600; } td.y { color:var(--accent); font-weight:700; }
+.tablewrap { overflow-x:auto; }
+details { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 16px; margin-bottom:10px; }
+summary { cursor:pointer; font-weight:600; } details p { color:var(--muted); margin:8px 0 0; }
+footer { padding:30px 0 50px; color:var(--muted); font-size:14px; border-top:1px solid var(--line); }
+@media (max-width:640px) { nav a:not(.gh) { display:none; } .cmd { flex-direction:column; align-items:stretch; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <a class="logo" href="./">make<span>reel</span></a>
+  <nav><a href="#why">Why</a><a href="#how">How it works</a><a href="#features">Features</a><a href="#faq">FAQ</a>
+    <a class="gh" href="https://github.com/simarpreetsingh-019/makereel">GitHub</a></nav>
+</header>
+
+<main>
+<section class="hero" style="border-top:0">
+  <h1>Live streams into captioned reels, automatically.</h1>
+  <p class="lead">makereel watches a YouTube, Twitch or Kick stream, finds the big moments as they happen, and makes 9:16 reels
+    with word-by-word captions, smart framing and credit to the creator. Free, on your own computer.</p>
+  <div class="badges"><span class="badge">Clips while live</span><span class="badge">24/7 channel watcher</span>
+    <span class="badge">Reads the chat</span><span class="badge">Hindi · English · Hinglish</span>
+    <span class="badge">Creator credit</span><span class="badge">No API key</span></div>
+  <div class="install" id="install">
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-os="win">Windows</button>
+      <button role="tab" aria-selected="false" data-os="mac">macOS / Linux</button>
+    </div>
+    <div class="cmd"><code id="cmd">irm https://raw.githubusercontent.com/simarpreetsingh-019/makereel/main/install.ps1 | iex</code>
+      <button id="copy" type="button">Copy</button></div>
+    <p class="after" id="after">Paste into <b>PowerShell</b>. No Python needed: it gets ffmpeg, Node.js and its own Python. Then open makereel from the shortcut.</p>
+  </div>
+</section>
+
+<section id="why">
+  <h2>Built for streams, not just videos</h2>
+  <div class="grid">
+    <div class="card"><h3>Clips while live</h3><p>A rolling buffer records the stream; a reel is made each time something big happens, while it's still live.</p></div>
+    <div class="card"><h3>Watches 24/7</h3><p>Clips your channels when they go live, plus new uploads and premieres.</p></div>
+    <div class="card"><h3>Chat-aware</h3><p>Moments come from chat activity and loudness, the way viewers react, not just the transcript.</p></div>
+    <div class="card"><h3>Hindi, English, Hinglish</h3><p>Language per sentence, a Hinglish model, YouTube's own captions, and a second model that double-checks.</p></div>
+    <div class="card"><h3>Credits every creator</h3><p>Channel badge on the video; creator, link and exact moment in the post text.</p></div>
+    <div class="card"><h3>Free and private</h3><p>Runs on your computer. Nothing uploaded, no account, no API key.</p></div>
+  </div>
+</section>
+
+<section id="how">
+  <h2>How it works</h2>
+  <ol class="flow">
+    <li><b>Find the stream.</b> makereel asks YouTube, Twitch or Kick where the live video is, the same way a player does.</li>
+    <li><b>Record lightly.</b> It copies the stream without re-encoding (almost no CPU) into a rolling 10-minute buffer, and listens to the loudness and chat every second.</li>
+    <li><b>Spot the moment.</b> When loudness or chat jumps, a moment opens and stays open while it lasts: a quick reaction or a three-minute bit.</li>
+    <li><b>Make the reel.</b> Captions word by word, checked by a second model; framing that follows the speaker or splits webcam and game; your brand and the creator's badge.</li>
+    <li><b>Ready to post.</b> 9:16 (or 4:5, 1:1, 16:9) with post text crediting the creator. Edit anything first in the built-in editor.</li>
+  </ol>
+</section>
+
+<section id="features">
+  <h2>Everything in the box</h2>
+  <div class="grid">
+    <div class="card"><h3>Captions</h3><p>7 styles, safe zones for app buttons, edit any word with timing kept, side-by-side check with one-click fixes, SRT/VTT import.</p></div>
+    <div class="card"><h3>Framing</h3><p>Auto split screen, follow the speaker, editable camera cuts, "show everyone" zoom-outs.</p></div>
+    <div class="card"><h3>Editor</h3><p>Trim, split, join, make short versions, quote cards, outros, export in four shapes.</p></div>
+    <div class="card"><h3>Smart length</h3><p>Each reel is as long as its moment, from 30 seconds to 5 minutes.</p></div>
+    <div class="card"><h3>Optional AI judge</h3><p>A local model, Claude or any OpenAI-compatible API scores moments and writes titles.</p></div>
+    <div class="card"><h3>Easy on your computer</h3><p>Models suggested for your hardware, NVIDIA GPU support, a cool-and-quiet mode, live CPU and temperature.</p></div>
+  </div>
+</section>
+
+<section id="compare">
+  <h2>How makereel compares</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>makereel</th><th>Typical AI clippers</th></tr></thead>
+    <tbody>
+      <tr><td>Clips live streams while live</td><td class="y">Yes</td><td>Finished videos only</td></tr>
+      <tr><td>24/7 channel watching</td><td class="y">Yes</td><td>Rare</td></tr>
+      <tr><td>Uses live chat to find moments</td><td class="y">Yes</td><td>Transcript only</td></tr>
+      <tr><td>Runs on your computer, no key</td><td class="y">Yes</td><td>Cloud or API key needed</td></tr>
+      <tr><td>Hinglish captions with a second-model check</td><td class="y">Yes</td><td>One language per video</td></tr>
+      <tr><td>Creator credit on every reel</td><td class="y">Yes</td><td>No</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="faq">
+  <h2>Questions</h2>
+  <details open><summary>Is makereel free?</summary><p>Yes. It runs on your own computer with nothing to pay for. AI features are optional and use your own key or a local model.</p></details>
+  <details><summary>Does it upload my videos?</summary><p>No. Everything is processed on your computer. It only downloads the stream or video, checks channels and checks for updates.</p></details>
+  <details><summary>Which platforms?</summary><p>YouTube, Twitch and Kick, any site yt-dlp supports, and local video files.</p></details>
+  <details><summary>Does it support Hindi and Hinglish?</summary><p>Yes: language per sentence, a Hinglish speech model, YouTube's own captions for finished videos, and a second model that double-checks.</p></details>
+  <details><summary>Do I need a GPU?</summary><p>No. An NVIDIA GPU makes speech faster; Apple Silicon Macs run well on the CPU.</p></details>
+  <details><summary>Can I repost other people's streams?</summary><p>Credit is not permission. You're responsible for having the right to repost what you clip; check each platform's rules and the creator's wishes.</p></details>
+</section>
+</main>
+
+<footer>
+  <p><b>makereel</b> · <a href="https://github.com/simarpreetsingh-019/makereel">Source on GitHub</a> ·
+    <a href="https://github.com/simarpreetsingh-019/makereel/blob/main/docs/GETTING_STARTED.md">Getting started</a> ·
+    <a href="llms.txt">For AI assistants (llms.txt)</a> · <a href="llms-full.txt">Full description</a></p>
+  <p>Built on yt-dlp, FFmpeg and faster-whisper.</p>
+</footer>
+</div>
+<script>
+const CMDS = {
+  win: ["irm https://raw.githubusercontent.com/simarpreetsingh-019/makereel/main/install.ps1 | iex",
+        "Paste into <b>PowerShell</b>. No Python needed: it gets ffmpeg, Node.js and its own Python. Then open makereel from the shortcut."],
+  mac: ["curl -LsSf https://raw.githubusercontent.com/simarpreetsingh-019/makereel/main/install.sh | bash",
+        "Paste into <b>Terminal</b>. No Python needed: it gets ffmpeg, Node.js and its own Python. Then run <code>makereel start</code>."],
+};
+const pick = (os) => {
+  document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.os === os)));
+  document.getElementById("cmd").textContent = CMDS[os][0];
+  document.getElementById("after").innerHTML = CMDS[os][1];
+};
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => pick(b.dataset.os)));
+if (/Mac|Linux/.test(navigator.platform) && !/Win/.test(navigator.platform)) pick("mac");
+document.getElementById("copy").addEventListener("click", async (e) => {
+  try { await navigator.clipboard.writeText(document.getElementById("cmd").textContent); e.target.textContent = "Copied"; }
+  catch { e.target.textContent = "Select and copy"; }
+  setTimeout(() => (e.target.textContent = "Copy"), 1600);
+});
+</script>
+</body>
+</html>
