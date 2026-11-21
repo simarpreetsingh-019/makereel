@@ -366,13 +366,16 @@
   <div class="ed-head">
     <h2 id="ed-title" style="margin:0">Edit reel</h2>
     <div class="tabs">
-      <button data-edtab="text" class="on">Text</button>
+      <button data-edtab="text" class="on">Quick fix</button>
+      <button type="button" id="ed-more" class="more-tools">More tools ▾</button>
+      <span id="ed-more-tabs" hidden>
       <button data-edtab="timing">Timing</button>
       <button data-edtab="look">Look</button>
       <button data-edtab="cards">Cards</button>
       <button data-edtab="camera">Camera</button>
       <button data-edtab="cut">Cut</button>
       <button data-edtab="export">Export</button>
+      </span>
     </div>
     <span class="hint" id="ed-msg" style="margin:0 0 0 auto"></span>
     <button class="btn small" id="ed-close" type="button">Close</button>
@@ -387,14 +390,11 @@
       </div>
     </div>
     <div class="stack">
-      <label class="field">Caption language <span class="hint" id="ed-lang" style="margin:0"></span>
-        <select id="ed-script"><option value="original">As spoken, mixed (हिंदी in Hindi script, English in English)</option><option value="roman">All in English letters (kya baat hai, emotional moment)</option><option value="english">Translate to English</option></select></label>
-      <p class="hint" id="ed-script-hint" style="margin:-6px 0 0">Changing this re-renders the reel. Going to English letters keeps your word edits; other switches write the captions again from the audio.</p>
       <label class="field">On-screen title<input id="ed-hook"></label>
       <label class="field">
         <span>Captions <span id="ed-words"></span></span>
         <textarea id="ed-transcript" class="transcript" rows="6" spellcheck="true"></textarea>
-        <span class="hint" style="margin:0">Fix any word right here. Words you don't touch keep their exact timing; edited, added or removed words are fitted around them.</span>
+        <span class="hint" style="margin:0">Fix any word here; untouched words keep their timing.</span>
       </label>
       <div><button class="btn small" id="ed-aifix" type="button" title="Sends only the caption text to your AI (Settings → AI judge)">Fix words with AI</button></div>
       <details id="ed-compare" hidden>
@@ -403,6 +403,11 @@
         <div class="cmp"><div><b class="hint">Captions now</b><div id="ed-cmp-a" class="cmp-col"></div></div>
           <div><b class="hint" id="ed-cmp-b-title">Other model</b><div id="ed-cmp-b" class="cmp-col"></div></div></div>
       </details>
+      <details class="ed-extras"><summary>More options: language, post text, logo, subtitles</summary>
+        <div class="stack" style="margin-top:10px">
+      <label class="field">Caption language <span class="hint" id="ed-lang" style="margin:0"></span>
+        <select id="ed-script"><option value="original">As spoken, mixed (हिंदी in Hindi script, English in English)</option><option value="roman">All in English letters (kya baat hai, emotional moment)</option><option value="english">Translate to English</option></select></label>
+      <p class="hint" id="ed-script-hint" style="margin:-6px 0 0">Changing this re-renders the reel. Going to English letters keeps your word edits; other switches write the captions again from the audio.</p>
       <div class="row">
         <label class="btn small">Import subtitles or transcript<input type="file" id="ed-import" accept=".srt,.vtt,.txt,text/plain" hidden></label>
         <button class="btn small" id="ed-srt" type="button">Download .srt</button>
@@ -413,7 +418,9 @@
       <details><summary>Advanced: caption file (.ass): fonts, colours, position, timing</summary>
         <textarea id="ed-ass" rows="12" style="font:12px var(--mono);margin-top:8px"></textarea>
       </details>
-      <div class="row">
+        </div>
+      </details>
+      <div class="row save-bar">
         <button class="btn primary" id="ed-save" type="button">Save &amp; re-render</button>
         <button class="btn" id="ed-restyle" type="button" title="Use the fonts and colours from the Brand tab">Apply brand style</button>
       </div>

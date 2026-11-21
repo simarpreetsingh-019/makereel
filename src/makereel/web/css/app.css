@@ -362,3 +362,8 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .subtabs button:focus-visible { outline: 2px solid var(--accent); }
 .saved { margin-left: auto; color: var(--ok); font-size: 13px; font-weight: 600; padding-right: 8px; }
 @media (max-width: 760px) { .subtabs { flex-wrap: nowrap; overflow-x: auto; } .subtabs button { white-space: nowrap; } }
+/* editor quick fix */
+.save-bar{position:sticky;bottom:0;background:var(--panel);padding:10px 0;border-top:1px solid var(--line);z-index:2}
+.more-tools{opacity:.8}
+#ed-more-tabs{display:contents}
+#ed-more-tabs[hidden]{display:none}

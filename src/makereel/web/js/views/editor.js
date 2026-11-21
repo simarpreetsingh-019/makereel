@@ -37,6 +37,7 @@ export async function openEditor(folder, name, onSaved, tab = "text") {
 function fillCompare(cmp) {
   $("#ed-compare").hidden = !cmp;
   if (!cmp) return;
+  $("#ed-compare").open = cmp.rows.some((r) => !r.ok);
   $("#ed-compare-sum").textContent = `Check captions: ${cmp.agree}% match (${cmp.captions_from} vs the ${cmp.checked_by})`;
   $("#ed-cmp-b-title").textContent = `Heard by the ${cmp.checked_by}`;
   $("#ed-cmp-a").innerHTML = cmp.rows.map((r, i) => `<span class="${r.ok ? "" : "cmp-bad"}" data-i="${i}">${esc(r.word)}</span>`).join(" ");
@@ -369,6 +370,7 @@ const LANGS = { en: "English", hi: "Hindi", pa: "Punjabi", ur: "Urdu", bn: "Beng
   ko: "Korean", zh: "Chinese", th: "Thai", vi: "Vietnamese", nl: "Dutch", pl: "Polish" };
 
 function showTab(tab) {
+  if (tab !== "text") $("#ed-more-tabs").hidden = false;
   document.querySelectorAll("#editor [data-edtab]").forEach((b) => b.classList.toggle("on", b.dataset.edtab === tab));
   document.querySelectorAll("#editor [data-edpanel]").forEach((p) => (p.hidden = p.dataset.edpanel !== tab));
   ["#ed-video", "#tm-video", "#lk-video", "#cut-video", "#cd-video", "#cm-video"].forEach((v) => $(v).pause());
@@ -583,6 +585,7 @@ function onEditorKey(e) {
 }
 
 export function mount() {
+  $("#ed-more").addEventListener("click", () => { const m = $("#ed-more-tabs"); m.hidden = !m.hidden; });
   $("#editor").addEventListener("keydown", onEditorKey);
   const dialog = $("#editor");
   $("#ed-close").addEventListener("click", () => dialog.close());
