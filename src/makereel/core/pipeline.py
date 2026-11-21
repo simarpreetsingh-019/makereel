@@ -62,6 +62,7 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand:
                       else signals.chat_activity(chat, n, meta.get("offset", 0.0)))
             curve, parts = highlights.signal_curve(n, loud, counts, clip["profile"])
             curve = _add_replays(curve, parts, meta, n)
+            curve = _add_action(curve, parts, video, n, clip)
             cands = highlights.candidates(curve, k=clip["max_clips"] * 3, max_len=clip["max_len"])
 
     clip = resolve_language(video, [(c.start, c.end) for c in cands], {**clip, "_mode": branding.script_mode(brand)})
@@ -91,6 +92,25 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand:
     if best and not results:
         raise MediaError("every reel failed to render; see the log above")
     return results
+
+
+ACTION_WEIGHT = 0.5   # how much fast on-screen action counts (gameplay)
+ACTION_MAX_LEN = 2 * 3600
+
+
+def _add_action(curve: np.ndarray, parts: dict, video: Path, n: int, clip: dict) -> np.ndarray:
+    """Add how much the picture changes (kills, crashes, chases) for gameplay videos up to 2 hours."""
+    if clip.get("profile") != "gameplay" or n > ACTION_MAX_LEN or not clip.get("picture_signal", True):
+        return curve
+    try:
+        with stage("signals"):
+            m = signals.motion(video, n)
+    except MediaError:
+        return curve
+    if not m.any():
+        return curve
+    parts["action"] = highlights.zscore(highlights._smooth(m, 3))
+    return curve + ACTION_WEIGHT * parts["action"]
 
 
 REPLAY_WEIGHT = 0.8   # how much YouTube's "most replayed" graph counts next to loudness and chat

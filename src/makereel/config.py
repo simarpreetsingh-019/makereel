@@ -108,6 +108,7 @@ CLIP_DEFAULTS: dict[str, Any] = {
     "silence": False,        # trim dead air with auto-editor (talk content)
     "caption_check": True,   # a second, already-downloaded model double-checks captions (more CPU per reel)
     "names": [],             # names written exactly like this in captions (streamers, places, in-jokes)
+    "picture_signal": True,  # gameplay: fast on-screen action (kills, crashes) helps find moments (videos ≤ 2 h)
     "live_words": True,      # a tiny model listens to live streams for exciting words (off in cool mode)
     "fps": 30,               # 30, or 60 to keep smooth motion from 50/60 fps sources (gameplay)
 }

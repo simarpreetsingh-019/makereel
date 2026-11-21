@@ -118,3 +118,16 @@ def test_most_replayed_graph_lifts_the_curve(monkeypatch):
     curve = pipeline._add_replays(np.zeros(100), parts, {"url": "https://youtube.com/watch?v=x"}, 100)
     assert curve[55] > curve[10] and "replays" in parts
     assert pipeline._add_replays(np.zeros(10), {}, {"url": "x", "live_status": "is_live"}, 10).sum() == 0
+
+
+def test_action_signal_only_for_gameplay(monkeypatch):
+    from pathlib import Path
+
+    import numpy as np
+
+    from makereel.core import pipeline, signals
+    monkeypatch.setattr(signals, "motion", lambda v, n: np.r_[np.zeros(50), np.ones(10), np.zeros(40)])
+    parts = {}
+    lifted = pipeline._add_action(np.zeros(100), parts, Path("v.mp4"), 100, {"profile": "gameplay"})
+    assert lifted[55] > lifted[10] and "action" in parts
+    assert pipeline._add_action(np.zeros(100), {}, Path("v.mp4"), 100, {"profile": "talk"}).sum() == 0

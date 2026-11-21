@@ -80,6 +80,22 @@ def chat_activity(chat_file: Path | None, n: int, offset: float = 0.0) -> np.nda
     return act
 
 
+def motion(video: Path, n: int) -> np.ndarray:
+    """How much the picture changes, per second (0-1): kills, crashes and chases change a lot. Measured on a
+    tiny copy (160 px, 2 frames a second), so it costs far less than the video itself."""
+    out = np.zeros(n)
+    proc = subprocess.run([media.binary("ffmpeg"), "-v", "error", "-skip_frame", "nokey", "-i", str(video), "-an",
+                           "-vf", "fps=2,scale=160:-2,select='gte(scene,0)',metadata=print:file=-", "-f", "null", "-"],
+                          capture_output=True, text=True)
+    t = None
+    for line in proc.stdout.splitlines():
+        if line.startswith("frame:") and "pts_time:" in line:
+            t = float(line.split("pts_time:")[1].split()[0])
+        elif "lavfi.scene_score=" in line and t is not None and int(t) < n:
+            out[int(t)] = max(out[int(t)], float(line.split("=")[1]))
+    return out
+
+
 def scene_cuts(video: Path, start: float, end: float) -> list[float]:
     """Hard cuts in [start, end] via PySceneDetect (used to start clips on a fresh shot).
 
