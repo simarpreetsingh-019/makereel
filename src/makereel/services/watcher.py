@@ -137,7 +137,8 @@ class Watcher:
                 continue
             log.info("%s is live: %s", channel, info.title)
             try:
-                job = self.jobs.adopt_live(runner.live_session(info, settings.with_clip(language=lang)))
+                session_settings = runner.with_creator(settings.with_clip(language=lang), info.channel)
+                job = self.jobs.adopt_live(runner.live_session(info, session_settings))
                 self._watching[info.id] = job.id
             except MakereelError as e:
                 log.warning("could not start recording %s: %s", channel, e.message)

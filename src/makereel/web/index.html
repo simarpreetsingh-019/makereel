@@ -174,6 +174,17 @@
       </div>
     </div>
     <div><button class="btn primary" id="save-settings">Save</button></div>
+    <div class="card" id="creator-card">
+      <h2>Creator memory</h2>
+      <p class="hint" style="margin-top:0">Per creator: names, places and in-jokes their captions should spell exactly right, and a few
+        notes for the AI word-fixer. Stored on this computer.</p>
+      <label class="field">Creator<select id="cr-channel"><option value="">Pick a creator…</option></select></label>
+      <label class="field">Names to spell exactly (one per line)<textarea id="cr-names" rows="4" placeholder="Mythpat&#10;Vice City&#10;Lucia"></textarea></label>
+      <label class="field">Notes (optional)<textarea id="cr-notes" rows="2" placeholder="Plays GTA 6 in Hinglish; calls his car 'Pinky'"></textarea></label>
+      <p class="hint" id="cr-suggest"></p>
+      <div class="row" style="gap:8px"><button class="btn small" id="cr-find" type="button">Suggest from their reels</button>
+        <button class="btn small primary" id="cr-save" type="button">Save</button></div>
+    </div>
     <div class="card" id="storage-card">
       <h2>Where files are saved</h2>
       <p class="hint" style="margin-top:0" id="st-summary">Loading…</p>

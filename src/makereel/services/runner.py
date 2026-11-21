@@ -12,6 +12,13 @@ from . import library
 log = logging.getLogger(__name__)
 
 
+def with_creator(settings: Settings, channel: str | None) -> Settings:
+    """Settings for one creator's reels: their remembered names join the global list."""
+    from . import creators
+    mine = creators.load(channel)["names"]
+    return settings.with_clip(names=(settings.clip.get("names") or []) + mine) if mine else settings
+
+
 def run_link(url: str, settings: Settings, section: str | None = None) -> LiveSession | list[dict]:
     """Auto-detects the link type.
 
@@ -21,7 +28,7 @@ def run_link(url: str, settings: Settings, section: str | None = None) -> LiveSe
     info = sources.probe(url, settings["max_height"])
     log.info("▶ %s  [%s, %s]", info.title, info.live_status, info.channel or "unknown channel")
     if info.live_status == "is_live":
-        return live_session(info, settings)
+        return live_session(info, with_creator(settings, info.channel))
     if info.live_status == "is_upcoming":
         log.info("  not started yet; turn on the channel watcher to catch it when it goes live")
         return []
@@ -30,6 +37,7 @@ def run_link(url: str, settings: Settings, section: str | None = None) -> LiveSe
                           max_height=settings["max_height"])
     try:
         folder = library.folder_for(dl.info.title, dl.info.id)
+        settings = with_creator(settings, dl.info.channel)
         return pipeline.process(dl.video, dl.info.to_meta(), folder, settings.clip, settings.brand, chat=dl.chat,
                                 ai=settings.ai)
     finally:

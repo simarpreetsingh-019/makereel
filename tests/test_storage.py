@@ -96,3 +96,18 @@ def test_youtube_upgrade_skips_hand_edited_reels(monkeypatch):
     res = library.youtube_upgrade("Live")
     assert res["updated"] == 0 and res["skipped"] == 1
     assert library.pending_youtube_upgrades() == []       # just tried: wait an hour before trying again
+
+
+def test_creator_memory_and_suggestions():
+    import json
+
+    from makereel import config
+    from makereel.services import creators
+    for i, words in enumerate(["bhai Lucia aaja", "Lucia kidhar hai bhai", "Pinky gaadi"]):
+        d = config.reels_dir() / f"Stream {i}"
+        d.mkdir(parents=True)
+        (d / "folder.json").write_text(json.dumps({"channel": "Mythpat"}))
+        (d / "reel_01.ass").write_text("[Events]\\nDialogue: 0,0:00:00.00,0:00:02.00,Caption,,0,0,0,," + words + "\\n")
+    assert creators.channels() == ["Mythpat"]
+    saved = creators.save("Mythpat", ["Vice City", " "], "GTA in Hinglish")
+    assert saved["names"] == ["Vice City"] and creators.load("Mythpat")["notes"] == "GTA in Hinglish"

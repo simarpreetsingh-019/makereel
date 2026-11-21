@@ -111,6 +111,26 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
     def reel_ai_fix(req: Request):
         return library.ai_fix_words(req.params["folder"], req.params["name"])
 
+    @api.get("/creators")
+    def creators_list(req: Request):
+        from ..services import creators
+        return {"creators": creators.channels()}
+
+    @api.get("/creators/{channel}")
+    def creator_get(req: Request):
+        from ..services import creators
+        ch = req.params["channel"]
+        return {**creators.load(ch), "suggested": creators.suggest(ch) if req.query.get("suggest") else []}
+
+    @api.put("/creators/{channel}")
+    def creator_put(req: Request):
+        from ..services import creators
+        body = req.json()
+        names = body.get("names") or []
+        if not isinstance(names, list):
+            raise InvalidInput("names must be a list")
+        return creators.save(req.params["channel"], [str(n) for n in names], str(body.get("notes") or ""))
+
     @api.post("/folders/{folder}/youtube-captions")
     def folder_youtube_captions(req: Request):
         return library.youtube_upgrade(req.params["folder"])

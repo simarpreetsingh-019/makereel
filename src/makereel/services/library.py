@@ -190,13 +190,25 @@ UPGRADE_FOR = 48 * 3600      # keep looking for a finished stream's captions thi
 UPGRADE_EVERY = 3600         # at most once an hour per folder
 
 
+def _channel(d: Path) -> str | None:
+    try:
+        return json.loads((d / FOLDER_FILE).read_text(encoding="utf-8")).get("channel")
+    except (OSError, ValueError):
+        return None
+
+
 def ai_fix_words(folder: str, name: str) -> dict:
     """The AI's spelling fixes for a reel's captions, as a suggested transcript (not saved until the user does)."""
     from ..core import judge
     meta_file, post = _reel_paths(folder, name)
     words = captions.parse_words((meta_file.parent / post["captions"]).read_text(encoding="utf-8"))
     text = " ".join(w["word"] for w in words)
-    fixed = judge.fix_words(text, post.get("language"), load_settings().ai)
+    from . import creators
+    memory = creators.load(_channel(meta_file.parent))
+    names = ", ".join(memory["names"] + (load_settings().clip.get("names") or []))
+    if memory["notes"]:
+        names = f"{names}. About this creator: {memory['notes']}"
+    fixed = judge.fix_words(text, post.get("language"), load_settings().ai, names)
     if fixed is None:
         raise InvalidInput("the AI couldn't fix these captions",
                            "Turn on the AI judge in Settings (local model, Claude, or an OpenAI-compatible API "
@@ -566,7 +578,9 @@ def import_captions(folder: str, name: str, text: str) -> dict:
 def _fresh_words(d: Path, post: dict, section: tuple[float, float] | None, mode: str | None = None) -> list[dict]:
     """Precise word timings for the reel (its section of the master), on the reel's clock,
     written the way `mode` asks (own script, English letters, or translated to English)."""
+    from . import creators
     clip = load_settings().clip
+    clip = {**clip, "names": (clip.get("names") or []) + creators.load(_channel(d))["names"]}
     mode = mode or branding.script_mode(load_settings().brand, post.get("look"))
     lang = _language(d, post)
     model = transcribe.model_for(clip["model"], lang, clip.get("model_other", "small"), mode)

@@ -61,6 +61,11 @@ export async function load() {
   store.set({ settings, watcher: watcher.running });
   drawStorage(st);
   api.ytSignIn().then(drawSignIn).catch(() => {});
+  api.creators().then(({ creators }) => {
+    const sel = $("#cr-channel"), keep = sel.value;
+    sel.innerHTML = `<option value="">Pick a creator…</option>` + creators.map((c) => `<option>${esc(c)}</option>`).join("");
+    sel.value = keep;
+  }).catch(() => {});
 }
 
 export function render(state) {
@@ -127,6 +132,34 @@ export function mount() {
       toast(e.target.checked ? "Captions get a second opinion" : "Caption double-check off");
     } catch (err) { showError(err); }
   });
+  const showCreator = (c) => {
+    $("#cr-names").value = (c.names || []).join("\n");
+    $("#cr-notes").value = c.notes || "";
+    $("#cr-suggest").innerHTML = c.suggested?.length
+      ? `Often in their reels (click to add): ${c.suggested.map((w) => `<button type="button" class="btn tiny cr-add">${esc(w)}</button>`).join(" ")}`
+      : "";
+  };
+  $("#cr-channel").addEventListener("change", async (e) => {
+    if (e.target.value) showCreator(await api.creator(e.target.value));
+  });
+  $("#cr-find").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+    if (!$("#cr-channel").value) return toast("Pick a creator first");
+    const c = await api.creator($("#cr-channel").value, true);
+    showCreator({ ...c, names: $("#cr-names").value.split("\n"), notes: $("#cr-notes").value });
+    if (!c.suggested.length) toast("Nothing new keeps coming up in their reels yet");
+  }));
+  $("#cr-suggest").addEventListener("click", (e) => {
+    const b = e.target.closest(".cr-add");
+    if (!b) return;
+    $("#cr-names").value = ($("#cr-names").value.trim() + "\n" + b.textContent).trim();
+    b.remove();
+  });
+  $("#cr-save").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+    const ch = $("#cr-channel").value;
+    if (!ch) return toast("Pick a creator first");
+    await api.saveCreator(ch, $("#cr-names").value.split("\n"), $("#cr-notes").value);
+    toast(`Saved. ${ch}'s new reels use these names.`);
+  }));
   $("#cpu_mode").addEventListener("change", async (e) => {
     try {
       store.set({ settings: await api.saveSettings({ cpu_mode: e.target.value }) });
