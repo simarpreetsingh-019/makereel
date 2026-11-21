@@ -69,9 +69,29 @@ function drawSignIn(st) {
   $("#yt-remove").hidden = st.source !== "file";
 }
 
+// ------------------------------------------------------------------ channel rows (the hidden #channels box is the source)
+let chState = {};
+const LANG_NAME = { en: "English", hi: "Hindi", pa: "Punjabi", ta: "Tamil", te: "Telugu", bn: "Bengali", mr: "Marathi", es: "Spanish" };
+function chLines() { return $("#channels").value.split("\n").map((l) => l.trim()).filter(Boolean); }
+function chParse(line) { const [name, lang] = line.split("|").map((x) => x.trim()); return { name, lang: lang || "" }; }
+function drawChannels() {
+  const lines = chLines();
+  $("#ch-rows").innerHTML = lines.length ? lines.map((l, i) => {
+    const { name, lang } = chParse(l), st = chState[name]?.state;
+    const dot = st === "live" ? `<span class="ch-dot live" title="Live now"></span>`
+      : st ? `<span class="ch-dot" title="Offline at last check"></span>` : `<span class="ch-dot unknown" title="Not checked yet"></span>`;
+    return `<div class="ch-row">${dot}<b>${esc(name)}</b>${lang ? `<span class="chip">${esc(LANG_NAME[lang] || lang)}</span>` : ""}
+      <span class="hint" style="margin:0 0 0 auto">${st === "live" ? "Live now" : st ? "Offline" : ""}</span>
+      <button class="btn small ghost" type="button" data-ch-del="${i}" title="Remove" aria-label="Remove ${esc(name)}">×</button></div>`;
+  }).join("") : `<p class="hint">No channels yet. Add one below.</p>`;
+}
+const CH_OK = /^(@[\w.-]{2,}|(https?:\/\/)?(www\.|m\.)?(youtube\.com|youtu\.be|twitch\.tv|kick\.com)\/\S+)$/i;
+
 export async function load() {
   const [settings, watcher, st] = await Promise.all([api.settings(), api.watcher(), api.storage()]);
   store.set({ settings, watcher: watcher.running });
+  chState = watcher.channels || {};
+  if (filled) drawChannels();
   drawStorage(st);
   api.ytSignIn().then(drawSignIn).catch(() => {});
   api.creators().then(({ creators }) => {
@@ -85,6 +105,7 @@ export function render(state) {
   if (document.activeElement !== $("#watch")) $("#watch").checked = state.watcher;
   if (!filled && state.settings) {   // fill the form once; don't overwrite what the user is typing
     $("#channels").value = state.settings.channels.join("\n");
+    drawChannels();
     $("#watch_language").value = state.settings.watch_language || "";
     LIMITS.forEach((k) => ($(`#${k}`).value = state.settings[k]));
     $("#watch_uploads").checked = state.settings.watch_uploads !== false;
@@ -229,7 +250,22 @@ export function mount() {
     try { store.set({ settings: await api.saveSettings(body) }); savedTick(); } catch (err) { showError(err); }
   };
   const later = debounce(saveGeneral, 900);
-  ["#channels", "#names", ...LIMITS.map((k) => `#${k}`)].forEach((id) => $(id).addEventListener("input", later));
+  $("#ch-rows").addEventListener("click", (e) => {
+    const i = e.target.closest("[data-ch-del]")?.dataset.chDel;
+    if (i === undefined) return;
+    const lines = chLines(); lines.splice(+i, 1);
+    $("#channels").value = lines.join("\n"); drawChannels(); saveGeneral();
+  });
+  $("#ch-add").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = $("#ch-new").value.trim(), lang = $("#ch-new-lang").value, msg = $("#ch-add-msg");
+    if (!CH_OK.test(name)) { msg.textContent = "That doesn't look like a channel. Try @name or a YouTube, Twitch or Kick link."; return; }
+    if (chLines().some((l) => chParse(l).name.toLowerCase() === name.toLowerCase())) { msg.textContent = "Already in the list."; return; }
+    $("#channels").value = [...chLines(), lang ? `${name} | ${lang}` : name].join("\n");
+    $("#ch-new").value = ""; $("#ch-new-lang").value = ""; msg.textContent = "";
+    drawChannels(); saveGeneral();
+  });
+  ["#names", ...LIMITS.map((k) => `#${k}`)].forEach((id) => $(id).addEventListener("input", later));
   $("#watch_language").addEventListener("change", saveGeneral);
 
   // settings tabs

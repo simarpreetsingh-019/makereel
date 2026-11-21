@@ -51,6 +51,7 @@ class Watcher:
         self._stop: threading.Event | None = None
         self._job = None
         self._watching: dict[str, str] = {}   # video id -> job id
+        self.channel_state: dict[str, dict] = {}   # channel -> {"state": live|offline, "at": time}
         self._next_live = 0.0                 # when the next live check / uploads check is due
         self._next_uploads = 0.0
 
@@ -128,7 +129,9 @@ class Watcher:
             try:
                 info = sources.probe(sources.channel_live_url(channel), settings["max_height"])
             except MakereelError:
+                self.channel_state[channel] = {"state": "offline", "at": now}
                 continue  # offline / not live: yt-dlp raises, that's normal
+            self.channel_state[channel] = {"state": "live" if info.live_status == "is_live" else "offline", "at": now}
             if info.live_status != "is_live" or info.id in self._watching:
                 continue
             already = self.jobs.recording(info.id)

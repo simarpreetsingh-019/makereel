@@ -270,7 +270,7 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
 
     @api.get("/watcher")
     def get_watcher(req: Request):
-        return {"running": watcher.running}
+        return {"running": watcher.running, "channels": watcher.channel_state}
 
     @api.put("/watcher")
     def put_watcher(req: Request):

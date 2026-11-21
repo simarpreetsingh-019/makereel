@@ -367,3 +367,9 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .more-tools{opacity:.8}
 #ed-more-tabs{display:contents}
 #ed-more-tabs[hidden]{display:none}
+/* channel rows */
+.ch-rows{display:flex;flex-direction:column;gap:6px}
+.ch-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--soft)}
+.ch-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.ch-dot.live{background:#e5484d;box-shadow:0 0 0 3px #e5484d33}
+.ch-dot.unknown{background:transparent;border:1px solid var(--muted)}

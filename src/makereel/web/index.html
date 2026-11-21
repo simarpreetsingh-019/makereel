@@ -116,9 +116,14 @@
       </div>
       <div class="card">
         <h2>Channels</h2>
-        <textarea id="channels" rows="9" placeholder="@streamer&#10;https://www.youtube.com/@another&#10;twitch.tv/name&#10;kick.com/name"></textarea>
-        <p class="hint">One per line: YouTube @handles or channel links, Twitch or Kick. Add <code>| hi</code> (or <code>| en</code>…)
-          after a channel to set its language, e.g. <code>@CarryisLive | hi</code>.</p>
+        <div id="ch-rows" class="ch-rows"></div>
+        <form id="ch-add" class="row" style="margin-top:8px">
+          <input id="ch-new" placeholder="@streamer, a channel link, twitch.tv/name or kick.com/name" style="flex:1;min-width:200px">
+          <select id="ch-new-lang" title="Language"><option value="">Auto</option><option value="en">English</option><option value="hi">Hindi / Hinglish</option><option value="pa">Punjabi</option><option value="ta">Tamil</option><option value="te">Telugu</option><option value="bn">Bengali</option><option value="mr">Marathi</option><option value="es">Spanish</option></select>
+          <button class="btn primary small" type="submit">Add channel</button>
+        </form>
+        <p class="hint" id="ch-add-msg" style="margin:4px 0 0"></p>
+        <textarea id="channels" hidden></textarea>
         <label class="field">Language of watched channels<select id="watch_language"><option value="">Auto-detect (once per video)</option><option value="en">English</option><option value="hi">Hindi / Hinglish</option><option value="pa">Punjabi</option><option value="ur">Urdu</option><option value="bn">Bengali</option><option value="mr">Marathi</option><option value="gu">Gujarati</option><option value="ta">Tamil</option><option value="te">Telugu</option><option value="kn">Kannada</option><option value="ml">Malayalam</option><option value="es">Spanish</option><option value="pt">Portuguese</option><option value="fr">French</option><option value="de">German</option><option value="ar">Arabic</option><option value="id">Indonesian</option><option value="ja">Japanese</option><option value="ko">Korean</option></select></label>
       </div>
       <div class="card">
