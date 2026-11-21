@@ -144,3 +144,22 @@ def test_youtube_captions_setting_values():
         clip = {**config.CLIP_DEFAULTS, "youtube_captions": given}
         config.validate_clip(clip)
         assert clip["youtube_captions"] == want
+
+
+def test_compare_with_pasted_script():
+    import json
+
+    from makereel import config
+    from makereel.core import captions
+    from makereel.services import library
+    d = config.reels_dir() / "Paste"
+    d.mkdir(parents=True)
+    words = [{"start": 10 + i, "end": 10.5 + i, "word": w} for i, w in enumerate(["bas", "do", "minute", "bache"])]
+    (d / "reel_01.ass").write_text(captions.build_ass(words, 10.0, 15.0, "T"))
+    (d / "reel_01.json").write_text(json.dumps({"captions": "reel_01.ass", "length": 5, "file": "reel_01.mp4"}))
+    (d / "reel_01.mp4").write_bytes(b"x")
+    library.compare_with_text("Paste", "reel_01", "bas two minute left", "English")
+    post = json.loads((d / "reel_01.json").read_text())
+    assert post["caption_check"]["checker"] == "English text"
+    rows = library._compare(post, captions.parse_words((d / "reel_01.ass").read_text()))["rows"]
+    assert [r["ok"] for r in rows] == [True, False, True, False]        # lined up by word order

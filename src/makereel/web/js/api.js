@@ -44,6 +44,8 @@ export const api = {
   folder: (folder) => request("GET", `/folders/${enc(folder)}`),
   deleteFolder: (folder) => request("DELETE", `/folders/${enc(folder)}`),
   setReady: (folder, name, ready) => request("PUT", `${reelPath(folder, name)}/ready`, { ready }),
+  compareText: (folder, name, text, label) => request("POST", `${reelPath(folder, name)}/compare`, { text, label }),
+  useOther: (folder, name) => request("POST", `${reelPath(folder, name)}/use-other`),
   aiFixWords: (folder, name) => request("POST", `${reelPath(folder, name)}/ai-fix`),
   creators: () => request("GET", "/creators"),
   creator: (ch, suggest = false) => request("GET", `/creators/${enc(ch)}${suggest ? "?suggest=1" : ""}`),

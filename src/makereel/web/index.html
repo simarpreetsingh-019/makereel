@@ -405,9 +405,21 @@
       <div><button class="btn small" id="ed-aifix" type="button" title="Sends only the caption text to your AI (Settings → AI judge)">Fix words with AI</button></div>
       <details id="ed-compare" hidden>
         <summary id="ed-compare-sum"></summary>
-        <p class="hint" style="margin:6px 0">Yellow = the two disagree. Click a yellow word on the right to use that version, then Save.</p>
+        <p class="hint" style="margin:6px 0">Yellow = the two disagree. Click a yellow word on the right to use just that word,
+          or use the whole other version. Then Save.</p>
+        <div class="row" style="margin-bottom:8px">
+          <button class="btn small" id="ed-use-all" type="button">Use all of the right side</button>
+          <span class="hint" style="margin:0">Your current words move to the right, so you can still pick single words back.</span>
+        </div>
         <div class="cmp"><div><b class="hint">Captions now</b><div id="ed-cmp-a" class="cmp-col"></div></div>
           <div><b class="hint" id="ed-cmp-b-title">Other model</b><div id="ed-cmp-b" class="cmp-col"></div></div></div>
+      </details>
+      <details id="ed-paste-box"><summary>Compare with a script you paste (e.g. an English version)</summary>
+        <textarea id="ed-paste" rows="4" style="margin-top:8px" placeholder="Paste the whole script here"></textarea>
+        <div class="row" style="margin-top:6px">
+          <input id="ed-paste-label" placeholder="Name it (optional), e.g. English script" style="flex:1;min-width:160px">
+          <button class="btn small" id="ed-paste-go" type="button">Compare word by word</button>
+        </div>
       </details>
       <details class="ed-extras"><summary>More options: language, post text, logo, subtitles</summary>
         <div class="stack" style="margin-top:10px">

@@ -111,6 +111,16 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
     def reel_ready(req: Request):
         return library.set_ready(req.params["folder"], req.params["name"], bool(req.json().get("ready")))
 
+    @api.post("/folders/{folder}/reels/{name}/compare")
+    def reel_compare(req: Request):
+        body = req.json()
+        return library.compare_with_text(req.params["folder"], req.params["name"], body.get("text", ""),
+                                         body.get("label", ""))
+
+    @api.post("/folders/{folder}/reels/{name}/use-other")
+    def reel_use_other(req: Request):
+        return library.use_other_version(req.params["folder"], req.params["name"])
+
     @api.post("/folders/{folder}/reels/{name}/ai-fix")
     def reel_ai_fix(req: Request):
         return library.ai_fix_words(req.params["folder"], req.params["name"])

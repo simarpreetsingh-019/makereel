@@ -639,6 +639,24 @@ export function mount() {
     b.classList.remove("cmp-bad"); b.classList.add("cmp-used");
     toast("Word replaced. Press Save to re-render.");
   });
+  $("#ed-paste-go").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+    const text = $("#ed-paste").value.trim();
+    if (!text) return toast("Paste a script first");
+    const reel = await api.compareText(cur.folder, cur.name, text, $("#ed-paste-label").value);
+    cur.reel.compare = reel.compare;
+    fillCompare(reel.compare);
+    $("#ed-compare").open = true; $("#ed-paste-box").open = false;
+    toast("Shown side by side. Click yellow words, or use all of it.");
+  }));
+  $("#ed-use-all").addEventListener("click", (e) => {
+    if (Object.keys(textChanges()).length) return toast("Save or undo your edits first");
+    busy(e.currentTarget, async () => {
+      const reel = await api.useOther(cur.folder, cur.name);
+      fill(reel);
+      cur.onSaved?.();
+      toast("Swapped and re-rendered. The old words are on the right.");
+    });
+  });
   $("#ed-save").addEventListener("click", (e) => {
     const c = textChanges();
     if (!Object.keys(c).length) return toast("Nothing changed");

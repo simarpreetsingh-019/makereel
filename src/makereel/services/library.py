@@ -381,7 +381,8 @@ def _compare(post: dict, words: list[dict]) -> dict | None:
     rows = align(words, other)
     ok = sum(r["ok"] for r in rows)
     names = {"youtube": "YouTube's captions", "local": "makereel's captions"}
-    return {"captions_from": names.get(check.get("source"), check.get("source")),
+    return {"other_text": " ".join(w["word"] for w in other),
+            "captions_from": names.get(check.get("source"), check.get("source")),
             "checked_by": (check.get("checker") if " " in check.get("checker", "")
                            else f"{check.get('checker', 'local')} model"), "agree": round(100 * ok / len(rows)),
             "rows": rows}
@@ -584,6 +585,49 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
         post["captions_edited"] = True        # never overwrite hand edits with YouTube's captions later
 
     _write_and_render(d, meta_file, post, text, brand, reraw, plan)
+    return get_reel(folder, name)
+
+
+def compare_with_text(folder: str, name: str, text: str, label: str = "") -> dict:
+    """Put a pasted script (e.g. an English version) beside the captions, for word-by-word picks. No re-render."""
+    words = (text or "").split()
+    if not words:
+        raise InvalidInput("paste some text first")
+    if len(words) > 5000:
+        raise InvalidInput("that script is too long for one reel")
+    meta_file, post = _reel_paths(folder, name)
+    old = post.get("caption_check") or {}
+    checker = (label.strip() or "your pasted script")[:60]
+    post["caption_check"] = {"source": old.get("source", "local"), "checker": checker,
+                             "other": [{"word": w} for w in words]}
+    if " " not in post["caption_check"]["checker"]:
+        post["caption_check"]["checker"] += " text"
+    meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
+    return get_reel(folder, name)
+
+
+def use_other_version(folder: str, name: str) -> dict:
+    """Swap: the compared version becomes the captions (fitted to the current timing) and the old captions
+    move to the other column, so single words can still be picked back."""
+    meta_file, post = _reel_paths(folder, name)
+    check = post.get("caption_check") or {}
+    other = check.get("other") or []
+    if not other:
+        raise InvalidInput("there is no other version to use")
+    d = meta_file.parent
+    before = [{"start": w["start"], "word": w["word"]}
+              for w in captions.parse_words((d / post["captions"]).read_text(encoding="utf-8"))]
+    old_label = {"youtube": "YouTube's captions", "local": "makereel's captions"}.get(check.get("source"),
+                                                                                     check.get("source") or "")
+    def plain(label: str) -> str:
+        m = re.fullmatch(r"previous captions \((.*)\)", label or "")
+        return m.group(1) if m else label
+    update_reel(folder, name, transcript=" ".join(w["word"] for w in other))
+    meta_file, post = _reel_paths(folder, name)
+    old_label = plain(old_label)
+    post["caption_check"] = {"source": plain(check.get("checker", "other")), "other": before,
+                             "checker": f"previous captions ({old_label})" if old_label else "previous captions"}
+    meta_file.write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
     return get_reel(folder, name)
 
 
