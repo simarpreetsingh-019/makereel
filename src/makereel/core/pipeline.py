@@ -61,6 +61,7 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand:
             counts = (chat_counts if chat_counts is not None
                       else signals.chat_activity(chat, n, meta.get("offset", 0.0)))
             curve, parts = highlights.signal_curve(n, loud, counts, clip["profile"])
+            curve = _add_replays(curve, parts, meta, n)
             cands = highlights.candidates(curve, k=clip["max_clips"] * 3, max_len=clip["max_len"])
 
     clip = resolve_language(video, [(c.start, c.end) for c in cands], {**clip, "_mode": branding.script_mode(brand)})
@@ -90,6 +91,28 @@ def process(video: Path, meta: dict, out_dir: Path, clip: dict[str, Any], brand:
     if best and not results:
         raise MediaError("every reel failed to render; see the log above")
     return results
+
+
+REPLAY_WEIGHT = 0.8   # how much YouTube's "most replayed" graph counts next to loudness and chat
+
+
+def _add_replays(curve: np.ndarray, parts: dict, meta: dict, n: int) -> np.ndarray:
+    """Add YouTube's "most replayed" graph (finished videos that have one) to the moment curve."""
+    if meta.get("live_status") == "is_live":
+        return curve
+    heat = sources.youtube_heatmap(meta.get("url") or "")
+    if not heat:
+        return curve
+    off, per_sec = float(meta.get("offset") or 0.0), np.zeros(n)
+    for h in heat:
+        a, b = int(max(0, h["start_time"] - off)), int(min(n, h["end_time"] - off + 1))
+        if a < b:
+            per_sec[a:b] = np.maximum(per_sec[a:b], float(h.get("value") or 0.0))
+    if not per_sec.any():
+        return curve
+    parts["replays"] = highlights.zscore(per_sec)
+    log.info("   using YouTube's most-replayed graph (%d points)", len(heat))
+    return curve + REPLAY_WEIGHT * parts["replays"]
 
 
 def _youtube_words(meta: dict, clip: dict, brand: dict) -> list[dict] | None:

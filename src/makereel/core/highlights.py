@@ -135,7 +135,7 @@ def rescore(c: Clip, words: list[dict], parts: dict, profile: str) -> Clip:
     dur = max(1.0, c.end - c.start)
     c.score += w["words"] * min(3.0, hype / dur * 10) + w["speech"] * min(3.0, len(inside) / dur)
     p = int(c.peak)
-    c.reasons = [k for k in ("chat", "loud") if p < len(parts[k]) and parts[k][p] > 1.0]
+    c.reasons = [k for k in ("chat", "loud", "replays") if k in parts and p < len(parts[k]) and parts[k][p] > 1.0]
     if hype >= 3:
         c.reasons.append("words")
     c.words = words

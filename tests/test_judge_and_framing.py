@@ -106,3 +106,15 @@ def test_ai_word_fix_keeps_fixes_and_rejects_rewrites(monkeypatch):
     rewrite = "Brother, this mission has a strict time limit and we must hurry now."
     monkeypatch.setattr(judge, "_ask", lambda a, p: rewrite)
     assert judge.fix_words("bhai misan taim limited hai", "hi", ai) is None      # rewrote it: not trusted
+
+
+def test_most_replayed_graph_lifts_the_curve(monkeypatch):
+    import numpy as np
+
+    from makereel.core import pipeline, sources
+    monkeypatch.setattr(sources, "youtube_heatmap", lambda url: [{"start_time": 50, "end_time": 60, "value": 1.0},
+                                                                 {"start_time": 0, "end_time": 50, "value": 0.1}])
+    parts = {}
+    curve = pipeline._add_replays(np.zeros(100), parts, {"url": "https://youtube.com/watch?v=x"}, 100)
+    assert curve[55] > curve[10] and "replays" in parts
+    assert pipeline._add_replays(np.zeros(10), {}, {"url": "x", "live_status": "is_live"}, 10).sum() == 0

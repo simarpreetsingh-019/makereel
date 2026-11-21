@@ -296,6 +296,32 @@ def download(url: str, out_dir: Path, section: str | None = None, chat: bool = T
     return Download(video, chat_file if chat_file.exists() else None, info)
 
 
+_YT_INFO: dict[str, tuple[float, dict]] = {}
+
+
+def _youtube_info(url: str) -> dict:
+    """A YouTube video's details, fetched once and reused for 10 minutes (captions, most-replayed graph)."""
+    import time
+    hit = _YT_INFO.get(url)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    try:
+        with yt_dlp.YoutubeDL({**ydl_opts(), "skip_download": True}) as ydl:
+            raw = ydl.extract_info(url, download=False) or {}
+    except Exception:  # noqa: BLE001 - a bonus; never fail a job over it
+        raw = {}
+    _YT_INFO[url] = (time.time(), raw)
+    return raw
+
+
+def youtube_heatmap(url: str) -> list[dict] | None:
+    """YouTube's "most replayed" graph ([{start_time, end_time, value 0-1}]), or None. Only videos with
+    enough views have one."""
+    if "youtube.com" not in url and "youtu.be" not in url:
+        return None
+    return _youtube_info(url).get("heatmap") or None
+
+
 def youtube_captions(url: str, language: str | None) -> list[dict] | None:
     """YouTube's own captions for a video as timed words ({start, end, word}, on the video's clock).
 
@@ -305,10 +331,8 @@ def youtube_captions(url: str, language: str | None) -> list[dict] | None:
     if "youtube.com" not in url and "youtu.be" not in url:
         return None
     import urllib.request
-    try:
-        with yt_dlp.YoutubeDL({**ydl_opts(), "skip_download": True}) as ydl:
-            raw = ydl.extract_info(url, download=False) or {}
-    except Exception:  # noqa: BLE001 - captions are a bonus; never fail a job over them
+    raw = _youtube_info(url)
+    if not raw:
         return None
     lang = (language or raw.get("language") or "en").split("-")[0]
     manual, auto = raw.get("subtitles") or {}, raw.get("automatic_captions") or {}
