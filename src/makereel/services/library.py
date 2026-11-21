@@ -234,7 +234,8 @@ def youtube_upgrade(folder: str) -> dict:
             continue
         mode = branding.script_mode(brand, post.get("look"))
         words = language.romanize_words(best) if mode == "roman" else best
-        post["caption_check"] = {"source": "youtube", "checker": "makereel's live captions", "agree": round(best_score * 100),
+        post["caption_check"] = {"source": "youtube", "checker": "makereel's live captions",
+                                 "agree": round(best_score * 100),
                                  "other": [{"start": w["start"], "word": w["word"]} for w in mine]}
         post["captions_source"] = "youtube"
         _write_and_render(d, meta_file, post, _rebuild(post, current, words, post.get("hook"), brand, False, length),

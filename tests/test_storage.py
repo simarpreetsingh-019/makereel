@@ -90,7 +90,8 @@ def test_youtube_upgrade_skips_hand_edited_reels(monkeypatch):
     d = config.reels_dir() / "Live"
     d.mkdir(parents=True)
     (d / "folder.json").write_text(json.dumps({"url": "https://www.youtube.com/watch?v=x", "live_status": "is_live"}))
-    (d / "reel_01.json").write_text(json.dumps({"captions_edited": True, "source_start": 10, "captions": "reel_01.ass"}))
+    post = {"captions_edited": True, "source_start": 10, "captions": "reel_01.ass"}
+    (d / "reel_01.json").write_text(json.dumps(post))
     monkeypatch.setattr(sources, "youtube_captions", lambda url, lang: [{"start": 10, "end": 11, "word": "x"}] * 5)
     res = library.youtube_upgrade("Live")
     assert res["updated"] == 0 and res["skipped"] == 1
