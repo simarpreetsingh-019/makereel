@@ -109,3 +109,16 @@ def test_english_words_in_hindi_script_get_english_spelling():
     from makereel.core import language
     out = language.romanize_text("भाई इमोशनल मोमेंट है। तुम मिशन टाइम")
     assert out == "bhai emotional moment hai. tum mission time"
+
+
+def test_names_are_kept_exactly():
+    from makereel.core.pipeline import keep_names
+    ws = [{"word": w} for w in "bhai carryminati aur mithpat, tum".split()]
+    out = " ".join(w["word"] for w in keep_names(ws, ["CarryMinati", "Mythpat"]))
+    assert out == "bhai CarryMinati aur Mythpat, tum"
+
+
+def test_noise_titles_fall_back_to_the_video_title():
+    from makereel.core.pipeline import sane_title, title_from_video
+    assert not sane_title("ैॉॉ ॉॉॉ ैॉॉॉ ू।") and sane_title("BHAI KYA HUA")
+    assert title_from_video("CARRYMINATI PLAYS GTA VI | NO PROMOTIONS 2026-11-18 22:32") == "CARRYMINATI PLAYS GTA VI"

@@ -129,6 +129,9 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
     hook_original = c.ai.get("title") or make_hook(" ".join(w["word"] for w in words) if mode == "original"
                                                    and words else c.text)
     hook = caption_hook(hook_original, words, mode)
+    if not sane_title(hook):       # noise heard as words (gameplay): a clean title from the video instead
+        log.info("   title from the speech looked like noise (%r); using the video's title", hook[:40])
+        hook = hook_original = title_from_video(meta.get("title") or "")
     script = language.script_of(" ".join(w["word"] for w in words) + " " + hook)
     with stage("framing"):
         plan = render.plan_fit(src, render.MAIN_FORMAT, clip["layout"], section)
@@ -174,6 +177,27 @@ def resolve_language(video: Path, windows: list[tuple[float, float]], clip: dict
     return {**clip, "language": lang or None, "model": model}
 
 
+def sane_title(text: str) -> bool:
+    """False for titles made of noise: tokens with no real letter (stray marks like "ैॉॉ"), mostly 1-2
+    character bits, or under two words."""
+    import unicodedata
+    toks = [t.strip(".,!?\"'।") for t in text.split()]
+    toks = [t for t in toks if t]
+    if len(toks) < 2:
+        return False
+    letterless = sum(not any(unicodedata.category(ch).startswith("L") for ch in t) for t in toks)
+    tiny = sum(len(t) <= 2 for t in toks)
+    return letterless == 0 and tiny <= len(toks) * 0.5
+
+
+def title_from_video(title: str) -> str:
+    """A short title from the video's own: before any "|", without dates, times or "#tags"."""
+    t = title.split("|")[0]
+    t = re.sub(r"\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}:\d{2}\b|#\S+", " ", t)
+    t = re.sub(r"\s+", " ", t).strip(" -–—:")
+    return (t or "Watch this moment")[:60]
+
+
 def caption_hook(hook: str, words: list[dict], mode: str) -> str:
     """The on-screen title in the captions' script."""
     if mode == "roman":
@@ -204,6 +228,20 @@ def similar(a: str, b: str) -> bool:
     from difflib import SequenceMatcher
     x, y = _sounds(a), _sounds(b)
     return x == y or (bool(x) and bool(y) and SequenceMatcher(None, x, y).ratio() >= SAME_WORD)
+
+
+def keep_names(words: list[dict], names: list[str]) -> list[dict]:
+    """Write names exactly as the user listed them (streamers, places, in-jokes), whatever the model heard:
+    a caption word that sounds like a listed name becomes that name (punctuation kept)."""
+    names = [n.strip() for n in names or [] if n.strip() and " " not in n.strip()]
+    if not names:
+        return words
+    out = []
+    for w in words:
+        core = w["word"].strip(".,!?\"'।")
+        hit = next((n for n in names if len(core) >= 4 and (core.lower() == n.lower() or similar(core, n))), None)
+        out.append({**w, "word": w["word"].replace(core, hit)} if hit else w)
+    return out
 
 
 def align(words: list[dict], other: list[dict], window: float = 0.6) -> list[dict]:
@@ -277,7 +315,7 @@ def synced_words(clip_file: Path, section: tuple[float, float], source_words: li
                 if report is not None and check:
                     report.update(source="youtube", checker=checker, agree=round(score * 100),
                                   other=[{"start": round(w["start"], 2), "word": w["word"]} for w in check])
-                return language.romanize_words(mine) if mode == "roman" else mine
+                return keep_names(language.romanize_words(mine) if mode == "roman" else mine, clip.get("names") or [])
             log.info("   YouTube's captions don't match this reel (%d%%); using the local ones", round(score * 100))
     try:
         if not translate and clip.get("mixed_languages", True):
@@ -295,7 +333,8 @@ def synced_words(clip_file: Path, section: tuple[float, float], source_words: li
                         for w in source_words if w["start"] >= clip_start]
     if precise and report is not None and clip.get("caption_check", True) and not translate:
         _second_opinion(clip_file, section, words, clip, mode, report)
-    return language.romanize_words(words) if mode == "roman" else words
+    words = language.romanize_words(words) if mode == "roman" else words
+    return keep_names(words, clip.get("names") or [])
 
 
 def _second_opinion(clip_file: Path, section: tuple[float, float], words: list[dict], clip: dict, mode: str,

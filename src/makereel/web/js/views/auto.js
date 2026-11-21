@@ -77,6 +77,7 @@ export function render(state) {
     $("#cookies_browser").value = state.settings.cookies_browser || "";
     $("#cpu_mode").value = state.settings.cpu_mode || "balanced";
     $("#caption_check").checked = state.settings.clip?.caption_check !== false;
+    $("#names").value = (state.settings.clip?.names || []).join("\n");
     drawUploads();
     const ai = state.settings.ai || {};
     $("#ai-provider").value = ai.provider || "off";
@@ -173,7 +174,8 @@ export function mount() {
   }));
 
   $("#save-settings").addEventListener("click", (e) => {
-    const body = { channels: $("#channels").value.split("\n"), watch_language: $("#watch_language").value };
+    const body = { channels: $("#channels").value.split("\n"), watch_language: $("#watch_language").value,
+                   clip: { names: $("#names").value.split("\n") } };
     LIMITS.forEach((k) => (body[k] = $(`#${k}`).value));
     busy(e.currentTarget, async () => {
       store.set({ settings: await api.saveSettings(body) });

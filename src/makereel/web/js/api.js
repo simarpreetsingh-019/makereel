@@ -43,6 +43,7 @@ export const api = {
   folders: () => request("GET", "/folders"),
   folder: (folder) => request("GET", `/folders/${enc(folder)}`),
   deleteFolder: (folder) => request("DELETE", `/folders/${enc(folder)}`),
+  aiFixWords: (folder, name) => request("POST", `${reelPath(folder, name)}/ai-fix`),
   folderZip: (folder) => request("POST", `/folders/${enc(folder)}/zip`),
   folderYoutubeCaptions: (folder) => request("POST", `/folders/${enc(folder)}/youtube-captions`),
   reel: (folder, name) => request("GET", reelPath(folder, name)),

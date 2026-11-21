@@ -107,6 +107,8 @@ CLIP_DEFAULTS: dict[str, Any] = {
     "model_other": "small",  # model for non-English speech when `model` is tiny/base ("same" = don't switch)
     "silence": False,        # trim dead air with auto-editor (talk content)
     "caption_check": True,   # a second, already-downloaded model double-checks captions (more CPU per reel)
+    "names": [],             # names written exactly like this in captions (streamers, places, in-jokes)
+    "live_words": True,      # a tiny model listens to live streams for exciting words (off in cool mode)
     "fps": 30,               # 30, or 60 to keep smooth motion from 50/60 fps sources (gameplay)
 }
 
@@ -204,6 +206,10 @@ class Settings:
 def validate_clip(clip: dict[str, Any]) -> None:
     clip.setdefault("model_other", "small")
     clip["caption_check"] = bool(clip.get("caption_check", True))
+    names = clip.get("names") or []
+    if isinstance(names, str):
+        names = names.replace(",", "\n").splitlines()
+    clip["names"] = [n.strip()[:40] for n in names if n.strip()][:100]
     try:
         clip["fps"] = int(clip.get("fps") or 30)
     except (TypeError, ValueError) as e:

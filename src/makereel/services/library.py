@@ -190,6 +190,21 @@ UPGRADE_FOR = 48 * 3600      # keep looking for a finished stream's captions thi
 UPGRADE_EVERY = 3600         # at most once an hour per folder
 
 
+def ai_fix_words(folder: str, name: str) -> dict:
+    """The AI's spelling fixes for a reel's captions, as a suggested transcript (not saved until the user does)."""
+    from ..core import judge
+    meta_file, post = _reel_paths(folder, name)
+    words = captions.parse_words((meta_file.parent / post["captions"]).read_text(encoding="utf-8"))
+    text = " ".join(w["word"] for w in words)
+    fixed = judge.fix_words(text, post.get("language"), load_settings().ai)
+    if fixed is None:
+        raise InvalidInput("the AI couldn't fix these captions",
+                           "Turn on the AI judge in Settings (local model, Claude, or an OpenAI-compatible API "
+                           "such as Gemini), then try again.")
+    changed = sum(x != y for x, y in zip(text.split(), fixed.split(), strict=False))
+    return {"transcript": fixed, "changed": changed}
+
+
 def youtube_upgrade(folder: str) -> dict:
     """Swap YouTube's captions into this folder's reels (live reels, once the stream has ended and YouTube
     has captioned it). Reels edited by hand, or already on YouTube's captions, are left alone. Each reel's
@@ -563,7 +578,8 @@ def _fresh_words(d: Path, post: dict, section: tuple[float, float] | None, mode:
         words = [{**w, "start": round(w["start"] - off, 2), "end": round(w["end"] - off, 2)}
                  for w in transcribe.words_in(d / post["source_clip"], off, off + length, model, lang,
                                               precise=True, task=task)]
-    return language.romanize_words(words) if mode == "roman" else words
+    from ..core.pipeline import keep_names
+    return keep_names(language.romanize_words(words) if mode == "roman" else words, clip.get("names") or [])
 
 
 def _words_in_mode(d: Path, post: dict, current: list[dict], old: str, new: str) -> list[dict]:

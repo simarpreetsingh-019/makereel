@@ -95,3 +95,14 @@ def test_moment_length_follows_the_moment():
     assert e - s <= 60                        # never past the longest-reel setting
     picks = highlights.candidates(curve, k=2, max_len=240)
     assert len(picks) == 2 and max(c.end - c.start for c in picks) >= 170
+
+
+def test_ai_word_fix_keeps_fixes_and_rejects_rewrites(monkeypatch):
+    from makereel.core import judge
+    ai = {"provider": "local", "model": "", "base_url": "", "weight": 0.5}
+    monkeypatch.setattr(judge, "enabled", lambda a: True)
+    monkeypatch.setattr(judge, "_ask", lambda a, p: "bhai mission time limited hai")
+    assert judge.fix_words("bhai misan taim limited hai", "hi", ai) == "bhai mission time limited hai"
+    rewrite = "Brother, this mission has a strict time limit and we must hurry now."
+    monkeypatch.setattr(judge, "_ask", lambda a, p: rewrite)
+    assert judge.fix_words("bhai misan taim limited hai", "hi", ai) is None      # rewrote it: not trusted

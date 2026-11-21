@@ -145,6 +145,34 @@ def judge(candidates: list[dict], ai: dict, profile: str) -> dict[int, dict]:
     return scores
 
 
+def _ask(ai: dict, prompt: str) -> str:
+    if ai["provider"] == "claude":
+        return _claude(ai, prompt)
+    return _openai_compatible(ai, prompt, needs_key=ai["provider"] == "openai")
+
+
+def fix_words(text: str, language: str | None, ai: dict, names: str = "") -> str | None:
+    """Ask the AI to correct a caption transcript's spelling (Hinglish, slang, names) without rewording it.
+    Only the text is sent, never audio. Returns the corrected text, or None (off, failed, or changed too much)."""
+    if not enabled(ai) or not text.strip():
+        return None
+    prompt = ("These are automatic captions of a stream" + (f" in language '{language}'" if language else "") +
+              ". Fix only clearly misheard words, spelling, names and slang. Keep the same words in the same "
+              "order and the same script; do not translate, summarise, add or remove anything. "
+              + (f"Names that may appear: {names}. " if names else "") +
+              "Reply with the corrected captions only.\n\n" + text)
+    try:
+        fixed = _ask(ai, prompt).strip().strip('"')
+    except Exception as e:  # noqa: BLE001
+        log.warning("   AI word fix skipped: %s", e)
+        return None
+    a, b = text.split(), fixed.split()
+    if not b or abs(len(a) - len(b)) > max(3, len(a) // 5):   # it rewrote rather than fixed: don't trust it
+        log.warning("   AI word fix changed too much (%d → %d words); kept the original", len(a), len(b))
+        return None
+    return fixed
+
+
 def blend(signal_scores: list[float], ai_scores: list[float | None], weight: float) -> list[float]:
     """Mix signal and AI scores (both normalised to 0..1). Candidates the AI skipped keep their signal score."""
     lo, hi = min(signal_scores), max(signal_scores)

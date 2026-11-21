@@ -615,6 +615,13 @@ export function mount() {
       fillScript();
     }
   });
+  $("#ed-aifix").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+    const r = await api.aiFixWords(cur.folder, cur.name);
+    if (!r.changed) return toast("The AI found nothing to fix");
+    $("#ed-transcript").value = r.transcript;
+    $("#ed-transcript").dispatchEvent(new Event("input"));
+    toast(`The AI suggested ${r.changed} fix${r.changed === 1 ? "" : "es"}. Check them, then Save.`);
+  }));
   $("#ed-cmp-b").addEventListener("click", (e) => {
     const b = e.target.closest(".cmp-pick");
     if (!b || !b.textContent || b.textContent === "—") return;

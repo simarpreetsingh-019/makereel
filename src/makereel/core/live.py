@@ -37,6 +37,7 @@ WARMUP = 90                      # seconds of baseline before spikes can fire
 PROBE_TIMEOUT = 90               # one "is it still live?" check may take this long before it counts as failed
 STALL = 300                      # no new video for this long: finish with what we have and end the session
 LANG_SURE = 0.6                  # detect a stream's language once, when at least this sure
+HYPE_WORDS = 2                   # excited words heard in the last 10 s that count as a moment signal
 RETRY_FOR = 600                  # keep retrying a failing live check this long before giving up
 CHAT_BACKLOG_SECS = 45           # ignore chat for this long: yt-dlp replays old messages first
 
@@ -64,6 +65,7 @@ class LiveSession:
         self.stop = threading.Event()
         self.language: str | None = None
         self.stream_delta: float | None = None   # seconds into the stream when recording began
+        self.heard: list[dict] = []              # rough words from the live listener: {"t", "word"}
         self.proc: subprocess.Popen | None = None
 
     # ------------------------------------------------------------------ stats (read by the web app)
@@ -186,8 +188,9 @@ class LiveSession:
         chat = [self.chat.get(t, 0) for t in range(max(0, n - 190), n)]
         c_now = sum(chat[-8:]) / 8
         # a moment in progress stays open while it's still louder or chattier than before it began
+        hype = self._recent_hype(n)
         for p in self.pending:
-            if cur > p["base"] * (1 + JUMP / 2) or c_now >= max(1.0, p["cbase"] * 1.5):
+            if cur > p["base"] * (1 + JUMP / 2) or c_now >= max(1.0, p["cbase"] * 1.5) or hype >= HYPE_WORDS:
                 p["last"] = float(n)
         if self.pending or n - self.last_spike < MIN_GAP:
             return
@@ -195,6 +198,8 @@ class LiveSession:
         why = []
         if cur / max(base, 1e-6) - 1 >= JUMP:
             why.append("loud")
+        if hype >= HYPE_WORDS:
+            why.append("hype words")
         c_base = sum(chat[:-10]) / max(1, len(chat) - 10)
         if c_now >= max(1.5, c_base * (1 + JUMP)):
             why.append("chat")
@@ -282,6 +287,52 @@ class LiveSession:
                 log.warning("  language detection skipped: %s", e.message)
         return self.language
 
+    # ------------------------------------------------------------------ live listener (rough words)
+    def _listener_model(self) -> str | None:
+        """A tiny model to hear every piece: Hinglish lite (Hindi streams) or base, if already downloaded.
+        Off in Cool-and-quiet mode or when switched off, to spare the CPU."""
+        from . import models
+        if not self.clip.get("live_words", True) or media.cpu_mode() == "quiet":
+            return None
+        for name in (("hinglish-lite", "base") if (self.clip.get("language") or "hi") == "hi" else ("base",)):
+            if models.installed(name):
+                return name
+        return None
+
+    def _listen(self) -> None:
+        """Rough words for every new piece, from a small separate model (1 thread, never the main one)."""
+        from faster_whisper import WhisperModel
+
+        from . import models
+        name = self._listener_model()
+        try:
+            model = WhisperModel(models.source(name), device="cpu", compute_type="int8", cpu_threads=1)
+        except Exception as e:  # noqa: BLE001
+            log.warning("  live listener unavailable (%s)", str(e)[:100])
+            return
+        lang = "en" if name in models.HINGLISH else self.clip.get("language")
+        heard_pieces: set[str] = set()          # by name: old pieces leave the front of the list
+        while not self.stop.is_set():
+            pieces = [p for p in list(self.segments) if p[0].name not in heard_pieces]
+            if not pieces:
+                self.stop.wait(2)
+                continue
+            for path, t0, _t1 in pieces:
+                heard_pieces.add(path.name)
+                try:
+                    audio = transcribe._pcm(path, 0.0, 7.0)
+                    segs, _ = model.transcribe(audio, language=lang, beam_size=1, vad_filter=True,
+                                               condition_on_previous_text=False)
+                    self.heard += [{"t": t0 + float(s.start), "word": w} for s in segs for w in s.text.split()]
+                except Exception:  # noqa: BLE001 - a piece already deleted, or unreadable: skip it
+                    continue
+            self.heard = self.heard[-2000:]
+
+    def _recent_hype(self, n: int) -> int:
+        from .highlights import hype_count
+        recent = [{"word": w["word"]} for w in self.heard if w["t"] >= n - 10]
+        return hype_count(recent) if recent else 0
+
     def _clear_leftovers(self) -> None:
         """Pieces left by an earlier session of this stream that didn't end cleanly (makereel was closed
         or restarted mid-stream). Only one session records a stream at a time, so they're unused."""
@@ -296,6 +347,8 @@ class LiveSession:
         self._clear_leftovers()
         logs.spawn(self._record, "live-record")
         logs.spawn(self._follow_chat, "live-chat")
+        if self._listener_model():
+            logs.spawn(self._listen, "live-listen")
         try:
             last_growth, last_clock = time.time(), self.clock
             while not self.stop.is_set() or self.pending:

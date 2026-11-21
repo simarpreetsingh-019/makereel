@@ -165,6 +165,10 @@
           <option value="fast">Fast: most cores (quickest reels, most heat)</option></select></label>
         <label class="switch" style="font-weight:400"><input type="checkbox" id="caption_check"> Double-check captions with a
           second speech model (only one you've already downloaded; adds work per reel). Disagreements show in yellow in Edit → Text.</label>
+        <label class="field" style="margin-top:10px">Names to keep exactly (one per line: streamers, places, in-jokes)
+          <textarea id="names" rows="3" placeholder="CarryMinati&#10;Mythpat&#10;Vice City"></textarea></label>
+        <p class="hint" style="margin-top:-6px">A caption word that sounds like one of these is written exactly like this.
+          Saved with the Save button.</p>
         <p class="hint" style="margin-top:-6px">Every reel is a burst of work (listening to the audio, then rendering).
           Fewer "Reels per hour" means fewer bursts; "Cool and quiet" makes each burst gentler.</p>
       </div>
@@ -235,7 +239,7 @@
               <option value="classic">Classic</option><option value="pop">Pop</option><option value="boxed">Boxed word</option>
               <option value="glow">Glow</option><option value="karaoke">Karaoke fill</option><option value="single">One word</option>
               <option value="minimal">Minimal</option></select></label>
-            <label class="field">Caption letters<select id="br-caption_script"><option value="original">Original script (हिंदी, ਪੰਜਾਬੀ…)</option><option value="roman">English letters (kya baat hai)</option><option value="english">Translate to English</option></select></label>
+            <label class="field">Caption letters<select id="br-caption_script"><option value="original">As spoken, mixed (हिंदी in Hindi script, English in English)</option><option value="roman">All in English letters (kya baat hai, emotional moment)</option><option value="english">Translate to English</option></select></label>
             <label class="field">Keep clear of app buttons<select id="br-safe_zone"><option value="all">All apps (safest)</option><option value="tiktok">TikTok</option><option value="reels">Instagram Reels</option><option value="shorts">YouTube Shorts</option><option value="off">Off</option></select></label>
             <label class="field">Position<select id="br-caption_position"><option value="bottom">Lower third</option><option value="middle">Middle</option><option value="top">Top</option></select></label>
             <label class="field">Text colour<input type="color" id="br-text_colour"></label>
@@ -353,7 +357,7 @@
     </div>
     <div class="stack">
       <label class="field">Caption language <span class="hint" id="ed-lang" style="margin:0"></span>
-        <select id="ed-script"><option value="original">Original script (हिंदी, ਪੰਜਾਬੀ…)</option><option value="roman">English letters (kya baat hai)</option><option value="english">Translate to English</option></select></label>
+        <select id="ed-script"><option value="original">As spoken, mixed (हिंदी in Hindi script, English in English)</option><option value="roman">All in English letters (kya baat hai, emotional moment)</option><option value="english">Translate to English</option></select></label>
       <p class="hint" id="ed-script-hint" style="margin:-6px 0 0">Changing this re-renders the reel. Going to English letters keeps your word edits; other switches write the captions again from the audio.</p>
       <label class="field">On-screen title<input id="ed-hook"></label>
       <label class="field">
@@ -361,6 +365,7 @@
         <textarea id="ed-transcript" class="transcript" rows="6" spellcheck="true"></textarea>
         <span class="hint" style="margin:0">Fix any word right here. Words you don't touch keep their exact timing; edited, added or removed words are fitted around them.</span>
       </label>
+      <div><button class="btn small" id="ed-aifix" type="button" title="Sends only the caption text to your AI (Settings → AI judge)">Fix words with AI</button></div>
       <details id="ed-compare" hidden>
         <summary id="ed-compare-sum"></summary>
         <p class="hint" style="margin:6px 0">Yellow = the two disagree. Click a yellow word on the right to use that version, then Save.</p>

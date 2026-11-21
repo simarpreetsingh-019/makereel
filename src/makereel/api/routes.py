@@ -107,6 +107,10 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
     def folder(req: Request):
         return library.list_reels(req.params["folder"])
 
+    @api.post("/folders/{folder}/reels/{name}/ai-fix")
+    def reel_ai_fix(req: Request):
+        return library.ai_fix_words(req.params["folder"], req.params["name"])
+
     @api.post("/folders/{folder}/youtube-captions")
     def folder_youtube_captions(req: Request):
         return library.youtube_upgrade(req.params["folder"])
