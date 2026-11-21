@@ -79,3 +79,19 @@ def test_job_stage_from_log():
     assert j._stage() is None
     j.append_log("12:00 [2/3] transcribing 3 candidate windows")
     assert j._stage() == {"step": 2, "label": "transcribing 3 candidate windows"}
+
+
+def test_youtube_upgrade_skips_hand_edited_reels(monkeypatch):
+    import json
+
+    from makereel import config
+    from makereel.core import sources
+    from makereel.services import library
+    d = config.reels_dir() / "Live"
+    d.mkdir(parents=True)
+    (d / "folder.json").write_text(json.dumps({"url": "https://www.youtube.com/watch?v=x", "live_status": "is_live"}))
+    (d / "reel_01.json").write_text(json.dumps({"captions_edited": True, "source_start": 10, "captions": "reel_01.ass"}))
+    monkeypatch.setattr(sources, "youtube_captions", lambda url, lang: [{"start": 10, "end": 11, "word": "x"}] * 5)
+    res = library.youtube_upgrade("Live")
+    assert res["updated"] == 0 and res["skipped"] == 1
+    assert library.pending_youtube_upgrades() == []       # just tried: wait an hour before trying again

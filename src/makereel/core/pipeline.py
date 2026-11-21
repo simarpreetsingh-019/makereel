@@ -149,6 +149,7 @@ def _render_one(video: Path, c: highlights.Clip, meta: dict, out_dir: Path, clip
             "hook_original": hook_original, "language": clip.get("language"),
             "ai": c.ai or None,
             "start": c.start, "end": c.end, "caption_check": check or None,
+            "source_start": round(c.start + float(meta.get("offset") or 0.0), 2),   # time in the original video
             **credits(meta, c.start, clip["profile"], hook, brand)}
     (out_dir / f"{name}.json").write_text(json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8")
     log.info("   %s  %.1f-%.1fs  score %.2f  %s", name, c.start, c.end, c.score, c.reasons)

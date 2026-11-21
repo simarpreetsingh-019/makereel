@@ -142,6 +142,13 @@ class Watcher:
             except MakereelError as e:
                 log.warning("could not start recording %s: %s", channel, e.message)
 
+        for folder in library.pending_youtube_upgrades():     # finished live streams: YouTube's captions yet?
+            try:
+                res = library.youtube_upgrade(folder)
+                if res["updated"]:
+                    log.info("%s: %s", folder, res["status"])
+            except Exception as e:  # noqa: BLE001 - never stop the watcher over this
+                log.debug("caption upgrade skipped for %s: %s", folder, e)
         library.cleanup(settings["keep_days"])
         if not self._watching:
             transcribe.release_if_idle(300)  # give the speech model's RAM back between streams

@@ -107,6 +107,10 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
     def folder(req: Request):
         return library.list_reels(req.params["folder"])
 
+    @api.post("/folders/{folder}/youtube-captions")
+    def folder_youtube_captions(req: Request):
+        return library.youtube_upgrade(req.params["folder"])
+
     @api.post("/folders/{folder}/zip")
     def folder_zip(req: Request):
         return library.folder_zip(req.params["folder"])

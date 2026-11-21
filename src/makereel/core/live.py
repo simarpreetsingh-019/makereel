@@ -63,6 +63,7 @@ class LiveSession:
         self.last_spike = -MIN_GAP
         self.stop = threading.Event()
         self.language: str | None = None
+        self.stream_delta: float | None = None   # seconds into the stream when recording began
         self.proc: subprocess.Popen | None = None
 
     # ------------------------------------------------------------------ stats (read by the web app)
@@ -107,6 +108,10 @@ class LiveSession:
                     "-map", audio, "-vn", "-ac", "1", "-ar", str(signals.SAMPLE_RATE), "-f", "s16le", "pipe:1"]
             (self.buf / "list.csv").unlink(missing_ok=True)
             self.csv_seen = 0
+            if self.stream_delta is None and info.published:
+                # where this recording sits in the stream (for the "exact moment" link, and for swapping in
+                # YouTube's captions after the stream); fine-tuned later by matching words
+                self.stream_delta = max(0.0, time.time() - info.published - self.clock)
             with open(self.buf / "ffmpeg.log", "ab") as err:
                 self.proc = subprocess.Popen(cmd, cwd=self.buf, stdout=subprocess.PIPE, stderr=err)
                 got, second = 0, signals.SAMPLE_RATE * 2
@@ -229,7 +234,7 @@ class LiveSession:
                    "-i", "join.txt", "-c", "copy", "-bsf:a", "aac_adtstoasc", win.name], cwd=self.buf)
         try:
             chat = np.array([self.chat.get(win_start + i, 0) for i in range(int(media.duration(win)) + 1)])
-            meta = {**self.info.to_meta(), "offset": float(win_start)}
+            meta = {**self.info.to_meta(), "offset": float(win_start) + (self.stream_delta or 0.0)}
             clip = {**self.clip, "max_clips": 1, "language": self._language(win) or self.clip.get("language")}
             reels = pipeline.process(win, meta, self.out, clip, self.brand, chat_counts=chat, ai=self.ai)
             self.made.append(time.time())

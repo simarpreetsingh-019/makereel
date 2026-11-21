@@ -185,6 +185,86 @@ def _camera_view(folder: str, d: Path, post: dict) -> dict:
             "crop_share": round(min(1.0, h * out_w / out_h / w), 4)}
 
 
+# --------------------------------------------------------------------------- YouTube captions after a live stream
+UPGRADE_FOR = 48 * 3600      # keep looking for a finished stream's captions this long
+UPGRADE_EVERY = 3600         # at most once an hour per folder
+
+
+def youtube_upgrade(folder: str) -> dict:
+    """Swap YouTube's captions into this folder's reels (live reels, once the stream has ended and YouTube
+    has captioned it). Reels edited by hand, or already on YouTube's captions, are left alone. Each reel's
+    place in the stream is fine-tuned by matching its words within ±20 s; the old words go to the
+    side-by-side check."""
+    import time
+
+    from ..core import sources
+    from ..core.pipeline import align
+    d = _folder(folder)
+    info = json.loads((d / FOLDER_FILE).read_text(encoding="utf-8")) if (d / FOLDER_FILE).exists() else {}
+    info["yt_captions_tried"] = time.time()
+    (d / FOLDER_FILE).write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")
+    yt = sources.youtube_captions(info.get("url") or "", info.get("language"))
+    if not yt:
+        return {"updated": 0, "status": "YouTube has no captions for this video yet"}
+    brand, updated, skipped = load_settings().brand, 0, 0
+    for meta_file in sorted(d.glob("reel_*.json")):
+        try:
+            post = json.loads(meta_file.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        if post.get("captions_edited") or post.get("captions_source") == "youtube" or "source_start" not in post:
+            skipped += 1
+            continue
+        current = (d / post["captions"]).read_text(encoding="utf-8")
+        mine = captions.parse_words(current)
+        length = float(post.get("length") or captions.length_of(current))
+        best, best_score = None, 0.0
+        for k in range(-40, 41):                           # ±20 s in half-second steps
+            t0 = post["source_start"] + k / 2
+            cand = [{"start": round(w["start"] - t0, 2), "end": round(w["end"] - t0, 2), "word": w["word"]}
+                    for w in yt if t0 <= w["start"] < t0 + length]
+            if len(cand) < 3:
+                continue
+            rows = align(mine, cand) if mine else []
+            score = sum(r["ok"] for r in rows) / len(rows) if rows else 0.0
+            if score > best_score:
+                best, best_score = cand, score
+        if not best or best_score < 0.2:
+            skipped += 1
+            continue
+        mode = branding.script_mode(brand, post.get("look"))
+        words = language.romanize_words(best) if mode == "roman" else best
+        post["caption_check"] = {"source": "youtube", "checker": "makereel's live captions", "agree": round(best_score * 100),
+                                 "other": [{"start": w["start"], "word": w["word"]} for w in mine]}
+        post["captions_source"] = "youtube"
+        _write_and_render(d, meta_file, post, _rebuild(post, current, words, post.get("hook"), brand, False, length),
+                          brand)
+        updated += 1
+    if updated:
+        info["yt_captions_done"] = time.time()
+        (d / FOLDER_FILE).write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")
+    return {"updated": updated, "skipped": skipped,
+            "status": (f"{updated} reel now uses YouTube's captions" if updated == 1
+                       else f"{updated} reels now use YouTube's captions")}
+
+
+def pending_youtube_upgrades() -> list[str]:
+    """Folders of live streams (recent, not done, not tried in the last hour) worth checking again."""
+    import time
+    out, now = [], time.time()
+    for meta in root().glob(f"*/{FOLDER_FILE}") if root().is_dir() else []:
+        try:
+            info = json.loads(meta.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if (info.get("live_status") == "is_live" and not info.get("yt_captions_done")
+                and now - meta.parent.stat().st_mtime < UPGRADE_FOR
+                and now - info.get("yt_captions_tried", 0) > UPGRADE_EVERY
+                and "youtube" in (info.get("url") or "")):
+            out.append(meta.parent.name)
+    return out
+
+
 ZIP_NAME = "all-reels.zip"
 
 
@@ -242,7 +322,8 @@ def _compare(post: dict, words: list[dict]) -> dict | None:
     ok = sum(r["ok"] for r in rows)
     names = {"youtube": "YouTube's captions", "local": "makereel's captions"}
     return {"captions_from": names.get(check.get("source"), check.get("source")),
-            "checked_by": f"{check.get('checker', 'local')} model", "agree": round(100 * ok / len(rows)),
+            "checked_by": (check.get("checker") if " " in check.get("checker", "")
+                           else f"{check.get('checker', 'local')} model"), "agree": round(100 * ok / len(rows)),
             "rows": rows}
 
 
@@ -439,6 +520,8 @@ def update_reel(folder: str, name: str, *, hook: str | None = None, caption: str
         post["hook"] = new_hook
     if logo is not None:
         post["logo"] = bool(logo)
+    if text != current:
+        post["captions_edited"] = True        # never overwrite hand edits with YouTube's captions later
 
     _write_and_render(d, meta_file, post, text, brand, reraw, plan)
     return get_reel(folder, name)
