@@ -43,6 +43,7 @@ export const api = {
   folders: () => request("GET", "/folders"),
   folder: (folder) => request("GET", `/folders/${enc(folder)}`),
   deleteFolder: (folder) => request("DELETE", `/folders/${enc(folder)}`),
+  folderZip: (folder) => request("POST", `/folders/${enc(folder)}/zip`),
   reel: (folder, name) => request("GET", reelPath(folder, name)),
   editReel: (folder, name, changes) => request("PATCH", reelPath(folder, name), changes),
   deleteReel: (folder, name) => request("DELETE", reelPath(folder, name)),

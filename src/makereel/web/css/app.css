@@ -316,3 +316,7 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .cmp-pick { border: 0; font: inherit; cursor: pointer; color: inherit; }
 .cmp-used { background: color-mix(in srgb, var(--ok) 35%, transparent); border-radius: 4px; padding: 0 3px; border: 0; font: inherit; }
 @media (max-width: 640px) { .cmp { grid-template-columns: 1fr; } }
+
+.stage { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 2px; }
+.stage-bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.stage-bar i { display: block; height: 100%; background: var(--accent); transition: width .5s; }

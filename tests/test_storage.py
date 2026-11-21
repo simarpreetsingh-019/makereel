@@ -54,3 +54,28 @@ def test_status_and_help_run(capsys, monkeypatch):
     cli.main(["status"])
     out = capsys.readouterr().out
     assert "makereel isn't running" in out and "Speech models" in out
+
+
+def test_folder_zip_has_reels_and_post_text(tmp_path):
+    import json
+    import zipfile
+
+    from makereel import config
+    from makereel.services import library
+    d = config.reels_dir() / "Video A"
+    d.mkdir(parents=True)
+    (d / "reel_01.mp4").write_bytes(b"video")
+    (d / "reel_01.json").write_text(json.dumps({"file": "reel_01.mp4", "caption": "Credit: someone"}))
+    res = library.folder_zip("Video A")
+    assert res["count"] == 1 and "download=1" in res["download"]
+    with zipfile.ZipFile(d / "all-reels.zip") as z:
+        assert sorted(z.namelist()) == ["reel_01.mp4", "reel_01.txt"]
+        assert z.read("reel_01.txt").decode().startswith("Credit: someone")
+
+
+def test_job_stage_from_log():
+    from makereel.services.jobs import Job
+    j = Job("link", "u")
+    assert j._stage() is None
+    j.append_log("12:00 [2/3] transcribing 3 candidate windows")
+    assert j._stage() == {"step": 2, "label": "transcribing 3 candidate windows"}

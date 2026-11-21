@@ -231,8 +231,11 @@ class LiveSession:
             chat = np.array([self.chat.get(win_start + i, 0) for i in range(int(media.duration(win)) + 1)])
             meta = {**self.info.to_meta(), "offset": float(win_start)}
             clip = {**self.clip, "max_clips": 1, "language": self._language(win) or self.clip.get("language")}
-            pipeline.process(win, meta, self.out, clip, self.brand, chat_counts=chat, ai=self.ai)
+            reels = pipeline.process(win, meta, self.out, clip, self.brand, chat_counts=chat, ai=self.ai)
             self.made.append(time.time())
+            if reels:
+                from . import notify
+                notify.reel_ready(self.info.title, reels[0].get("hook", ""))
         finally:
             win.unlink(missing_ok=True)
 

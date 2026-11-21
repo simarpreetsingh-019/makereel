@@ -185,6 +185,32 @@ def _camera_view(folder: str, d: Path, post: dict) -> dict:
             "crop_share": round(min(1.0, h * out_w / out_h / w), 4)}
 
 
+ZIP_NAME = "all-reels.zip"
+
+
+def folder_zip(folder: str) -> dict:
+    """Every reel of a folder plus its post text, in one zip, for posting in one go."""
+    import zipfile
+    d = _folder(folder)
+    out = d / ZIP_NAME
+    tmp = d / (ZIP_NAME + ".part")
+    count = 0
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:       # videos are already compressed
+        for meta_file in sorted(d.glob("reel_*.json")):
+            try:
+                post = json.loads(meta_file.read_text(encoding="utf-8"))
+            except ValueError:
+                continue
+            video = d / post.get("file", "")
+            if not video.is_file():
+                continue
+            z.write(video, video.name)
+            z.writestr(f"{meta_file.stem}.txt", (post.get("caption") or "") + "\n")
+            count += 1
+    tmp.replace(out)
+    return {"count": count, "download": _media_url(folder, ZIP_NAME, out) + "&download=1"}
+
+
 def get_reel(folder: str, name: str) -> dict:
     meta_file, post = _reel_paths(folder, name)
     ass_text = (meta_file.parent / post["captions"]).read_text(encoding="utf-8")

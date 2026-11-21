@@ -75,7 +75,10 @@ function jobRow(j, logText) {
   const reels = j.reels ? ` · ${j.reels} reel${j.reels === 1 ? "" : "s"}` : "";
   const canStop = (j.status === "live" && j.kind !== "watcher") || j.status === "queued";
   const err = j.error ? `<div class="err">${esc(j.error.message)}${j.error.hint ? ` — ${esc(j.error.hint)}` : ""}</div>` : "";
-  return `<div class="job">
+  const st = j.status === "running" && j.stage;
+  const bar = st ? `<div class="stage"><div class="stage-bar"><i style="width:${Math.round((st.step - 0.5) / 3 * 100)}%"></i></div>
+    <span class="hint" style="margin:0">Step ${st.step} of 3: ${esc(st.label)}</span></div>` : "";
+  return `<div class="job">${bar ? "" : ""}
     <div class="row">
       <span class="pill ${j.status}">${j.status}</span>
       <span class="title" title="${esc(j.target)}">${esc(j.title)}</span>
@@ -86,6 +89,7 @@ function jobRow(j, logText) {
       ${["done", "failed", "stopped"].includes(j.status) && j.kind !== "watcher"
         ? `<button class="btn tiny job-x" data-action="remove" data-id="${j.id}" title="Remove from this list (reels stay)" aria-label="Remove">×</button>` : ""}
     </div>
+    ${bar}
     ${err}
     ${logText !== undefined ? `<pre class="log" data-log="${j.id}">${esc(logText)}</pre>` : `<div class="tail">${esc(j.last_line)}</div>`}
   </div>`;

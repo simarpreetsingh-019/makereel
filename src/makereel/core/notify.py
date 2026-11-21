@@ -16,12 +16,18 @@ QUIET_FOR = 15 * 60
 _last: dict[str, float] = {}
 
 
-def send(kind: str, title: str, message: str) -> bool:
+def send(kind: str, title: str, message: str, quiet_for: float = QUIET_FOR) -> bool:
+    import os
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
     now = time.time()
-    if now - _last.get(kind, 0) < QUIET_FOR:
+    if now - _last.get(kind, 0) < quiet_for:
         return False
     _last[kind] = now
-    title, message = title.replace('"', "'")[:80], message.replace('"', "'")[:200]
+
+    def clean(text: str, limit: int) -> str:   # plain text only: nothing that could break the OS command
+        return text.replace("\\", " ").replace('"', "'").replace("\n", " ")[:limit]
+    title, message = clean(title, 80), clean(message, 200)
     system = platform.system()
     try:
         if system == "Darwin":
@@ -40,6 +46,15 @@ def send(kind: str, title: str, message: str) -> bool:
     except OSError as e:
         log.debug("notification failed: %s", e)
         return False
+
+
+def reel_ready(title: str, hook: str, count: int = 1) -> None:
+    """A new reel (or a finished batch) is ready: worth knowing when makereel runs in the background."""
+    from ..config import load_settings
+    if not load_settings()["notify_reels"]:
+        return
+    what = f"{count} new reels" if count > 1 else "New reel"
+    send("reel", f"makereel: {what} ready", f"{hook[:90]} · {title[:60]}", quiet_for=20)
 
 
 def bot_check(url: str) -> None:

@@ -59,6 +59,15 @@ class Job:
     session: LiveSession | None = field(default=None, repr=False)
     result: dict | None = None        # e.g. a benchmark's result id
 
+    def _stage(self) -> dict | None:
+        """Where a running job is: {"step": 1-3, "label"} from its "[k/3]" log lines (None if not started)."""
+        import re
+        for line in reversed(self.log[-200:]):
+            m = re.search(r"\[(\d)/3\]\s*(.*)", line)
+            if m:
+                return {"step": int(m.group(1)), "label": m.group(2)[:90]}
+        return None
+
     def append_log(self, line: str) -> None:
         self.log.append(line)
         if len(self.log) > MAX_LOG_LINES:
@@ -68,7 +77,7 @@ class Job:
         d = {"id": self.id, "kind": self.kind, "target": self.target, "status": self.status.value,
              "title": self.title or self.target, "folder": self.folder, "reels": self.reels,
              "error": self.error, "created": self.created, "finished": self.finished, "result": self.result,
-             "last_line": self.log[-1] if self.log else ""}
+             "last_line": self.log[-1] if self.log else "", "stage": self._stage()}
         if self.session is not None:
             d["live"] = self.session.stats()
             d["reels"] = max(self.reels, self.session.stats()["reels"])
@@ -250,6 +259,8 @@ class JobManager:
         job.reels = len(reels)
         if reels:
             job.folder = reels[0]["folder"]
+            from ..core import notify
+            notify.reel_ready(job.title or job.target, reels[0].get("hook", ""), len(reels))
         self._finish(job, Status.DONE)
 
     def _start_live(self, job: Job, session: LiveSession) -> None:

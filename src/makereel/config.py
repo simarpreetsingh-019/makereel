@@ -157,6 +157,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "cpu_mode": "balanced",  # quiet (1 core, low priority: cooler) | balanced | fast (most cores)
     "speech_device": "auto", # where speech recognition runs: auto (NVIDIA GPU if usable) | gpu | cpu
     "setup_done": False,     # the first-run setup (model suggestions) was finished or skipped
+    "notify_reels": True,    # a desktop notification when new reels are ready
     "watching": False,       # the channel watcher was on when makereel last ran (it starts again)
     "update_check": True,    # look for a new release when the app starts (one small request)
     "reels_folder": "",      # where reel folders are saved ("" = ./output); MAKEREEL_OUTPUT_DIR wins if set
@@ -403,7 +404,7 @@ def save_settings(changes: dict[str, Any], path: Path | None = None) -> Settings
         if changes["speech_device"] not in ("auto", "gpu", "cpu"):
             raise ConfigError("speech_device must be auto, gpu or cpu")
         current["speech_device"] = changes["speech_device"]
-    for key in ("keep_source", "watch_uploads", "setup_done", "update_check", "watching"):
+    for key in ("keep_source", "watch_uploads", "setup_done", "update_check", "watching", "notify_reels"):
         if key in changes:
             current[key] = bool(changes[key])
     if isinstance(changes.get("clip"), dict):

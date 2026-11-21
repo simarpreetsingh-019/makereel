@@ -552,7 +552,35 @@ function drawExports() {
 }
 
 // ------------------------------------------------------------------ wiring
+const TAB_VIDEO = { text: "#ed-video", timing: "#tm-video", look: "#lk-video", cards: "#cd-video",
+  camera: "#cm-video", cut: "#cut-video" };
+
+// Editor shortcuts: Space play/pause, ←/→ 1 s (Shift: 5 s), Ctrl/Cmd+S saves the current tab.
+function onEditorKey(e) {
+  const tab = document.querySelector("#editor [data-edtab].on")?.dataset.edtab;
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    const panel = document.querySelector(`#editor [data-edpanel="${tab}"]`);
+    const save = [...(panel?.querySelectorAll("button.primary") || [])].find((b) => b.offsetParent && !b.disabled);
+    if (save) save.click(); else toast("Nothing to save on this tab");
+    return;
+  }
+  if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+  const v = TAB_VIDEO[tab] && $(TAB_VIDEO[tab]);
+  if (!v || !v.src) return;
+  if (e.key === " ") {
+    e.preventDefault();
+    if (v.paused) v.play(); else v.pause();
+  } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    e.preventDefault();
+    const step = (e.shiftKey ? 5 : 1) * (e.key === "ArrowLeft" ? -1 : 1);
+    v.currentTime = Math.max(0, Math.min((v.duration || 0) - 0.05, v.currentTime + step));
+  }
+}
+
 export function mount() {
+  $("#editor").addEventListener("keydown", onEditorKey);
   const dialog = $("#editor");
   $("#ed-close").addEventListener("click", () => dialog.close());
   dialog.addEventListener("close", () => {
