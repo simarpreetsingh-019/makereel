@@ -388,3 +388,8 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .sys-bench>summary::before{content:"▸ ";color:var(--muted)}
 .sys-bench[open]>summary::before{content:"▾ "}
 .sys-compact{font-size:13px}
+/* reel card: let the ⋯ menu show (it opens upward, above the buttons) */
+.reel { overflow: visible; }
+.reel video { border-radius: 13px 13px 0 0; }
+.reel .menu-list { top: auto; bottom: calc(100% + 4px); left: 0; right: auto; }
+.reel:has(.menu[open]) { z-index: 30; }
