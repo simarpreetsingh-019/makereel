@@ -8,6 +8,7 @@
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to content</a>
 <aside class="side">
   <h1 class="side-logo">make<b>reel</b></h1>
   <nav aria-label="Main">
@@ -20,7 +21,7 @@
   <div class="sys" id="sys"></div>
 </aside>
 
-<main>
+<main id="main-content" tabindex="-1">
   <div id="banner"></div>
   <div id="notices"></div>
 
@@ -653,16 +654,16 @@
         <p class="hint" style="margin:4px 0 10px">Move each edge earlier (−) or later (+). Up to <span id="cut-room"></span> of extra video is kept around this reel.</p>
         <div class="trim-row"><span>Start</span>
           <button class="btn small" data-trim="start" data-d="-1">−1 s</button>
-          <button class="btn small" data-trim="start" data-d="-0.25">−¼</button>
+          <button class="btn small" data-trim="start" data-d="-0.25" aria-label="Move start a quarter second earlier">−¼</button>
           <b id="cut-start">0.00 s</b>
-          <button class="btn small" data-trim="start" data-d="0.25">+¼</button>
+          <button class="btn small" data-trim="start" data-d="0.25" aria-label="Move start a quarter second later">+¼</button>
           <button class="btn small" data-trim="start" data-d="1">+1 s</button>
           <button class="btn small" data-trim-now="start" title="Start the reel at the playhead">at playhead</button></div>
         <div class="trim-row"><span>End</span>
           <button class="btn small" data-trim="end" data-d="-1">−1 s</button>
-          <button class="btn small" data-trim="end" data-d="-0.25">−¼</button>
+          <button class="btn small" data-trim="end" data-d="-0.25" aria-label="Move end a quarter second earlier">−¼</button>
           <b id="cut-end">0.00 s</b>
-          <button class="btn small" data-trim="end" data-d="0.25">+¼</button>
+          <button class="btn small" data-trim="end" data-d="0.25" aria-label="Move end a quarter second later">+¼</button>
           <button class="btn small" data-trim="end" data-d="1">+1 s</button>
           <button class="btn small" data-trim-now="end" title="End the reel at the playhead">at playhead</button></div>
         <div class="row" style="margin-top:10px"><button class="btn primary" id="cut-apply">Apply trim</button>

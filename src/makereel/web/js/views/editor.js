@@ -506,8 +506,8 @@ function drawWordList() {
     <div class="word-row" data-i="${i}">
       <button class="link" data-act="seek" data-i="${i}" title="Play from here">${(w.start + cur.offset).toFixed(2)}</button>
       <span class="w">${esc(w.word)}</span>
-      <button class="btn tiny" data-act="nudge" data-i="${i}" data-d="-0.1" title="0.1 s earlier">−</button>
-      <button class="btn tiny" data-act="nudge" data-i="${i}" data-d="0.1" title="0.1 s later">+</button>
+      <button class="btn tiny" data-act="nudge" data-i="${i}" data-d="-0.1" title="0.1 s earlier" aria-label="Word 0.1 s earlier">−</button>
+      <button class="btn tiny" data-act="nudge" data-i="${i}" data-d="0.1" title="0.1 s later" aria-label="Word 0.1 s later">+</button>
       <button class="btn tiny" data-act="now" data-i="${i}" title="Start this word at the current video time">set to now</button>
     </div>`).join("");
 }

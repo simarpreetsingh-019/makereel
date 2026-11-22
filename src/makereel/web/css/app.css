@@ -422,3 +422,10 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 @media (max-width:520px){.sample{flex-direction:column;text-align:center}}
 .toast{display:flex;align-items:center;gap:12px}
 .toast-undo{background:transparent;color:var(--accent,#ffd60a);border-color:currentColor}
+/* C5: visible keyboard focus everywhere (mouse clicks stay ring-free) */
+:where(button, a, summary, [tabindex], .btn, label.switch input):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.folder:focus-visible, .reel:has(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+.skip-link{position:absolute;left:-9999px;top:8px;z-index:100;background:var(--panel);color:var(--ink);padding:8px 12px;border-radius:8px}
+.skip-link:focus{left:8px}
+main:focus{outline:none}
