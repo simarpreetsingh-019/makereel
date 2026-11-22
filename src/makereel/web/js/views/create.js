@@ -65,6 +65,10 @@ export function mount(refreshJobs) {
       refreshJobs();
     } else if (btn.dataset.action === "remove") {
       busy(btn, async () => { await api.removeJob(id); refreshJobs(); });
+    } else if (btn.dataset.action === "sample") {
+      const box = document.querySelector("#link-form input[name=url]");
+      box.value = "https://www.youtube.com/watch?v=jNQXAC9IVRw";
+      document.querySelector("#link-form").requestSubmit();
     } else if (btn.dataset.action === "liveview") {
       liveview.open(id, btn.dataset.title);
     } else if (btn.dataset.action === "open") {
@@ -106,7 +110,18 @@ export function render(state) {
   box.querySelectorAll("pre.log").forEach((p) => (stick[p.dataset.log] = p.scrollTop + p.clientHeight >= p.scrollHeight - 20));
   box.innerHTML = state.jobs.length
     ? state.jobs.map((j) => jobRow(j, state.openLogs[j.id])).join("")
-    : `<div class="empty">Nothing yet. Paste a link above.</div>`;
+    : `<div class="sample">
+        <div class="sample-phone" aria-hidden="true"><div class="sp-video"></div>
+          <div class="sp-title">THIS IS WHERE THE TITLE GOES</div>
+          <div class="sp-cap"><span>bhai</span> <span class="on">ye</span> <span>dekho</span></div>
+          <div class="sp-credit">@creator</div></div>
+        <div class="stack">
+          <h3 style="margin:0">What you get</h3>
+          <p class="hint" style="margin:0">Vertical 9:16 reels of the best moments, with a title on top, word-by-word captions
+            (Hindi, Hinglish or English) and a credit to the creator. Plus ready-to-paste post text.</p>
+          <div class="row"><button class="btn small" data-action="sample" type="button">Try it on a 19-second sample video</button></div>
+          <span class="hint" style="margin:0">Uses YouTube's first ever video. Takes about a minute.</span>
+        </div></div>`;
   box.querySelectorAll("pre.log").forEach((p) => { if (stick[p.dataset.log] !== false) p.scrollTop = p.scrollHeight; });
 }
 

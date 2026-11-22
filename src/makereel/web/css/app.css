@@ -410,3 +410,13 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .lv-m.reel line{stroke:var(--lv-reel)} .lv-m.reel text{fill:var(--lv-reel)}
 .lv-legend{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 0}
 .lv-legend i{display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle}
+/* empty Create page: what a reel looks like */
+.sample{display:flex;gap:20px;align-items:center;padding:16px;border:1px dashed var(--line);border-radius:14px}
+.sample-phone{flex:none;width:120px;aspect-ratio:9/16;border-radius:14px;position:relative;overflow:hidden;
+  background:linear-gradient(160deg,#3a2a5e,#1b2a4a 55%,#0e1424);box-shadow:0 6px 20px #0006}
+.sp-video{position:absolute;inset:32% 0 30%;background:linear-gradient(120deg,#5b6cff55,#e5484d44),repeating-linear-gradient(90deg,#fff1 0 6px,#0000 6px 12px)}
+.sp-title{position:absolute;top:10%;left:8%;right:8%;font:800 9px/1.2 system-ui;color:#fff;text-align:center;background:#000a;padding:3px;border-radius:4px}
+.sp-cap{position:absolute;bottom:22%;left:0;right:0;text-align:center;font:800 11px system-ui;color:#fff;text-shadow:0 1px 2px #000}
+.sp-cap .on{color:#ffd60a}
+.sp-credit{position:absolute;bottom:6%;right:8%;font:600 7px system-ui;color:#fffa}
+@media (max-width:520px){.sample{flex-direction:column;text-align:center}}
