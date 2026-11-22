@@ -288,6 +288,9 @@ function fillLook() {
   $("#lk-templates").innerHTML = Object.entries(r.templates || {}).map(([id, label]) =>
     `<button type="button" class="chip-btn ${id === cur.look.template ? "on" : ""}" data-template="${id}">${esc(label)}</button>`).join("");
   $("#lk-fit").value = r.fit || "blur";
+  $("#ed-fit").value = r.fit || "blur";
+  $("#ed-fit").disabled = !r.can_export;
+  if (!r.can_export) $("#ed-fit-hint").textContent = "This reel's original clip is gone, so its layout can't change.";
   $("#lk-fit").disabled = !r.can_export;
   LOOK_FIELDS.forEach((k) => {
     const el = $(`#lk-${k}`);
@@ -638,6 +641,13 @@ export function mount() {
     $("#ed-transcript").dispatchEvent(new Event("input"));
     b.classList.remove("cmp-bad"); b.classList.add("cmp-used");
     toast("Word replaced. Press Save to re-render.");
+  });
+  $("#ed-fit").addEventListener("change", async (e) => {
+    const fit = e.target.value, before = cur.reel.fit || "blur";
+    if (Object.keys(textChanges()).length) { e.target.value = before; return toast("Save or undo your word edits first"); }
+    e.target.disabled = true;
+    try { await save({ fit }, null, "Layout changed and re-rendered."); }
+    finally { e.target.disabled = !cur.reel?.can_export; if (cur.reel?.fit) e.target.value = cur.reel.fit; }
   });
   $("#ed-paste-go").addEventListener("click", (e) => busy(e.currentTarget, async () => {
     const text = $("#ed-paste").value.trim();

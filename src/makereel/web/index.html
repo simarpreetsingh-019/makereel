@@ -451,6 +451,11 @@
     </div>
     <div class="stack">
       <label class="field">On-screen title<input id="ed-hook"></label>
+      <label class="field">Layout
+        <select id="ed-fit"><option value="blur">Whole frame + blurred background</option>
+          <option value="track">Follow the speaker</option><option value="split">Split: two people, or webcam over gameplay</option>
+          <option value="crop">Crop the centre</option><option value="pad">Black bars</option></select>
+        <span class="hint" id="ed-fit-hint" style="margin:0">Changing it re-renders the reel right away.</span></label>
       <label class="field">
         <span>Captions <span id="ed-words"></span></span>
         <textarea id="ed-transcript" class="transcript" rows="6" spellcheck="true"></textarea>
