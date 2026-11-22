@@ -11,6 +11,7 @@ import * as library from "./views/library.js";
 import * as setup from "./views/setup.js";
 import * as system from "./views/system.js";
 import * as wizard from "./views/wizard.js";
+import * as liveview from "./views/liveview.js";
 
 const POLL_MS = 2500;
 
@@ -82,6 +83,7 @@ async function start() {
   system.mount();
   setup.mount();
   wizard.mount();
+  liveview.mount();
   store.subscribe(render);
 
   window.addEventListener("hashchange", () => { store.set({ route: parseRoute() }); refreshView(); });

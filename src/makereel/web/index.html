@@ -377,6 +377,18 @@
   </section>
 </main>
 
+<!-- Live dashboard -->
+<dialog id="liveview" class="wizard" style="width:min(900px,calc(100vw - 32px))" aria-labelledby="lv-title">
+  <div class="wz-head"><h2 id="lv-title" style="margin:0">Live</h2>
+    <select id="lv-min" aria-label="Time shown"><option value="15">Last 15 min</option><option value="30" selected>Last 30 min</option><option value="60">Last hour</option><option value="120">Last 2 hours</option></select>
+    <button class="btn small" id="lv-close" type="button" style="margin-left:auto">Close</button></div>
+  <p class="hint" id="lv-sum" style="margin:0 0 8px"></p>
+  <div id="lv-chart"></div>
+  <div class="lv-legend hint"><span><i style="background:var(--lv-loud)"></i>Loudness</span><span><i style="background:var(--lv-chat)"></i>Chat</span>
+    <span><i style="background:var(--lv-hype)"></i>Excited words</span><span>▲ moment · <b style="color:var(--lv-reel)">▲</b> became a reel</span></div>
+  <div id="lv-moments" class="stack" style="margin-top:10px"></div>
+</dialog>
+
 <!-- First-run setup -->
 <dialog id="wizard" class="wizard" aria-labelledby="wz-title">
   <div class="wz-head"><h2 id="wz-title">Welcome to makereel</h2><span class="hint" id="wz-step" style="margin:0"></span>

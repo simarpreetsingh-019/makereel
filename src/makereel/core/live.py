@@ -66,11 +66,28 @@ class LiveSession:
         self.language: str | None = None
         self.stream_delta: float | None = None   # seconds into the stream when recording began
         self.heard: list[dict] = []              # rough words from the live listener: {"t", "word"}
+        self.moments: list[dict] = []            # spikes for the live dashboard: {"t", "why", "reel"?}
         self.proc: subprocess.Popen | None = None
 
     # ------------------------------------------------------------------ stats (read by the web app)
     def stats(self) -> dict:
         return {"seconds": len(self.db), "reels": len(self.made), "chat": sum(self.chat.values())}
+
+    def timeline(self, minutes: int = 30, step: int = 5) -> dict:
+        """The live dashboard: loudness, chat and excited words in `step`-second buckets, plus moments."""
+        from .highlights import hype_count
+        n = len(self.db)
+        start = max(0, n - minutes * 60)
+        buckets = []
+        for b in range(start - start % step, n, step):
+            db = self.db[b:b + step]
+            words = [{"word": w["word"]} for w in self.heard if b <= w["t"] < b + step]
+            buckets.append({"t": b, "loud": round(max(db), 1) if db else None,
+                            "chat": sum(self.chat.get(t, 0) for t in range(b, b + step)),
+                            "hype": hype_count(words) if words else 0})
+        return {"seconds": n, "from": start, "step": step, "buckets": buckets,
+                "moments": [m for m in self.moments if m["t"] >= start],
+                "reels": len(self.made), "per_hour": self.per_hour}
 
     # ------------------------------------------------------------------ recording
     def _record(self) -> None:
@@ -207,6 +224,7 @@ class LiveSession:
             self.last_spike = n
             t = float(n - 3)
             self.pending.append({"t": t, "why": why, "base": base, "cbase": c_base, "last": t})
+            self.moments = (self.moments + [{"t": t, "why": why}])[-200:]
             log.info("  spike at %ds (%s)", n - 3, ", ".join(why))
 
     def _moment_over(self, p: dict) -> bool:
@@ -219,9 +237,15 @@ class LiveSession:
             return True                    # stopping: make the reel from whatever was recorded
         return (calmed or too_long) and self.clock >= end
 
+    def _mark(self, spike: dict, reel: bool | None) -> None:
+        for m in self.moments:
+            if m["t"] == spike["t"]:
+                m["reel"] = reel
+
     def _clip(self, spike: dict) -> None:
         hour_ago = time.time() - 3600
         self.made = [t for t in self.made if t > hour_ago]
+        self._mark(spike, False)
         if len(self.made) >= self.per_hour:
             log.info("  hourly reel limit reached; skipping spike")
             return
@@ -232,6 +256,7 @@ class LiveSession:
         parts = [s for s in self.segments if s[2] > a and s[1] < b]
         if not parts:
             return
+        self._mark(spike, None)                         # making it now
         win_start = int(parts[0][1])
         (self.buf / "join.txt").write_text("".join(f"file '{p[0].name}'\n" for p in parts))
         win = self.buf / f"win_{int(spike['t'])}.mp4"
@@ -243,9 +268,13 @@ class LiveSession:
             clip = {**self.clip, "max_clips": 1, "language": self._language(win) or self.clip.get("language")}
             reels = pipeline.process(win, meta, self.out, clip, self.brand, chat_counts=chat, ai=self.ai)
             self.made.append(time.time())
+            self._mark(spike, bool(reels))
             if reels:
                 from . import notify
                 notify.reel_ready(self.info.title, reels[0].get("hook", ""))
+        except Exception:
+            self._mark(spike, False)
+            raise
         finally:
             win.unlink(missing_ok=True)
 

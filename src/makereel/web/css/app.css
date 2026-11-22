@@ -398,3 +398,15 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .wizard::backdrop{background:#000a}
 .wz-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .wz-foot{margin-top:18px}
+/* live dashboard */
+:root { --lv-loud:#7c8cff; --lv-chat:#30a46c; --lv-hype:#f5a524; --lv-reel:#e5484d; }
+.lv-svg{width:100%;height:auto;display:block}
+.lv-svg text{fill:var(--muted);font-size:11px}
+.lv-axis{stroke:var(--line)}
+.lv-loud{stroke:var(--lv-loud);stroke-width:1.6}
+.lv-chat{stroke:var(--lv-chat);stroke-width:1.6}
+.lv-hype{stroke:var(--lv-hype);stroke-width:1.6}
+.lv-m line{stroke:var(--muted);stroke-dasharray:3 3}
+.lv-m.reel line{stroke:var(--lv-reel)} .lv-m.reel text{fill:var(--lv-reel)}
+.lv-legend{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 0}
+.lv-legend i{display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle}

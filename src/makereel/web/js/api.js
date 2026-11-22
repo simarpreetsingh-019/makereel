@@ -48,6 +48,7 @@ export const api = {
   useOther: (folder, name) => request("POST", `${reelPath(folder, name)}/use-other`),
   bulkLetters: (source) => request("POST", "/library/english-letters", { source }),
   bulkLettersStatus: () => request("GET", "/library/english-letters"),
+  jobLive: (id, minutes = 30) => request("GET", `/jobs/${encodeURIComponent(id)}/live?minutes=${minutes}`),
   aiFixWords: (folder, name) => request("POST", `${reelPath(folder, name)}/ai-fix`),
   creators: () => request("GET", "/creators"),
   creator: (ch, suggest = false) => request("GET", `/creators/${enc(ch)}${suggest ? "?suggest=1" : ""}`),

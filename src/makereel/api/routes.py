@@ -94,6 +94,13 @@ def build(jobs: JobManager, watcher: Watcher) -> Router:
     def get_job(req: Request):
         return jobs.get(req.params["job_id"]).to_dict(with_log=True)
 
+    @api.get("/jobs/{job_id}/live")
+    def job_live(req: Request):
+        job = jobs.get(req.params["job_id"])
+        if job.session is None or not hasattr(job.session, "timeline"):
+            raise InvalidInput("this job isn't recording a live stream")
+        return job.session.timeline(max(5, min(120, int(req.query.get("minutes", 30) or 30))))
+
     @api.post("/jobs/{job_id}/stop")
     def stop_job(req: Request):
         return jobs.stop(req.params["job_id"]).to_dict()

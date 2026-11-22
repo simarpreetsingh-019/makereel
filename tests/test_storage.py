@@ -190,3 +190,20 @@ def test_english_letters_prefers_a_downloaded_hinglish_model(monkeypatch):
     assert transcribe.model_for("base", "hi", "small", "roman") == "hinglish"
     assert transcribe.model_for("base", "hi", "small", "original") != "hinglish"
     assert transcribe.model_for("base", "en", "small", "roman") == "base"
+
+
+def test_live_timeline_buckets_and_moments():
+    import collections
+
+    from makereel.core import live
+    s = object.__new__(live.LiveSession)
+    s.db = [-30.0] * 100 + [-10.0] * 20
+    s.chat = collections.Counter({101: 4, 102: 3})
+    s.heard = [{"t": 103, "word": "OMG"}]
+    s.moments = [{"t": 101.0, "why": ["loud"], "reel": True}]
+    s.made, s.per_hour = [1.0], 6
+    d = s.timeline(minutes=5, step=10)
+    assert d["seconds"] == 120 and len(d["buckets"]) == 12
+    b = next(x for x in d["buckets"] if x["t"] == 100)
+    assert b["loud"] == -10.0 and b["chat"] == 7
+    assert d["moments"][0]["reel"] is True and d["reels"] == 1

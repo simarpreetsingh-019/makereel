@@ -1,4 +1,5 @@
 // "Create" tab: paste a link or upload a file, then follow the jobs.
+import * as liveview from "./liveview.js";
 import { api } from "../api.js";
 import { store } from "../store.js";
 import { $, busy, esc, showError, timeAgo, toast } from "../ui.js";
@@ -64,6 +65,8 @@ export function mount(refreshJobs) {
       refreshJobs();
     } else if (btn.dataset.action === "remove") {
       busy(btn, async () => { await api.removeJob(id); refreshJobs(); });
+    } else if (btn.dataset.action === "liveview") {
+      liveview.open(id, btn.dataset.title);
     } else if (btn.dataset.action === "open") {
       location.hash = `#/library/${encodeURIComponent(btn.dataset.folder)}`;
     }
@@ -84,6 +87,7 @@ function jobRow(j, logText) {
       <span class="title" title="${esc(j.target)}">${esc(j.title)}</span>
       <span class="hint" style="margin:0">${timeAgo(j.created)}${live}${reels}</span>
       ${j.folder && j.kind !== "watcher" ? `<button class="btn small" data-action="open" data-folder="${esc(j.folder)}">Open folder</button>` : ""}
+      ${j.status === "live" && j.kind !== "watcher" && j.live ? `<button class="btn small primary" data-action="liveview" data-id="${j.id}" data-title="${esc(j.title)}">Live view</button>` : ""}
       ${canStop ? `<button class="btn small" data-action="stop" data-id="${j.id}">Stop</button>` : ""}
       <button class="btn small" data-action="log" data-id="${j.id}">${logText !== undefined ? "Hide log" : "Log"}</button>
       ${["done", "failed", "stopped"].includes(j.status) && j.kind !== "watcher"
