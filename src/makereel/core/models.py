@@ -36,13 +36,26 @@ CATALOG: dict[str, dict] = {
                          "English. Best for Indian streamers. Fast with an NVIDIA GPU."},
     "hinglish-lite": {"label": "Hinglish lite", "size_gb": 0.08, "ram_gb": 1, "english_only": False,
                       "translate": False, "note": "A tiny Hinglish model for small computers. Rougher words."},
+    "indic-hi": {"label": "IndicConformer Hindi", "size_gb": 0.13, "ram_gb": 1, "english_only": False,
+                 "translate": False, "engine": "onnx",
+                 "note": "AI4Bharat's Hindi model: trained on Indian speech, very fast on a CPU. Writes Hindi "
+                         "script (English letters if your captions use them). Hindi only."},
+    "parakeet": {"label": "Parakeet (English)", "size_gb": 0.67, "ram_gb": 2, "english_only": True,
+                 "translate": False, "engine": "onnx",
+                 "note": "NVIDIA's fast English model: about as accurate as the big ones, much quicker. English only."},
 }
+# Models for the second speech engine (onnx-asr): Hugging Face repo, what onnx-asr calls it, files to fetch.
+ONNX = {"indic-hi": {"repo": "OpenVoiceOS/ai4bharat-indicconformer-hi-onnx",
+                     "load": "OpenVoiceOS/ai4bharat-indicconformer-hi-onnx",
+                     "files": ["config.json", "*.int8.onnx", "vocab.txt"]},
+        "parakeet": {"repo": "istupakov/parakeet-tdt-0.6b-v2-onnx", "load": "nemo-parakeet-tdt-0.6b-v2",
+                     "files": ["config.json", "*.int8.onnx", "vocab.txt"]}}
 # Hinglish models (Oriserve's Hindi2Hinglish, Apache-2.0), converted for the speech engine by the community.
 REPOS = {"hinglish": "abhayhadez/anchor-hinglish-apex-ct2",
          "hinglish-lite": "MSpider3/whisper-hindi2hinglish-swift-ct2"}
 HINGLISH = tuple(REPOS)
-ENGLISH_CHOICES = ("base", "small", "medium", "distil-large-v3", "large-v3")
-OTHER_CHOICES = ("small", "medium", "large-v3", "hinglish", "hinglish-lite")
+ENGLISH_CHOICES = ("base", "small", "medium", "distil-large-v3", "large-v3", "parakeet")
+OTHER_CHOICES = ("small", "medium", "large-v3", "hinglish", "hinglish-lite", "indic-hi")
 FOCUS = ("english", "indian", "both")
 
 
@@ -114,7 +127,18 @@ def recommend(pc: dict, focus: str = "both") -> dict:
 
 
 # --------------------------------------------------------------------------- downloads
+def is_onnx(name: str | None) -> bool:
+    return name in ONNX
+
+
+def onnx_dir(name: str) -> Path:
+    from ..config import env
+    return env().data_dir / "models" / name
+
+
 def _repo(name: str) -> str:
+    if name in ONNX:
+        return ONNX[name]["repo"]
     if name in REPOS:
         return REPOS[name]
     from faster_whisper.utils import _MODELS
@@ -127,6 +151,9 @@ def source(name: str) -> str:
 
 
 def installed(name: str) -> bool:
+    if name in ONNX:
+        d = onnx_dir(name)
+        return d.is_dir() and any(d.glob("*.onnx")) and (d / "vocab.txt").is_file()
     try:                                  # faster-whisper fetches only the files it needs: ask it, not the hub
         from faster_whisper import download_model
         return (Path(download_model(source(name), local_files_only=True)) / "model.bin").is_file()
@@ -145,6 +172,8 @@ _dl_lock = threading.Lock()
 
 
 def _cache_dir(name: str) -> Path | None:
+    if name in ONNX:
+        return onnx_dir(name)
     try:
         from huggingface_hub.constants import HF_HUB_CACHE
     except ImportError:
@@ -161,8 +190,15 @@ def download(name: str) -> dict:
         if installed(name):
             _downloads[name] = {"state": "done"}
         elif _downloads.get(name, {}).get("state") != "downloading":
-            code = "import sys; from faster_whisper import download_model; download_model(sys.argv[1])"
-            proc = subprocess.Popen([sys.executable, "-c", code, source(name)],
+            if name in ONNX:
+                code = ("import sys, json; from huggingface_hub import snapshot_download; "
+                        "snapshot_download(sys.argv[1], local_dir=sys.argv[2], allow_patterns=json.loads(sys.argv[3]))")
+                import json as _json
+                args = [ONNX[name]["repo"], str(onnx_dir(name)), _json.dumps(ONNX[name]["files"])]
+            else:
+                code = "import sys; from faster_whisper import download_model; download_model(sys.argv[1])"
+                args = [source(name)]
+            proc = subprocess.Popen([sys.executable, "-c", code, *args],
                                     stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             _procs[name], _downloads[name] = proc, {"state": "downloading"}
 

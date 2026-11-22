@@ -6,8 +6,8 @@ import { $, busy, esc, toast } from "../ui.js";
 let setup = null;     // GET /setup
 let update = null;    // GET /updates
 
-const ENGLISH = ["base", "small", "medium", "distil-large-v3", "large-v3"];
-const OTHER = ["small", "medium", "large-v3", "hinglish", "hinglish-lite"];
+const ENGLISH = ["base", "small", "medium", "distil-large-v3", "large-v3", "parakeet"];
+const OTHER = ["small", "medium", "large-v3", "hinglish", "hinglish-lite", "indic-hi"];
 
 function option(m, recommended) {
   const flag = m.state === "done" ? "downloaded" : `${m.size_gb} GB download`;

@@ -207,3 +207,18 @@ def test_live_timeline_buckets_and_moments():
     b = next(x for x in d["buckets"] if x["t"] == 100)
     assert b["loud"] == -10.0 and b["chat"] == 7
     assert d["moments"][0]["reel"] is True and d["reels"] == 1
+
+
+def test_onnx_tokens_become_timed_words():
+    from makereel.core import transcribe
+    words = transcribe.tokens_to_words([" ब", "स", " दो", "▁hi", "ya"], [0.8, 0.9, 1.1, 1.5, 1.6], offset=10)
+    assert [w["word"] for w in words] == ["बस", "दो", "hiya"]
+    assert words[0]["start"] == 10.8 and words[0]["end"] == 11.1 and words[-1]["end"] == 11.9
+
+
+def test_indic_model_only_for_hindi(monkeypatch):
+    from makereel.core import transcribe
+    monkeypatch.setattr(transcribe, "_downloaded_multilingual", lambda: "medium")
+    assert transcribe.model_for("base", "hi", "indic-hi") == "indic-hi"
+    assert transcribe.model_for("base", "ta", "indic-hi") == "medium"     # Tamil: not a Hindi model
+    assert transcribe.model_for("parakeet", "hi", "small") == "small"     # English-only model can't do Hindi

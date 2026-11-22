@@ -174,8 +174,8 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
 INT_SETTINGS = ("poll_minutes", "max_parallel_live", "keep_days", "buffer_minutes",
                 "clips_per_hour", "max_height")
 CLIP_CHOICES = {"profile": ("gameplay", "talk"), "layout": ("auto", "blur", "crop", "pad", "track", "split"),
-                "model": ("tiny", "base", "small", "medium", "distil-large-v3", "large-v3"),
-                "model_other": ("same", "small", "medium", "large-v3", "hinglish", "hinglish-lite")}
+                "model": ("tiny", "base", "small", "medium", "distil-large-v3", "large-v3", "parakeet"),
+                "model_other": ("same", "small", "medium", "large-v3", "hinglish", "hinglish-lite", "indic-hi")}
 
 
 @dataclass

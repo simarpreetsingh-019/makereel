@@ -35,10 +35,10 @@ def _clip_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--max-clips", type=int)
     g.add_argument("--min-len", type=float)
     g.add_argument("--max-len", type=float)
-    g.add_argument("--model", help="speech model for English: tiny, base, small, medium, distil-large-v3, large-v3")
+    g.add_argument("--model", help="speech model for English: tiny, base, small, medium, distil-large-v3, large-v3, parakeet")
     g.add_argument("--language", help="e.g. en, hi, pa (auto-detected once per video if omitted)")
     g.add_argument("--fps", type=int, choices=(30, 60), help="60 keeps smooth motion from 60 fps sources")
-    g.add_argument("--model-other", dest="model_other", choices=("same", "small", "medium", "large-v3"),
+    g.add_argument("--model-other", dest="model_other", choices=("same", "small", "medium", "large-v3", "hinglish", "hinglish-lite", "indic-hi"),
                    help="speech model for Hindi and other languages (used when it's bigger than --model, "
                         "or --model is English-only)")
     g.add_argument("--layout", choices=["auto", "blur", "crop", "pad", "track", "split"])

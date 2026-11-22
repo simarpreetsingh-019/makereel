@@ -12,6 +12,7 @@ dependencies = [
   "numpy",
   "psutil>=5.9",
   "anyascii>=0.3",   # English letters for non-Indian scripts (Indian ones use our own rules)
+  "onnx-asr[cpu]>=0.12",   # second speech engine: IndicConformer (Hindi) and Parakeet (English)
 ]
 
 [project.optional-dependencies]

@@ -79,8 +79,9 @@ def _get(size: str):
 def release_if_idle(seconds: float = 600) -> None:
     global _model
     with _lock:
-        if _model is not None and time.time() - _last_used > seconds:
+        if (_model is not None or _onnx) and time.time() - _last_used > seconds:
             _model = None
+            _onnx.clear()
             gc.collect()
             log.debug("speech model released")
 
@@ -98,7 +99,7 @@ def _downloaded_multilingual() -> str | None:
     other = load_settings().clip.get("model_other")
     for name in (other, "small", "medium", "large-v3", "base"):
         if (name and name in models.CATALOG and name not in ENGLISH_ONLY and not _hinglish(name)
-                and models.installed(name)):
+                and not models.is_onnx(name) and models.installed(name)):
             return name
     return None
 
@@ -109,7 +110,8 @@ def detect_language(video: Path, windows: list[tuple[float, float]], size: str =
     Detecting once per video (instead of per clip) keeps every reel of a video in the same
     language and script, which matters for mixed speech like Hinglish.
     """
-    if size in ENGLISH_ONLY or _hinglish(size):   # these always "hear" English: detect with a normal model
+    if size in ENGLISH_ONLY or _hinglish(size) or models.is_onnx(size):
+        # these can't tell languages apart: detect with a normal multilingual model
         size = _downloaded_multilingual() or "small"
     audio = np.concatenate([_pcm(video, s, min(e, s + 30)) for s, e in windows[:3]] or [np.zeros(0, np.float32)])
     if len(audio) < 16000 * 2:
@@ -132,6 +134,8 @@ def words_in(video: Path, start: float, end: float, size: str = "base",
     audio = _pcm(video, start, end)
     if len(audio) < 16000:  # under a second: nothing worth transcribing
         return []
+    if models.is_onnx(size):
+        return _onnx_words(size, audio, start)
     if _hinglish(size):     # Hinglish models write Hindi + English in English letters, in their "en" mode
         language, task = "en", "transcribe"
     with _lock:
@@ -144,6 +148,55 @@ def words_in(video: Path, start: float, end: float, size: str = "base",
             return [{"start": round(float(w.start) + start, 2), "end": round(float(w.end) + start, 2),
                      "word": w.word.strip()} for s in segments for w in (s.words or [])]
         return _with_fallback(size, run)
+
+
+# --------------------------------------------------------------------------- second engine (onnx-asr)
+_onnx: dict[str, object] = {}
+
+
+def _onnx_model(name: str):
+    if name not in _onnx:
+        try:
+            import onnx_asr
+            import onnxruntime
+        except ImportError as e:
+            raise MediaError(f"the {name} model needs the onnx-asr package",
+                             "Update makereel (it installs it), or pick another speech model.") from e
+        if not models.installed(name):
+            raise MediaError(f"the {name} speech model isn't downloaded", "Download it in System → Speech models.")
+        onnxruntime.set_default_logger_severity(3)
+        log.info("loading speech model '%s' (onnx)", name)
+        _onnx[name] = onnx_asr.load_model(models.ONNX[name]["load"], models.onnx_dir(name),
+                                          quantization="int8").with_timestamps()
+    return _onnx[name]
+
+
+def tokens_to_words(tokens: list[str], times: list[float], offset: float = 0.0) -> list[dict]:
+    """Word timings from word-piece tokens (a leading space starts a new word)."""
+    words: list[dict] = []
+    for i, (tok, t) in enumerate(zip(tokens, times, strict=False)):
+        if not words or tok.startswith((" ", "▁")):
+            words.append({"start": round(float(t) + offset, 2), "word": tok.strip(" ▁")})
+        else:
+            words[-1]["word"] += tok
+        nxt = times[i + 1] if i + 1 < len(times) else t + 0.3
+        words[-1]["end"] = round(float(nxt) + offset, 2)
+    return [w for w in words if w["word"]]
+
+
+ONNX_CHUNK = 20.0       # seconds per pass: these models want short audio; cut at pauses
+
+
+def _onnx_words(name: str, audio: np.ndarray, start: float) -> list[dict]:
+    global _last_used
+    words: list[dict] = []
+    with _lock:
+        model = _onnx_model(name)
+        _last_used = time.time()
+        for a, b in sentences(audio, longest=ONNX_CHUNK):
+            r = model.recognize(audio[a:b].astype(np.float32), sample_rate=16000)
+            words += tokens_to_words(list(r.tokens or []), list(r.timestamps or []), start + a / 16000)
+    return words
 
 
 SWITCH_SURE = 0.6       # switch away from the stream's language only when the model is at least this sure
@@ -189,6 +242,8 @@ def words_by_sentence(video: Path, start: float, end: float, size: str, primary:
     primary = primary or "en"
     allowed = allowed or {primary, "en"}
     detector = model_for(size, primary if primary != "en" else "hi", other)   # a multilingual model
+    if models.is_onnx(detector) and primary == "hi":     # one-language model: no sentence switching
+        return [{**w, "lang": "hi"} for w in words_in(video, start, end, detector, "hi", precise=True)]
     if _hinglish(detector) and primary == "hi":
         # a Hinglish model handles Hindi and English in one pass, mid-sentence switches included
         return [{**w, "lang": "hi"} for w in words_in(video, start, end, detector, "en", precise=True)]
@@ -213,8 +268,8 @@ def words_by_sentence(video: Path, start: float, end: float, size: str, primary:
     return words
 
 
-CHECKERS = {"hi": ("hinglish", "large-v3", "medium", "hinglish-lite", "small"),
-            "en": ("large-v3", "distil-large-v3", "medium", "small")}
+CHECKERS = {"hi": ("hinglish", "indic-hi", "large-v3", "medium", "hinglish-lite", "small"),
+            "en": ("parakeet", "large-v3", "distil-large-v3", "medium", "small")}
 
 
 def checker_for(main: str, language: str | None) -> str | None:
@@ -233,7 +288,7 @@ def words_in_file(video: Path, size: str = "base", language: str | None = None,
 
 
 RANK = ("tiny", "base", "small", "medium", "distil-large-v3", "large-v3")
-ENGLISH_ONLY = ("distil-large-v3",)
+ENGLISH_ONLY = ("distil-large-v3", "parakeet")
 
 
 def _hinglish(name: str | None) -> bool:
@@ -262,10 +317,14 @@ def _model_for(size: str, language: str | None, other: str) -> str:
     An English-only model can't hear Hindi at all, and small sizes are weak outside English, so for
     non-English speech the other model is used unless the main one is the bigger multilingual one.
     """
+    if models.is_onnx(other) and language != "hi":      # a Hindi-only model: other languages use a normal one
+        other = _downloaded_multilingual() or "small"
     if not language or language == "en" or other == "same":
         return size if size not in ENGLISH_ONLY or not language or language == "en" else "small"
     if _hinglish(other):
         return other if language == "hi" else (size if size not in ENGLISH_ONLY else "small")
+    if models.is_onnx(other):
+        return other
     if size in ENGLISH_ONLY or RANK.index(other) > RANK.index(size):
         return other
     return size
