@@ -1,11 +1,13 @@
 // "Reels" tab: one folder per source video; open a folder to see and edit its reels.
 import { api, media } from "../api.js";
 import { store } from "../store.js";
-import { $, busy, confirmDialog, copyText, esc, showError, timeAgo, toast } from "../ui.js";
+import { $, busy, copyText, esc, showError, timeAgo, toast, undoable } from "../ui.js";
 import { openEditor } from "./editor.js";
 
 let lastDrawn = "";   // avoid redrawing (and restarting videos) when nothing changed
 let joining = null;   // null, or the reel names picked to join, in click order
+const gone = new Set();  // folders / "folder/reel" waiting out their Undo: hidden, not yet deleted
+const redraw = () => { lastDrawn = null; render(store.state); };
 let sortBest = true;  // best score first, or in the order they happen in the video
 try { sortBest = localStorage.getItem("mr-reel-sort") !== "time"; } catch { /* private mode */ }
 
@@ -17,7 +19,7 @@ export async function load(folder) {
 
 function foldersHTML(folders, query) {
   const q = query.toLowerCase();
-  const list = folders.filter((f) => !q || `${f.title} ${f.channel}`.toLowerCase().includes(q));
+  const list = folders.filter((f) => !gone.has(f.folder)).filter((f) => !q || `${f.title} ${f.channel}`.toLowerCase().includes(q));
   if (!list.length) return `<div class="empty">${folders.length ? "No folder matches." : "No reels yet. Paste a link in Create."}</div>`;
   return `<div class="folders">${list.map((f) => `
     <div class="folder" data-folder="${esc(f.folder)}" role="link" tabindex="0">
@@ -30,7 +32,8 @@ function foldersHTML(folders, query) {
     </div>`).join("")}</div>`;
 }
 
-function reelsHTML(data) {
+function reelsHTML(all) {
+  const data = { ...all, reels: all.reels.filter((r) => !gone.has(`${all.folder}/${r.name}`)) };
   if (!data.reels.length) return `<div class="empty">This folder has no reels yet${data.info?.live_status === "is_live" ? " (it fills up as the stream has big moments)" : ""}.</div>`;
   const bar = joining ? `<div class="joinbar"><span>${joining.length ? `Join in this order: <b>${joining.map(esc).join(" → ")}</b>`
       : "Tick the reels to join, in the order they should play."}</span>
@@ -98,9 +101,10 @@ export function mount() {
     const del = e.target.closest("[data-del-folder]");
     if (del) {
       const f = store.state.folders.find((x) => x.folder === del.dataset.delFolder);
-      if (await confirmDialog(`Delete "${f.title}" and its ${f.count} reel${f.count === 1 ? "" : "s"}? This can't be undone.`)) {
-        busy(del, async () => { await api.deleteFolder(f.folder); toast("Folder deleted"); await load(); });
-      }
+      undoable(`Deleted "${f.title}" (${f.count} reel${f.count === 1 ? "" : "s"})`, {
+        hide: () => { gone.add(f.folder); redraw(); }, restore: () => { gone.delete(f.folder); redraw(); },
+        commit: async () => { try { await api.deleteFolder(f.folder); } finally { gone.delete(f.folder); } await load(); },
+      });
       return;
     }
     const folderBtn = e.target.closest(".folder");
@@ -141,8 +145,12 @@ export function mount() {
     if (btn.dataset.act === "edit") openEditor(folder, reel.name, () => load(folder));
     if (btn.dataset.act === "export") openEditor(folder, reel.name, () => load(folder), "export");
     if (btn.dataset.act === "copy") copyText(reel.caption);
-    if (btn.dataset.act === "delete" && await confirmDialog(`Delete ${reel.name} and its exports? This can't be undone.`)) {
-      busy(btn, async () => { await api.deleteReel(folder, reel.name); toast("Reel deleted"); await load(folder); });
+    if (btn.dataset.act === "delete") {
+      const key = `${folder}/${reel.name}`;
+      undoable(`Deleted "${reel.hook || reel.name}"`, {
+        hide: () => { gone.add(key); redraw(); }, restore: () => { gone.delete(key); redraw(); },
+        commit: async () => { try { await api.deleteReel(folder, reel.name); } finally { gone.delete(key); } await load(folder); },
+      });
     }
   });
 
@@ -179,7 +187,10 @@ export function mount() {
     if (e.target.id !== "delete-folder") return;
     const { folder, reels } = store.state.folder;
     const n = reels.length;
-    if (!await confirmDialog(`Delete "${folder}" and its ${n} reel${n === 1 ? "" : "s"}? This can't be undone.`)) return;
-    busy(e.target, async () => { await api.deleteFolder(folder); toast("Folder deleted"); location.hash = "#/library"; });
+    location.hash = "#/library";
+    undoable(`Deleted "${folder}" (${n} reel${n === 1 ? "" : "s"})`, {
+      hide: () => { gone.add(folder); redraw(); }, restore: () => { gone.delete(folder); redraw(); },
+      commit: async () => { try { await api.deleteFolder(folder); } finally { gone.delete(folder); } await load(); },
+    });
   });
 }

@@ -8,11 +8,45 @@ export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
 let toastTimer;
 export function toast(message) {
   const t = $("#toast");
-  t.textContent = message;
+  t.textContent = message;     // also clears an Undo button
   t.classList.add("on");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove("on"), 2600);
 }
+
+/**
+ * Undo instead of "are you sure?": `hide()` runs now, the real `commit()` after a few seconds,
+ * unless Undo is pressed (then `restore()`). A second undoable commits the first one at once.
+ */
+let pendingUndo = null;
+export function undoable(message, { hide, restore, commit, seconds = 8 }) {
+  if (pendingUndo) pendingUndo.finish();
+  hide?.();
+  const t = $("#toast");
+  t.innerHTML = "";
+  const span = document.createElement("span");
+  span.textContent = message;
+  const btn = document.createElement("button");
+  btn.className = "btn small toast-undo"; btn.type = "button"; btn.textContent = "Undo";
+  t.append(span, btn);
+  t.classList.add("on");
+  clearTimeout(toastTimer);
+  let done = false;
+  const me = {
+    finish: () => {
+      if (done) return; done = true; clearTimeout(me.timer); pendingUndo = null;
+      t.classList.remove("on");
+      Promise.resolve(commit()).catch((err) => { restore?.(); showError(err); });
+    },
+  };
+  btn.addEventListener("click", () => {
+    if (done) return; done = true; clearTimeout(me.timer); pendingUndo = null;
+    restore?.(); toast("Undone");
+  });
+  me.timer = setTimeout(me.finish, seconds * 1000);
+  pendingUndo = me;
+}
+window.addEventListener("pagehide", () => pendingUndo?.finish());
 
 /** Show an error from the API (message + how to fix it). */
 export function showError(err) {

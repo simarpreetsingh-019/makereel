@@ -420,3 +420,5 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .sp-cap .on{color:#ffd60a}
 .sp-credit{position:absolute;bottom:6%;right:8%;font:600 7px system-ui;color:#fffa}
 @media (max-width:520px){.sample{flex-direction:column;text-align:center}}
+.toast{display:flex;align-items:center;gap:12px}
+.toast-undo{background:transparent;color:var(--accent,#ffd60a);border-color:currentColor}
