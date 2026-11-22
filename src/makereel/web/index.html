@@ -377,6 +377,37 @@
   </section>
 </main>
 
+<!-- First-run setup -->
+<dialog id="wizard" class="wizard" aria-labelledby="wz-title">
+  <div class="wz-head"><h2 id="wz-title">Welcome to makereel</h2><span class="hint" id="wz-step" style="margin:0"></span>
+    <button class="btn small" id="wz-skip" type="button" style="margin-left:auto">Skip setup</button></div>
+  <section data-wz="1">
+    <h3>Who do you clip?</h3>
+    <p class="hint">Add streamers to watch. When they go live, makereel records and makes reels on its own. You can add more later.</p>
+    <div class="row"><input id="wz-ch" placeholder="@streamer or a YouTube, Twitch or Kick link" style="flex:1;min-width:200px">
+      <select id="wz-ch-lang"><option value="">Auto language</option><option value="en">English</option><option value="hi">Hindi / Hinglish</option></select>
+      <button class="btn small" id="wz-ch-add" type="button">Add</button></div>
+    <div id="wz-ch-list" class="ch-rows" style="margin-top:8px"></div>
+    <p class="hint" id="wz-ch-msg"></p>
+    <label class="switch" style="font-weight:400"><input type="checkbox" id="wz-watch" checked> Start watching them now</label>
+  </section>
+  <section data-wz="2" hidden>
+    <h3>Speech models</h3>
+    <p class="hint" id="wz-pc">Checking this computer…</p>
+    <div id="wz-models" class="stack"></div>
+    <p class="hint" id="wz-dl"></p>
+  </section>
+  <section data-wz="3" hidden>
+    <h3>Make your first reel</h3>
+    <p class="hint">Paste a YouTube, Twitch or Kick link: a video, a past stream, or a live one.</p>
+    <input id="wz-url" type="url" placeholder="https://www.youtube.com/watch?v=…" style="width:100%">
+  </section>
+  <div class="row wz-foot">
+    <button class="btn" id="wz-back" type="button">Back</button>
+    <button class="btn primary" id="wz-next" type="button" style="margin-left:auto">Next</button>
+  </div>
+</dialog>
+
 <!-- Reel editor -->
 <dialog id="editor">
   <div class="ed-head">

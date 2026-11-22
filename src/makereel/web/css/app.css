@@ -393,3 +393,8 @@ dialog.confirm p { margin: 0 0 16px; line-height: 1.5; }
 .reel video { border-radius: 13px 13px 0 0; }
 .reel .menu-list { top: auto; bottom: calc(100% + 4px); left: 0; right: auto; }
 .reel:has(.menu[open]) { z-index: 30; }
+/* first-run wizard */
+.wizard{width:min(560px,calc(100vw - 32px));border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--ink);padding:20px}
+.wizard::backdrop{background:#000a}
+.wz-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.wz-foot{margin-top:18px}

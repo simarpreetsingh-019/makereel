@@ -10,6 +10,7 @@ import * as editor from "./views/editor.js";
 import * as library from "./views/library.js";
 import * as setup from "./views/setup.js";
 import * as system from "./views/system.js";
+import * as wizard from "./views/wizard.js";
 
 const POLL_MS = 2500;
 
@@ -80,6 +81,7 @@ async function start() {
   brand.mount();
   system.mount();
   setup.mount();
+  wizard.mount();
   store.subscribe(render);
 
   window.addEventListener("hashchange", () => { store.set({ route: parseRoute() }); refreshView(); });
@@ -89,7 +91,7 @@ async function start() {
   catch (err) { $("#banner").innerHTML = `<div class="banner">${esc(err.message)}</div>`; }
 
   await Promise.all([refreshJobs(), refreshView()]);
-  api.settings().then((s) => setup.drawNotices(s)).catch(() => {});
+  api.settings().then((s) => { setup.drawNotices(s); wizard.maybeOpen(s); }).catch(() => {});
   setInterval(() => {
     if (document.hidden) return;              // save power when the tab is in the background
     refreshJobs();
