@@ -175,7 +175,8 @@ def test_bulk_english_letters_picks_the_right_reels():
     d.mkdir(parents=True)
     for name, word, check, edited in (("reel_01", "भाई", "hinglish", False), ("reel_02", "bhai", None, False),
                                       ("reel_03", "भाई", "hinglish", True)):
-        (d / f"{name}.ass").write_text(captions.build_ass([{"start": 10, "end": 11, "word": word}], 10.0, 12.0, "T"))
+        ass = captions.build_ass([{"start": 10, "end": 11, "word": word}], 10.0, 12.0, "T")
+        (d / f"{name}.ass").write_text(ass, encoding="utf-8")
         post = {"captions": f"{name}.ass", "captions_edited": edited}
         if check:
             post["caption_check"] = {"checker": check, "other": [{"start": 0, "word": "bhai"}]}
